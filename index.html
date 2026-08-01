@@ -2310,18 +2310,17 @@ const STOCK_SYNC = { last:'—', next:'—', discrepancy:null };
    SETTINGS · API CONNECTIONS
    ===================================================================== */
 const API_CONNS = [
-  { id:'tt-inv',  provider:'TikTok',  icon:'🎵', name:'TikTok Shop — Products & Inventory', desc:'Stock per SKU + sample location, both directions',
-    status:'off', last:null, freq:'Every 30 min', auth:'Partner Center OAuth', scopes:['products.read','inventory.read','inventory.write (off)'], webhook:null, feeds:'Products page · Profit stock asset' },
-  { id:'tt-fin',  provider:'TikTok',  icon:'🎵', name:'TikTok Shop — Finance & Settlement', desc:'Orders, settlement, payouts → Profit tab orders',
-    status:'off', last:null, freq:'Hourly', auth:'Partner Center OAuth', scopes:['finance.read','orders.read'], webhook:null, feeds:'Profit → Orders · replaces xlsx exports' },
+  { id:'tt-shop', provider:'TikTok',  icon:'🎵', name:'TikTok Shop', desc:'Orders, stock, settlement and shop analytics',
+    status:'off', last:null, freq:'Hourly', auth:'Partner Center OAuth', webhook:null,
+    scopes:['order.info','finance.info','product.basic','inventory.read','shop_analytics.read'],
+    feeds:'Profit → Orders & Bank · Products stock · Overview KPIs' },
   { id:'tt-ads',  provider:'TikTok',  icon:'🎵', name:'TikTok Ads — Reporting', desc:'Daily ad cost → per-order ad allocation',
     status:'off', last:null, freq:'Daily, 06:00', auth:'TikTok for Business OAuth', scopes:['reporting.read'], webhook:null, feeds:'Profit → adCost per order-day' },
   { id:'rev-tx',  provider:'Revolut', icon:'🏦', name:'Revolut Business — Transactions', desc:'Bank feed: webhook realtime + hourly sweep',
     status:'off', last:null, freq:'Webhook + hourly', auth:'Certificate OAuth · refresh token in Vault', scopes:['READ'], webhook:null, feeds:'Profit → Bank · P&L actuals' },
-  { id:'shp-inv', provider:'Shopify', icon:'🛍️', name:'Shopify — Inventory', desc:'DTC stock levels per location',
-    status:'off', last:null, freq:'Every 30 min', auth:'Admin API access token', scopes:['read_inventory'], webhook:null, feeds:'Products page stock split' },
-  { id:'shp-ord', provider:'Shopify', icon:'🛍️', name:'Shopify — Orders & Payouts', desc:'DTC orders + payout reconciliation',
-    status:'off', last:null, freq:'Hourly', auth:'Admin API access token', scopes:['read_orders','read_payouts'], webhook:'Available', feeds:'Profit → Orders (DTC channel)' }
+  { id:'shp',     provider:'Shopify', icon:'🛍️', name:'Shopify', desc:'DTC stock, orders and payout reconciliation',
+    status:'off', last:null, freq:'Hourly', auth:'Admin API access token', webhook:'Available',
+    scopes:['read_inventory','read_orders','read_payouts'], feeds:'Products stock split · Profit → Orders (DTC channel)' }
 ];
 const API_CATALOG = [
   ['Meta Marketing API','Ad spend for Shopify (DTC) campaigns','📣'],
@@ -2350,10 +2349,12 @@ async function tiktokLoadStatus(){
     TIKTOK_STATUS=rows[0]||null;
     /* Mirror the real connection state onto the TikTok rows in the list. */
     const live=!!(TIKTOK_STATUS&&TIKTOK_STATUS.shop_id);
-    API_CONNS.forEach(c=>{ if(c.provider==='TikTok'&&c.id!=='tt-ads'){
-      c.status=live?'connected':'off';
-      c.last=live&&TIKTOK_STATUS.last_sync?new Date(TIKTOK_STATUS.last_sync).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):null;
-    }});
+    const shop=API_CONNS.find(c=>c.id==='tt-shop');
+    if(shop){
+      shop.status=live?'connected':'off';
+      shop.shopName=live?TIKTOK_STATUS.shop_name:null;
+      shop.last=live&&TIKTOK_STATUS.last_sync?new Date(TIKTOK_STATUS.last_sync).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):null;
+    }
     return TIKTOK_STATUS;
   }catch(e){ return null; }
 }
@@ -2396,7 +2397,7 @@ function tiktokConnect(){
 }
 function apiConnect(id){
   const c=API_CONNS.find(x=>x.id===id);
-  if(c.provider==='TikTok'&&c.id!=='tt-ads') return tiktokConnect();
+  if(c.id==='tt-shop') return tiktokConnect();
   openModal(modalShell(`Connect ${c.name}`,`
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
       <span style="font-size:1.8rem">${c.icon}</span>
@@ -2499,7 +2500,7 @@ function apiSection(){
             <span style="font-size:1.25rem;flex-shrink:0">${c.icon}</span>
             <div style="flex:1;min-width:0">
               <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</div>
-              <div style="font-size:.71rem;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.desc}${c.last?` · last sync ${c.last}`:''}</div>
+              <div style="font-size:.71rem;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.shopName?`<b style="color:var(--good-ink)">${esc(c.shopName)}</b> · `:''}${c.desc}${c.last?` · last sync ${c.last}`:''}</div>
             </div>
             ${c.webhook?'<span class="badge bg-aqua" style="font-size:.62rem">webhook</span>':''}
             ${apiStatusBadge(c.status)}
