@@ -2644,7 +2644,27 @@ async function tiktokLoadData(){
   }catch(e){ /* leave existing data alone */ }
 }
 let TIKTOK_ORDERS=[], TIKTOK_CANCELLED=0;
-let AD_SPEND={};   // 'YYYY-MM-DD' -> spend
+
+/* ---- AD SPEND ------------------------------------------------------
+   GMV Max spend is NOT available from the TikTok Shop API. Thirteen candidate
+   endpoints were probed across two rounds: /ad/* and /ads/* are not routed at
+   all (the gateway answers with an HTML 404), and every /analytics/* and
+   /marketing/* ad path answers "Invalid path". The one analytics endpoint that
+   DOES work — /analytics/202405/shop/performance — returns gmv, orders, buyers,
+   units, impressions and page views, and no spend field anywhere in the payload.
+   Shop Ads spend lives in the TikTok Business (Marketing) API, behind a separate
+   app and approval.
+
+   So ad spend comes from two places we actually control:
+     1. Xero — GMV Max is billed to the card, so it lands as spend from TikTok.
+        Automatic, and it is the real invoiced number.
+     2. A manual monthly figure typed from Seller Center, as a fallback and for
+        the current month before the bill arrives.
+   API rows still win where they exist, so this all keeps working unchanged if
+   TikTok ever opens the endpoint up. */
+let AD_SPEND={};    // 'YYYY-MM-DD' -> spend, straight from the API (authoritative)
+let AD_MANUAL={};   // 'YYYY-MM'    -> spend, typed by hand (persisted in tiki_state)
+
 async function adSpendLoad(){
   try{
     const r=await tikiFetch('/rest/v1/tiktok_ad_spend?select=day,spend&order=day.desc&limit=800');
@@ -2654,13 +2674,68 @@ async function adSpendLoad(){
     recomputePnlFromLive();   // ads land after the other loaders — recompute or the P&L misses them
   }catch(e){}
 }
+
+const AD_PAYEE=/tiktok|bytedance|tt ?ads|gmv ?max/i;
+const isAdSpendTx = t => t.type&&t.type.startsWith('SPEND')&&t.status!=='DELETED'
+  && AD_PAYEE.test((t.contact||'')+' '+(t.reference||''));
+
+/* Ad bills cover a period, not the single day they were charged on, so each one
+   is spread evenly from the day after the previous ad bill up to its own date.
+   Capped at 31 days so a first-ever invoice can't smear across the whole year. */
+function adSpendFromXero(){
+  const out={};
+  const txs=(XERO_TX||[]).filter(isAdSpendTx)
+    .sort((a,b)=>String(a.tx_date).localeCompare(String(b.tx_date)));
+  let prev=null;
+  txs.forEach(t=>{
+    const end=new Date(t.tx_date); if(isNaN(end)) return;
+    const amt=Number(t.total)||0; if(!amt) return;
+    let days=prev?Math.round((end-prev)/864e5):1;
+    days=Math.max(1,Math.min(days,31));
+    const per=amt/days;
+    for(let i=0;i<days;i++){
+      const d=new Date(end); d.setDate(d.getDate()-i);
+      const iso=isoOf(d);
+      out[iso]=(out[iso]||0)+per;
+    }
+    prev=end;
+  });
+  return out;
+}
+
+/* The effective daily ad spend: API first, then Xero, then a manual month
+   figure spread across that month — never stacked, so nothing double counts. */
+function adSpendEffective(){
+  const xero=adSpendFromXero();
+  const eff={...xero, ...AD_SPEND};       // API wins day-for-day
+  const covered=new Set(Object.keys(eff).map(d=>d.slice(0,7)));
+  Object.entries(AD_MANUAL).forEach(([mo,amt])=>{
+    const total=Number(amt)||0;
+    if(!total || covered.has(mo)) return;  // a real source already covers this month
+    const [y,m]=mo.split('-').map(Number);
+    const dim=new Date(y,m,0).getDate();
+    for(let d=1;d<=dim;d++) eff[`${mo}-${String(d).padStart(2,'0')}`]=total/dim;
+  });
+  return eff;
+}
+function adSpendSource(){
+  if(Object.keys(AD_SPEND).length) return 'TikTok API';
+  if(Object.keys(adSpendFromXero()).length) return 'Xero (TikTok bills)';
+  if(Object.values(AD_MANUAL).some(v=>Number(v)>0)) return 'Entered by hand';
+  return 'none yet';
+}
 /* Spread a day's ad spend across that day's orders, so per-order margin is fair. */
 function adPerOrder(){
   const perDay={};
   (TIKTOK_ORDERS||[]).forEach(o=>{ const d=(o.created_at||'').slice(0,10); if(d) perDay[d]=(perDay[d]||0)+1; });
   const out={};
-  Object.entries(AD_SPEND).forEach(([d,spend])=>{ if(perDay[d]) out[d]=spend/perDay[d]; });
+  Object.entries(adSpendEffective()).forEach(([d,spend])=>{ if(perDay[d]) out[d]=spend/perDay[d]; });
   return out;
+}
+function adManualSet(mo, val){
+  const v=Number(val)||0;
+  if(v>0) AD_MANUAL[mo]=+v.toFixed(2); else delete AD_MANUAL[mo];
+  tikiPush(); recomputePnlFromLive(); renderProfit(); rerenderAll();
 }
 /* Affiliate creators from Seller Center → Manage Creators. Synced rows are
    merged into CREATORS (matched by handle) so the existing pipeline, filters
@@ -2745,7 +2820,9 @@ function setOverheadRule(label, patch){
   tikiPush();
 }
 function xeroBuildOverheads(){
-  const spend=XERO_TX.filter(t=>t.type&&t.type.startsWith('SPEND')&&t.status!=='DELETED');
+  /* TikTok ad bills are deliberately excluded here: they are already deducted
+     as ad spend above gross profit. Leaving them in would charge them twice. */
+  const spend=XERO_TX.filter(t=>t.type&&t.type.startsWith('SPEND')&&t.status!=='DELETED'&&!isAdSpendTx(t));
   if(!spend.length) return;
   const keep=Object.fromEntries(PROFIT_VENDORS.map(v=>[v.label,v]));
   const groups={};
@@ -3346,10 +3423,68 @@ function profitCogs(){
         </tbody></table>
       </div>
     </div>
+    ${adSpendCard()}
+
     <div style="font-size:.75rem;color:var(--ink-3);margin-top:10px;line-height:1.6">
       Costs are entered <b>ex VAT</b> and <b>${vat}% VAT is added</b> before anything reaches the P&L —
       so a ${m2(cur||0)} batch costs ${m2((cur||0)*vatMult())} per unit in the accounts. Change a batch and every order
       on or after its date recosts automatically — nothing is baked in.</div>`;
+}
+
+/* Advertising spend. Sits with cost of goods because it is the other number the
+   API cannot tell us and you have to supply — see the AD SPEND note above for
+   why GMV Max isn't fetchable. Auto-filled from Xero the moment TikTok's bill is
+   reconciled; the hand-typed figure is only used for months Xero hasn't covered. */
+function adSpendCard(){
+  const xero=adSpendFromXero(), eff=adSpendEffective(), src=adSpendSource();
+  const months=[];
+  for(let i=0;i<6;i++){
+    const d=new Date(TODAY.getFullYear(), TODAY.getMonth()-i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  const sumFor=(obj,mo)=>Object.entries(obj).reduce((n,[d,v])=>n+(d.slice(0,7)===mo?v:0),0);
+  const total=Object.values(eff).reduce((n,v)=>n+v,0);
+  const badge = src==='none yet'
+    ? `<span class="badge bg-warn">● No ad spend recorded</span>`
+    : `<span class="badge bg-good">● ${esc(src)}</span>`;
+  return `
+    <div class="card" style="margin-top:16px">
+      <div class="card-h">
+        <div><div class="t">Advertising spend (GMV Max)</div>
+          <div class="sub">Deducted above gross profit, spread across each day's orders</div></div>
+        <div class="right">${badge}</div>
+      </div>
+      <div class="card-b flush tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>Month</th><th class="num">From Xero</th><th class="num">Typed by hand</th>
+          <th class="num">Used in the P&L</th><th>Source</th>
+        </tr></thead><tbody>
+        ${months.map(mo=>{
+          const x=sumFor(xero,mo), man=Number(AD_MANUAL[mo])||0, used=sumFor(eff,mo);
+          const label=new Date(mo+'-01').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+          const from = x>0.005 ? 'Xero bill' : man>0 ? 'Typed in' : '—';
+          return `<tr>
+            <td class="main-cell"><div class="t">${label}</div></td>
+            <td class="num" style="color:var(--ink-3)">${x>0.005?m2(x):'—'}</td>
+            <td class="num"><input class="inp" style="width:110px;text-align:right;padding:5px 8px"
+              type="number" step="0.01" min="0" placeholder="0.00"
+              value="${man||''}" onchange="adManualSet('${mo}', this.value)"></td>
+            <td class="num" style="font-weight:700">${used>0.005?m2(used):'—'}</td>
+            <td style="font-size:.78rem;color:var(--ink-2)">${from}</td>
+          </tr>`;
+        }).join('')}
+        <tr style="background:var(--bg-2)"><td style="font-weight:700">Total (all time)</td>
+          <td class="num">—</td><td class="num">—</td>
+          <td class="num" style="font-weight:800">${m2(total)}</td><td></td></tr>
+        </tbody></table>
+      </div>
+      <div class="card-b" style="font-size:.75rem;color:var(--ink-3);line-height:1.6;padding-top:0">
+        TikTok's Shop API does not expose GMV Max spend — every ads endpoint was probed and none exist on the
+        seller surface. So it comes from your Xero bills automatically, and anything Xero hasn't billed yet you can
+        type from <b>Seller Center → Marketing → Shop Ads</b>. A month with a real Xero bill ignores the typed figure,
+        so the two can never double count, and TikTok ad bills are kept out of the overheads list for the same reason.
+      </div>
+    </div>`;
 }
 
 function cogsEdit(id){
@@ -3416,7 +3551,7 @@ function profitPnl(){
     ...(unsettledEst>0.005?[[`Awaiting settlement (${PNL.nOrders-fb.settledOrders} orders, est.)`, unsettledEst, 'in']]:[]),
     ['Total payout (paid + pending)', PNL.settlement, 'sub'],
     [`COGS (${m2(cogsUnitInc(TODAY_ISO,null)||0)}/unit inc VAT)`, -PNL.cogs, 'ded'],
-    ['Per-order ad spend', -PNL.ads, 'ded'],
+    [`Per-order ad spend${PNL.ads?'':' — none recorded yet'}`, -PNL.ads, 'ded'],
     ['Gross profit', PNL.contribution, 'sub'],
     ['Monthlies & recurring', -a.mon, 'ded'],
     ['One-off costs', -a.one, 'ded'],
@@ -3428,7 +3563,7 @@ function profitPnl(){
     ['Platform fees', -PNL.fees, 'ded'],
     ['Settlement (payout)', PNL.settlement, 'sub'],
     [`COGS (${m2(cogsUnitInc(TODAY_ISO,null)||CALC_LEV.cost*vatMult())}/unit inc VAT)`, -PNL.cogs, 'ded'],
-    ['Per-order ad spend', -PNL.ads, 'ded'],
+    [`Per-order ad spend${PNL.ads?'':' — none recorded yet'}`, -PNL.ads, 'ded'],
     ['Gross profit', PNL.contribution, 'sub'],
     ['Monthlies & recurring', -a.mon, 'ded'],
     ['One-off costs', -a.one, 'ded'],
@@ -6065,7 +6200,7 @@ function collectTikiState(){
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
-    overheadManual:OVERHEAD_MANUAL, overheadRules:OVERHEAD_RULES,
+    overheadManual:OVERHEAD_MANUAL, overheadRules:OVERHEAD_RULES, adManual:AD_MANUAL,
     vaultBlob:TIKI_VAULT.blob };
 }
 function replaceArr(target, src){ if(Array.isArray(src)){ target.length=0; src.forEach(x=>target.push(x)); } }
@@ -6087,6 +6222,7 @@ function applyTikiState(d){
   if(Array.isArray(d.aiChat)) AI.msgs=d.aiChat;
   if(Array.isArray(d.overheadManual)) OVERHEAD_MANUAL=d.overheadManual;
   if(d.overheadRules&&typeof d.overheadRules==='object') OVERHEAD_RULES=d.overheadRules;
+  if(d.adManual&&typeof d.adManual==='object') AD_MANUAL=d.adManual;
   if(d.brands && Object.keys(d.brands).length){
     Object.keys(BRANDS).forEach(k=>delete BRANDS[k]); Object.assign(BRANDS,d.brands);
     if(!BRANDS[state.brand] && state.brand!=='all') state.brand=defaultBrand();
