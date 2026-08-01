@@ -2377,6 +2377,73 @@ function tiktokCatchReturn(){
   if(st==='ok') setTimeout(()=>{ tiktokLoadStatus().then(()=>{ if(state.page==='settings') renderSettingsInner(); }); },300);
   setTimeout(()=>box.remove(), st==='ok'?9000:20000);
 }
+/* Pull live data from TikTok via the sync function, then load it into the app. */
+let TIKTOK_SYNCING=false;
+async function tiktokSync(days){
+  if(TIKTOK_SYNCING) return;
+  if(!TIKTOK_STATUS||!TIKTOK_STATUS.shop_id) return toast('Connect TikTok Shop first');
+  TIKTOK_SYNCING=true;
+  const btns=[...document.querySelectorAll('[data-ttsync]')];
+  btns.forEach(b=>{ b.dataset.label=b.textContent; b.textContent='Syncing…'; b.disabled=true; });
+  toast('Syncing with TikTok Shop — this can take a minute');
+  try{
+    const r=await tikiFetch('/functions/v1/tiktok-sync?days='+(days||90),{method:'POST'});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error||'Sync failed');
+    await tiktokLoadData();
+    await tiktokLoadStatus();
+    const bits=[];
+    if(j.orders)   bits.push(`${j.orders} order${j.orders===1?'':'s'}`);
+    if(j.products) bits.push(`${j.products} product${j.products===1?'':'s'}`);
+    toast(bits.length?`Synced — pulled ${bits.join(' and ')}`:'Synced — nothing new found');
+    if(j.notes&&j.notes.length) console.warn('TikTok sync notes:', j.notes);
+    if(!bits.length&&j.notes&&j.notes.length) tiktokShowNotes(j.notes);
+    rerenderAll();
+  }catch(e){ toast(e.message||'Sync failed'); }
+  btns.forEach(b=>{ b.textContent=b.dataset.label||'Sync now'; b.disabled=false; });
+  TIKTOK_SYNCING=false;
+}
+function tiktokShowNotes(notes){
+  openModal(modalShell('TikTok returned nothing',`
+    <p style="font-size:.86rem;color:var(--ink-2);line-height:1.6;margin-bottom:12px">
+      The sync ran but came back empty. TikTok reported:</p>
+    <div style="background:var(--surface-2);border:1px solid var(--line-2);border-radius:11px;padding:12px 14px;
+      font-family:monospace;font-size:.74rem;line-height:1.6;white-space:pre-wrap">${esc(notes.join('\n'))}</div>
+    <p style="font-size:.8rem;color:var(--ink-3);line-height:1.55;margin-top:12px">
+      If this mentions permissions, the fix is in TikTok Partner Center → your app → Manage API, ticking the
+      relevant scope. Send me this message and I'll tell you which one.</p>`,
+    `<button class="btn btn-primary" onclick="closeModal()">Got it</button>`));
+}
+
+/* Load whatever the sync has stored into the app's in-memory arrays. */
+async function tiktokLoadData(){
+  try{
+    const [oR,pR]=await Promise.all([
+      tikiFetch('/rest/v1/tiktok_orders?select=order_id,created_at,status,total,currency,item_count,sku_summary&order=created_at.desc&limit=200'),
+      tikiFetch('/rest/v1/tiktok_products?select=product_id,title,status,price,stock,sku_count&order=title.asc')
+    ]);
+    if(oR.ok){
+      const rows=await oR.json();
+      TIKTOK_ORDERS=rows;
+      replaceArr(PROFIT_ORDERS, rows.slice(0,60).map(o=>({
+        d:o.created_at?new Date(o.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—',
+        id:String(o.order_id).slice(-8), ch:'TikTok Shop', p:o.sku_summary||'—',
+        qty:o.item_count||1, gross:Number(o.total)||0, disc:0,
+        set:+(Number(o.total)*0.86).toFixed(2), ad:0, live:true })));
+      PNL.nOrders=rows.length;
+    }
+    if(pR.ok){
+      const rows=await pR.json();
+      replaceArr(PRODUCTS, rows.map((p,i)=>({
+        id:p.product_id, name:p.title||'Untitled', variant:`${p.sku_count||1} SKU${(p.sku_count||1)===1?'':'s'}`,
+        brand:defaultBrand(), emoji:['🫐','🍋','🎁','🥤','🏝️','📦'][i%6],
+        price:Number(p.price)||0, commission:0, creators:0, videos:0, views:0, units:0, gmv:0,
+        refundRate:0, stock:Number(p.stock)||0, sampleStock:0, campaign:'—', angles:[], live:true })));
+    }
+  }catch(e){ /* leave existing data alone */ }
+}
+let TIKTOK_ORDERS=[];
+
 function tiktokConnect(){
   const url=`${TIKTOK_AUTH_URL}?service_id=${TIKTOK_SERVICE_ID}&state=tiki`;
   openModal(modalShell('Connect your TikTok Shop',`
@@ -2504,6 +2571,8 @@ function apiSection(){
             </div>
             ${c.webhook?'<span class="badge bg-aqua" style="font-size:.62rem">webhook</span>':''}
             ${apiStatusBadge(c.status)}
+            ${c.id==='tt-shop'&&c.status==='connected'
+              ? `<button class="btn btn-soft btn-xs" data-ttsync onclick="tiktokSync(90)">Sync now</button>` : ''}
             ${c.status==='connected'
               ? `<button class="btn btn-ghost btn-xs" onclick="apiManage('${c.id}')">Manage</button>`
               : `<button class="btn btn-soft btn-xs" onclick="apiConnect('${c.id}')">Connect</button>`}
@@ -2976,7 +3045,10 @@ function profitOrders(){
         <option>All channels</option><option>TikTok Shop</option><option>Shopify (DTC)</option></select>
       <select style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:.8rem" onchange="toast('Sorted (visual only)')">
         <option>Newest first</option><option>Highest net</option><option>Lowest margin</option></select>
-      <span style="margin-left:auto;font-size:.76rem;color:var(--ink-3)">${PROFIT_ORDERS.length?`Showing ${Math.min(PROFIT_ORDERS.length,12)} of ${PNL.nOrders.toLocaleString()} orders — every order enriched with fees, COGS, ad share &amp; overhead`:'No orders yet — these arrive from the TikTok Shop and Shopify order feeds'}</span>
+      <span style="margin-left:auto;display:flex;align-items:center;gap:10px;font-size:.76rem;color:var(--ink-3)">
+        ${PROFIT_ORDERS.length?`${PROFIT_ORDERS.length} order${PROFIT_ORDERS.length===1?'':'s'} from TikTok Shop${TIKTOK_STATUS&&TIKTOK_STATUS.last_sync?` · synced ${new Date(TIKTOK_STATUS.last_sync).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}`:''}`:'No orders yet — pull them from TikTok Shop'}
+        ${TIKTOK_STATUS&&TIKTOK_STATUS.shop_id?`<button class="btn btn-soft btn-xs" data-ttsync onclick="tiktokSync(90)">Sync now</button>`:`<button class="btn btn-soft btn-xs" onclick="navTo('settings')">Connect TikTok →</button>`}
+      </span>
     </div>
     <div class="card"><div class="card-b flush tbl-wrap"><table class="tbl"><thead><tr>
       <th>Order</th><th>Channel</th><th>Product</th><th class="num">Qty</th><th class="num">Gross</th><th class="num">Disc.</th><th class="num">Fees</th><th class="num">Settlement</th><th class="num">COGS</th><th class="num">Ad</th><th class="num">Ovh</th><th class="num">Net</th><th class="num">Margin</th>
@@ -5383,6 +5455,8 @@ async function tikiEnter(inviteType){
   try{ await tikiPull(); syncStatus('', 'Synced · '+tikiSession.email.split('@')[0]); }
   catch(e){ syncStatus('error','Load failed — using local'); }
   resolveMe();
+  await tiktokLoadStatus();
+  if(TIKTOK_STATUS&&TIKTOK_STATUS.shop_id) await tiktokLoadData();
   rerenderAll(); renderNotifs();
   navTo('overview');
   setInterval(tikiPush, 4000);
