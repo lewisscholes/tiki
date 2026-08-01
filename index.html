@@ -759,6 +759,14 @@ body.sb-hidden .main{margin-left:0}
 .av.has-pic{background-size:cover;background-position:center;color:transparent!important}
 @media(max-width:720px){.pic-stage{flex-direction:column;align-items:center}.pic-ctl{width:100%}.onb-head,.onb-body,.onb-foot{padding-left:20px;padding-right:20px}}
 
+/* TikTok connection result banner */
+.tt-result{position:fixed;top:18px;left:50%;transform:translate(-50%,-14px);opacity:0;z-index:1200;
+  max-width:min(520px,92vw);background:#fff;border-radius:14px;padding:14px 18px;cursor:pointer;
+  box-shadow:0 14px 44px rgba(0,0,0,.20);border-left:4px solid var(--good);transition:opacity .3s,transform .3s}
+.tt-result.show{opacity:1;transform:translate(-50%,0)}
+.tt-result.err{border-left-color:var(--crit)}
+.tt-result b{font-size:.92rem;display:block;margin-bottom:4px}
+.tt-result div{font-size:.8rem;color:var(--ink-2);line-height:1.5}
 </style>
 </head>
 <body>
@@ -2348,6 +2356,25 @@ async function tiktokLoadStatus(){
     }});
     return TIKTOK_STATUS;
   }catch(e){ return null; }
+}
+/* The OAuth function redirects back here with a status flag, because Supabase
+   refuses to render HTML on its own domain. Show the outcome in Tiki's own UI. */
+function tiktokCatchReturn(){
+  const q=new URLSearchParams(location.search);
+  const st=q.get('tiktok'); if(!st) return;
+  const shop=q.get('shop')||'', msg=q.get('msg')||'';
+  q.delete('tiktok'); q.delete('shop'); q.delete('msg');
+  history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+location.hash);
+  const box=document.createElement('div');
+  box.className='tt-result '+(st==='ok'?'ok':'err');
+  box.innerHTML = st==='ok'
+    ? `<b>✅ TikTok Shop connected</b><div>${esc(shop)} is linked. Orders, stock and settlement data will start syncing.</div>`
+    : `<b>⚠️ Couldn't connect TikTok Shop</b><div>${esc(msg||'Unknown error.')}</div>`;
+  box.onclick=()=>box.remove();
+  document.body.appendChild(box);
+  setTimeout(()=>box.classList.add('show'),40);
+  if(st==='ok') setTimeout(()=>{ tiktokLoadStatus().then(()=>{ if(state.page==='settings') renderSettingsInner(); }); },300);
+  setTimeout(()=>box.remove(), st==='ok'?9000:20000);
 }
 function tiktokConnect(){
   const url=`${TIKTOK_AUTH_URL}?service_id=${TIKTOK_SERVICE_ID}&state=tiki`;
@@ -5367,6 +5394,7 @@ async function tikiEnter(inviteType){
 async function init(){
   renderBrandUI(); renderNewMenu(); renderSidebar(); renderNotifs();
   navTo('overview');
+  tiktokCatchReturn();
   const invite=tikiParseInviteHash();
   if(invite){ await tikiEnter(invite.type); return; }
   tikiLoadSession();
