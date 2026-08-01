@@ -2390,11 +2390,19 @@ async function tiktokSync(days){
     const r=await tikiFetch('/functions/v1/tiktok-sync?days='+(days||90),{method:'POST'});
     const j=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(j.error||'Sync failed');
-    await tiktokLoadData();
+    /* real settlement money — separate endpoint, failures here shouldn't kill the sync */
+    let fin={};
+    try{
+      const fr=await tikiFetch('/functions/v1/tiktok-finance?days='+(days||90),{method:'POST'});
+      fin=await fr.json().catch(()=>({}));
+      if(fin&&fin.notes&&fin.notes.length) console.warn('TikTok finance notes:', fin.notes);
+    }catch(e){}
+    await tiktokLoadData(); await settlementsLoad();
     await tiktokLoadStatus();
     const bits=[];
     if(j.orders)   bits.push(`${j.orders} order${j.orders===1?'':'s'}`);
     if(j.products) bits.push(`${j.products} product${j.products===1?'':'s'}`);
+    if(fin&&fin.settlements) bits.push(`${fin.settlements} settlement${fin.settlements===1?'':'s'}`);
     toast(bits.length?`Synced — pulled ${bits.join(' and ')}`:'Synced — nothing new found');
     if(j.notes&&j.notes.length) console.warn('TikTok sync notes:', j.notes);
     if(!bits.length&&j.notes&&j.notes.length) tiktokShowNotes(j.notes);
@@ -2427,10 +2435,13 @@ async function tiktokLoadData(){
       TIKTOK_ORDERS=rows;
       replaceArr(PROFIT_ORDERS, rows.slice(0,60).map(o=>({
         d:o.created_at?new Date(o.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—',
-        id:String(o.order_id).slice(-8), ch:'TikTok Shop', p:o.sku_summary||'—',
+        iso:o.created_at?o.created_at.slice(0,10):TODAY_ISO,
+        id:String(o.order_id).slice(-8), fullId:String(o.order_id), productId:null,
+        ch:'TikTok Shop', p:o.sku_summary||'—',
         qty:o.item_count||1, gross:Number(o.total)||0, disc:0,
         set:+(Number(o.total)*0.86).toFixed(2), ad:0, live:true })));
       PNL.nOrders=rows.length;
+      recomputePnlFromLive();
     }
     if(pR.ok){
       const rows=await pR.json();
@@ -2763,6 +2774,14 @@ function pnlActive(){
 }
 /* Has anything actually landed in the tracker yet? */
 function hasProfitData(){ return !!(PROFIT_BANK.length || PROFIT_ORDERS.length || PNL.gross); }
+function cogsGapNote(){
+  const n=PROFIT_ORDERS.length, c=PNL.costedOrders||0;
+  if(!n||c>=n) return '';
+  return `<div style="background:var(--warn-soft);border:1px solid #f3e2c0;border-radius:11px;padding:11px 14px;
+    font-size:.8rem;color:var(--warn-ink);line-height:1.55;margin-bottom:14px">
+    <b>${n-c} of ${n} orders have no cost batch covering their date</b> — their COGS counts as zero, so profit reads high.
+    <button class="link-btn" onclick="state.profitTab='cogs';renderProfit()">Add a batch →</button></div>`;
+}
 function renderProfit(){
   /* The tracker is wired to one brand's Shop + bank feed at a time. */
   if(state.brand!=='all' && state.brand!==PROFIT_BRAND){
@@ -2772,7 +2791,7 @@ function renderProfit(){
       <button class="btn btn-primary btn-sm" onclick="setBrand('${PROFIT_BRAND}');navTo('profit')">Switch to ${brandInfo(PROFIT_BRAND).name}</button></div></div>`;
     return;
   }
-  const tabs=[['pnl','P&L Overview'],['calc','Calculator'],['orders','Orders'],['bank','Bank'],['data','Data & Sync']];
+  const tabs=[['pnl','P&L Overview'],['calc','Calculator'],['orders','Orders'],['cogs','Cost of Goods'],['bank','Bank'],['data','Data & Sync']];
   const a=pnlActive();
   $('page-profit').innerHTML=`
     <div class="page-head">
@@ -2790,12 +2809,188 @@ function renderProfit(){
   if(state.profitTab==='pnl') b.innerHTML=profitPnl();
   else if(state.profitTab==='calc'){ b.innerHTML=profitCalc(); renderCalcResults(); }
   else if(state.profitTab==='orders') b.innerHTML=profitOrders();
+  else if(state.profitTab==='cogs') b.innerHTML=profitCogs();
   else if(state.profitTab==='bank') b.innerHTML=profitBank();
   else b.innerHTML=profitData();
   if(state.profitTab==='pnl') drawProfitCharts();
 }
+/* =====================================================================
+   COST OF GOODS — batch by batch.
+   Unit costs are stored EX-VAT. An order is costed with the most recent
+   batch received on or before that order's date (matching batch product
+   first, then any all-product batch).
+   ===================================================================== */
+/* Rebuild the P&L headline from live orders + real settlements + batch costs,
+   so "are we making money" answers itself instead of sitting at zero. */
+function recomputePnlFromLive(){
+  if(!PROFIT_ORDERS.length) return;
+  const L=CALC_LEV;
+  let gross=0, fees=0, settle=0, cogs=0, ads=0, costed=0;
+  PROFIT_ORDERS.forEach(o=>{
+    const st=TIKTOK_SETTLEMENTS[o.fullId];
+    gross+=o.gross||0;
+    const s = st?Number(st.settlement_amount)||0 : (o.set||0);
+    settle+=s;
+    fees += st ? (Number(st.fee_platform)||0)+(Number(st.fee_affiliate)||0)+(Number(st.fee_transaction)||0)
+               : Math.max((o.gross||0)-(o.disc||0)-s,0);
+    const unit=cogsUnitFor(o.iso,o.productId);
+    if(unit!=null){ cogs+=unit*(1+L.vat/100)*(o.qty||1); costed++; }
+    ads+=o.ad||0;
+  });
+  PNL.gross=gross; PNL.discounts=0; PNL.netSales=gross;
+  PNL.fees=fees; PNL.settlement=settle; PNL.cogs=cogs; PNL.ads=ads;
+  PNL.contribution=settle-cogs-ads;
+  PNL.nOrders=PROFIT_ORDERS.length;
+  PNL.stock=cogsStockValue();
+  PNL.costedOrders=costed;
+  const ds=PROFIT_ORDERS.map(o=>o.iso).filter(Boolean).sort();
+  PNL.period=ds.length?`${fmtDate(ds[0])} – ${fmtDate(ds[ds.length-1])}`:'No data yet';
+  PNL.months=ds.length?Math.max(1,Math.round((new Date(ds[ds.length-1])-new Date(ds[0]))/2.63e9*10)/10):0;
+  /* Keep the KPI tiles honest too. */
+  const k=BRAND_KPIS[defaultBrand()];
+  if(k){ k.gmv=Math.round(gross); k.net=Math.round(PNL.contribution); }
+}
+let COGS_BATCHES=[];
+let TIKTOK_SETTLEMENTS={};
+
+async function cogsLoad(){
+  try{
+    const r=await tikiFetch('/rest/v1/cogs_batches?select=*&order=received_date.desc');
+    if(r.ok) COGS_BATCHES=await r.json();
+    recomputePnlFromLive();
+  }catch(e){}
+}
+async function settlementsLoad(){
+  try{
+    const r=await tikiFetch('/rest/v1/tiktok_settlements?select=*&limit=500');
+    if(!r.ok) return;
+    TIKTOK_SETTLEMENTS={};
+    (await r.json()).forEach(x=>TIKTOK_SETTLEMENTS[x.order_id]=x);
+    recomputePnlFromLive();
+  }catch(e){}
+}
+/* Ex-VAT unit cost in force for a given date + product. */
+function cogsUnitFor(dateIso, productId){
+  if(!COGS_BATCHES.length) return null;
+  const d=dateIso||TODAY_ISO;
+  const eligible=COGS_BATCHES.filter(b=>b.received_date<=d);
+  const pool=eligible.filter(b=>b.product_id&&b.product_id===productId);
+  const chosen=(pool.length?pool:eligible.filter(b=>!b.product_id));
+  const list=chosen.length?chosen:eligible;
+  if(!list.length) return null;
+  return list.reduce((best,b)=>(!best||b.received_date>best.received_date)?b:best,null)?.unit_cost ?? null;
+}
+const cogsCurrent = pid => cogsUnitFor(TODAY_ISO, pid);
+function cogsWeightedAvg(){
+  const q=COGS_BATCHES.reduce((n,b)=>n+(+b.qty||0),0);
+  if(!q) return null;
+  return COGS_BATCHES.reduce((n,b)=>n+(+b.qty||0)*(+b.unit_cost||0),0)/q;
+}
+const cogsStockValue = () => COGS_BATCHES.reduce((n,b)=>n+(+b.qty||0)*(+b.unit_cost||0),0);
+
+function profitCogs(){
+  const cur=cogsCurrent(), avg=cogsWeightedAvg(), vat=CALC_LEV.vat;
+  const totalUnits=COGS_BATCHES.reduce((n,b)=>n+(+b.qty||0),0);
+  const stat=(l,v,s)=>`<div class="mini-stat"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+  return `
+    <div class="card" style="margin-bottom:16px"><div class="card-b">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+        ${stat('Current cost / unit', cur!=null?m2(cur):'—', cur!=null?`ex VAT · ${m2(cur*(1+vat/100))} inc VAT`:'add a batch to set this')}
+        ${stat('Weighted average', avg!=null?m2(avg):'—','across all batches')}
+        ${stat('Units purchased', totalUnits.toLocaleString(),`${COGS_BATCHES.length} batch${COGS_BATCHES.length===1?'':'es'}`)}
+        ${stat('Total spent on stock', m2(cogsStockValue()),'ex VAT')}
+      </div>
+    </div></div>
+
+    <div class="card">
+      <div class="card-h">
+        <div><div class="t">Cost batches</div><div class="sub">Each order is costed with the most recent batch on or before its date</div></div>
+        <div class="right"><button class="btn btn-primary btn-sm" onclick="cogsEdit()">${ICONS.plus} Add batch</button></div>
+      </div>
+      <div class="card-b flush tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>Received</th><th>Batch</th><th>Applies to</th><th class="num">Units</th>
+          <th class="num">Cost / unit</th><th class="num">Inc VAT</th><th class="num">Batch value</th><th>Supplier</th><th></th>
+        </tr></thead><tbody>
+        ${COGS_BATCHES.map((b,i)=>{
+          const isCurrent = cur!=null && b.received_date<=TODAY_ISO &&
+            b.id===COGS_BATCHES.filter(x=>x.received_date<=TODAY_ISO&&!x.product_id)
+              .reduce((best,x)=>(!best||x.received_date>best.received_date)?x:best,null)?.id;
+          return `<tr>
+            <td class="main-cell"><div class="t">${fmtDate(b.received_date)}</div>
+              ${isCurrent?'<div class="s" style="color:var(--good-ink);font-weight:600">in force now</div>':''}</td>
+            <td>${esc(b.label||'—')}</td>
+            <td>${b.product_id?esc(b.product_name||b.product_id):'<span style="color:var(--ink-3)">All products</span>'}</td>
+            <td class="num">${(+b.qty||0).toLocaleString()}</td>
+            <td class="num" style="font-weight:700">${m2(+b.unit_cost||0)}</td>
+            <td class="num" style="color:var(--ink-3)">${m2((+b.unit_cost||0)*(1+vat/100))}</td>
+            <td class="num">${m2((+b.qty||0)*(+b.unit_cost||0))}</td>
+            <td style="font-size:.78rem;color:var(--ink-2)">${esc(b.supplier||'—')}</td>
+            <td style="white-space:nowrap">
+              <button class="btn btn-ghost btn-xs" onclick="cogsEdit('${b.id}')">Edit</button>
+              <button class="btn btn-ghost btn-xs" style="color:var(--crit-ink)" onclick="cogsDelete('${b.id}')">Delete</button>
+            </td></tr>`;}).join('')||`<tr><td colspan="9"><div class="empty" style="padding:52px 20px"><div class="e-ico">📦</div>
+          <div style="font-weight:700;color:var(--ink);margin-bottom:6px">No cost batches yet</div>
+          Add what you paid your supplier and how many units you got. Every order from that date forward
+          uses that cost, so your margins become real instead of estimated.<br><br>
+          <button class="btn btn-primary btn-sm" onclick="cogsEdit()">Add your first batch</button></div></td></tr>`}
+        </tbody></table>
+      </div>
+    </div>
+    <div style="font-size:.75rem;color:var(--ink-3);margin-top:10px;line-height:1.6">
+      Costs are entered <b>ex VAT</b> and VAT is applied at ${vat}% where needed. Change a batch and every order
+      on or after its date recosts automatically — nothing is baked in.</div>`;
+}
+
+function cogsEdit(id){
+  const b=COGS_BATCHES.find(x=>x.id===id)||null;
+  openModal(modalShell(b?'Edit cost batch':'Add cost batch',`
+    <div class="form-grid">
+      <div class="field"><label>Date received</label><input id="cbDate" type="date" value="${b?b.received_date:TODAY_ISO}"></div>
+      <div class="field"><label>Batch name</label><input id="cbLabel" value="${b?esc(b.label||''):''}" placeholder="e.g. March run"></div>
+      <div class="field"><label>Units received</label><input id="cbQty" type="number" min="0" value="${b?(+b.qty||0):''}" placeholder="e.g. 2000"></div>
+      <div class="field"><label>Cost per unit (£, ex VAT)</label><input id="cbCost" type="number" step="0.01" min="0" value="${b?(+b.unit_cost||0):''}" placeholder="6.09"></div>
+      <div class="field"><label>Applies to</label>
+        <select id="cbProduct"><option value="">All products</option>
+          ${PRODUCTS.map(p=>`<option value="${esc(p.id)}" ${b&&b.product_id===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}
+        </select></div>
+      <div class="field"><label>Supplier</label><input id="cbSupplier" value="${b?esc(b.supplier||''):''}" placeholder="Optional"></div>
+      <div class="field full"><label>Notes</label><input id="cbNotes" value="${b?esc(b.notes||''):''}" placeholder="Optional — MOQ, shipping terms, anything worth remembering"></div>
+    </div>
+    <div style="font-size:.76rem;color:var(--ink-3);line-height:1.55;margin-top:10px">
+      Orders placed on or after this date will use this cost, unless a later batch overrides it.</div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" onclick="cogsSave(${b?`'${b.id}'`:'null'})">${b?'Save changes':'Add batch'}</button>`));
+}
+async function cogsSave(id){
+  const cost=parseFloat($('cbCost').value);
+  if(!(cost>=0)||isNaN(cost)) return toast('Enter a cost per unit');
+  const sel=$('cbProduct'), pid=sel.value||null;
+  const row={ received_date:$('cbDate').value||TODAY_ISO, label:$('cbLabel').value.trim()||null,
+    qty:parseInt($('cbQty').value)||0, unit_cost:cost, product_id:pid,
+    product_name:pid?sel.options[sel.selectedIndex].text:null,
+    supplier:$('cbSupplier').value.trim()||null, notes:$('cbNotes').value.trim()||null };
+  try{
+    const r=id
+      ? await tikiFetch(`/rest/v1/cogs_batches?id=eq.${id}`,{method:'PATCH',body:JSON.stringify(row)})
+      : await tikiFetch('/rest/v1/cogs_batches',{method:'POST',body:JSON.stringify(row)});
+    if(!r.ok) throw new Error('Could not save');
+    await cogsLoad(); closeModal(); toast(id?'Batch updated':'Batch added'); recomputePnlFromLive(); rerenderAll();
+  }catch(e){ toast(e.message||'Could not save the batch'); }
+}
+async function cogsDelete(id){
+  const b=COGS_BATCHES.find(x=>x.id===id);
+  if(!confirm(`Delete ${b&&b.label?`"${b.label}"`:'this batch'}? Orders will recost using the previous batch.`)) return;
+  try{
+    const r=await tikiFetch(`/rest/v1/cogs_batches?id=eq.${id}`,{method:'DELETE'});
+    if(!r.ok) throw new Error('Could not delete');
+    await cogsLoad(); toast('Batch deleted'); recomputePnlFromLive(); rerenderAll();
+  }catch(e){ toast(e.message||'Could not delete'); }
+}
+
 /* ---- P&L (ACTUALS) ---- */
 function profitPnl(){
+  const _gap=cogsGapNote();
   const a=pnlActive();
   const wf=[
     ['Gross sales', PNL.gross, 'in'],
@@ -2844,6 +3039,7 @@ function profitPnl(){
       </div></div>`;
   };
   return `
+    ${_gap}
     <div class="card" style="border-left:3px solid ${a.op>=0?'var(--good)':'var(--crit)'};margin-bottom:16px">
       <div class="card-b" style="display:flex;gap:26px;flex-wrap:wrap;align-items:center">
         <div><div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3)">Operating result (actuals)</div>
@@ -3039,7 +3235,9 @@ function renderCalcResults(){
 }
 /* ---- Orders ---- */
 function profitOrders(){
-  const L=CALC_LEV; const cogsU=L.cost*(1+L.vat/100); const ovh=2.33;
+  const L=CALC_LEV, ovh=2.33;
+  const nSettled=PROFIT_ORDERS.filter(o=>TIKTOK_SETTLEMENTS[o.fullId]).length;
+  const haveCogs=COGS_BATCHES.length>0;
   return `<div class="chip-row" style="margin-bottom:14px">
       <select style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:.8rem" onchange="toast('Filter applied (visual only)')">
         <option>All channels</option><option>TikTok Shop</option><option>Shopify (DTC)</option></select>
@@ -3051,24 +3249,40 @@ function profitOrders(){
       </span>
     </div>
     <div class="card"><div class="card-b flush tbl-wrap"><table class="tbl"><thead><tr>
-      <th>Order</th><th>Channel</th><th>Product</th><th class="num">Qty</th><th class="num">Gross</th><th class="num">Disc.</th><th class="num">Fees</th><th class="num">Settlement</th><th class="num">COGS</th><th class="num">Ad</th><th class="num">Ovh</th><th class="num">Net</th><th class="num">Margin</th>
+      <th>Order</th><th>Channel</th><th>Product</th><th class="num">Qty</th><th class="num">Gross</th>
+      <th class="num">Platform fee</th><th class="num">Affiliate</th><th class="num">Settlement</th>
+      <th class="num">COGS</th><th class="num">Ad</th><th class="num">Ovh</th><th class="num">Net</th><th class="num">Margin</th>
     </tr></thead><tbody>
     ${PROFIT_ORDERS.map(o=>{
-      const netSales=o.gross-o.disc, fees=netSales-o.set, cogs=cogsU*o.qty;
-      const net=o.set-cogs-o.ad-ovh, mg=net/o.gross*100;
+      const st=TIKTOK_SETTLEMENTS[o.fullId];
+      /* real money if the finance feed has this order, otherwise an estimate */
+      const settle = st ? Number(st.settlement_amount)||0 : o.set;
+      const feePlat = st ? Number(st.fee_platform)||0 : (o.gross-o.disc-o.set);
+      const feeAff  = st ? Number(st.fee_affiliate)||0 : 0;
+      const unit = cogsUnitFor(o.iso, o.productId);
+      const cogs = unit!=null ? unit*(1+L.vat/100)*o.qty : 0;
+      const net = settle - cogs - (o.ad||0) - ovh;
+      const mg = o.gross? net/o.gross*100 : 0;
       return `<tr>
-        <td class="main-cell"><div class="t">#${o.id}</div><div class="s">${o.d}</div></td>
+        <td class="main-cell"><div class="t">#${o.id}</div><div class="s">${o.d}${st?'':' · est.'}</div></td>
         <td><span class="badge ${o.ch==='TikTok Shop'?'bg-accent':'bg-neutral'}">${o.ch}</span></td>
-        <td>${o.p}</td><td class="num">${o.qty}</td>
-        <td class="num">${m2(o.gross)}</td><td class="num neg">${o.disc?m2(-o.disc):'—'}</td>
-        <td class="num neg">${m2(-fees)}</td><td class="num" style="font-weight:600">${m2(o.set)}</td>
-        <td class="num neg">${m2(-cogs)}</td><td class="num neg">${o.ad?m2(-o.ad):'—'}</td>
+        <td>${esc(o.p)}</td><td class="num">${o.qty}</td>
+        <td class="num">${m2(o.gross)}</td>
+        <td class="num neg">${feePlat?m2(-feePlat):'—'}</td>
+        <td class="num neg">${feeAff?m2(-feeAff):'—'}</td>
+        <td class="num" style="font-weight:600">${m2(settle)}${st?'':'<span title="estimated" style="color:var(--warn-ink)">*</span>'}</td>
+        <td class="num ${unit==null?'':'neg'}">${unit==null?'<span title="no cost batch covers this date" style="color:var(--warn-ink)">—</span>':m2(-cogs)}</td>
+        <td class="num neg">${o.ad?m2(-o.ad):'—'}</td>
         <td class="num neg">${m2(-ovh)}</td>
-        <td class="num ${net<0?'neg':'pos'}" style="font-weight:700">${m2(net)}</td>
-        <td class="num" style="font-weight:600;color:${mg<0?'var(--crit-ink)':mg<15?'var(--warn-ink)':'var(--good-ink)'}">${mg.toFixed(0)}%</td>
+        <td class="num ${net<0?'neg':'pos'}" style="font-weight:700">${unit==null?'<span style="color:var(--ink-3)">—</span>':m2(net)}</td>
+        <td class="num" style="font-weight:600;color:${mg<0?'var(--crit-ink)':mg<15?'var(--warn-ink)':'var(--good-ink)'}">${unit==null?'—':mg.toFixed(0)+'%'}</td>
       </tr>`;}).join('')}
     </tbody></table></div></div>
-    <div style="font-size:.75rem;color:var(--ink-3);margin-top:10px">settlement already nets platform fees (fees = settlement − net sales, never double-subtracted) · ad cost is pre-allocated per order-day and never re-counted in overhead.</div>`;
+    <div style="font-size:.75rem;color:var(--ink-3);margin-top:10px;line-height:1.6">
+      ${nSettled?`<b style="color:var(--good-ink)">${nSettled} of ${PROFIT_ORDERS.length}</b> orders have real settlement figures from TikTok — platform and affiliate fees on those rows are exact. `
+        :`Rows marked <b>*</b> use estimated fees. `}
+      ${nSettled<PROFIT_ORDERS.length?`Orders settle a few days after delivery, so recent ones stay estimated until TikTok releases the statement. `:''}
+      ${haveCogs?'':'<b style="color:var(--warn-ink)">No cost batches yet</b> — add one on the Cost of Goods tab and margins fill in.'}</div>`;
 }
 /* ---- Revolut live feed (API) ---- */
 const REVOLUT = { connected:false, account:'Not connected', lastSweep:'—', nextSweep:'—', webhook:'Not set up' };
@@ -5456,7 +5670,8 @@ async function tikiEnter(inviteType){
   catch(e){ syncStatus('error','Load failed — using local'); }
   resolveMe();
   await tiktokLoadStatus();
-  if(TIKTOK_STATUS&&TIKTOK_STATUS.shop_id) await tiktokLoadData();
+  await cogsLoad();
+  if(TIKTOK_STATUS&&TIKTOK_STATUS.shop_id){ await tiktokLoadData(); await settlementsLoad(); }
   rerenderAll(); renderNotifs();
   navTo('overview');
   setInterval(tikiPush, 4000);
