@@ -1021,8 +1021,54 @@ const VIDEO_SERIES = { lytes: [0,0,0,0,0,0,0,0] };
 const BRAND_KPIS = {
   lytes: { gmv:0, net:0, videos:0, creators:0, approvals:0, gmvDelta:'—', netDelta:'—', vidDelta:'—', crDelta:'—' }
 };
-const DATE_RANGES = ['Today','This Week','This Month','Last 30 Days','Custom Range'];
-const DATE_FACTOR = { 'Today':0.034, 'This Week':0.27, 'This Month':1, 'Last 30 Days':1.08, 'Custom Range':0.52 };
+/* Real ranges — every metric is computed from the synced orders inside the
+   window, and the delta compares against the previous window of equal length. */
+const DATE_RANGES = ['Today','Last 3 Days','Last 7 Days','Last 14 Days','Last 30 Days','Last 90 Days','All Time'];
+const RANGE_DAYS  = { 'Today':1, 'Last 3 Days':3, 'Last 7 Days':7, 'Last 14 Days':14, 'Last 30 Days':30, 'Last 90 Days':90, 'All Time':0 };
+function rangeWindow(range){
+  const days=RANGE_DAYS[range]??30;
+  if(!days) return { from:null, to:null, prevFrom:null, prevTo:null, days:0 };
+  const to=new Date(TODAY); to.setDate(to.getDate()+1);            // exclusive end: tomorrow 00:00
+  const from=new Date(to); from.setDate(from.getDate()-days);
+  const prevTo=from, prevFrom=new Date(from); prevFrom.setDate(prevFrom.getDate()-days);
+  return { from, to, prevFrom, prevTo, days };
+}
+/* Sum live TikTok orders + settlements + batch COGS inside a window. */
+function metricsIn(from, to){
+  const L=CALC_LEV; let gmv=0, net=0, orders=0, costed=0;
+  (TIKTOK_ORDERS||[]).forEach(o=>{
+    if(!o.created_at) return;
+    const d=new Date(o.created_at);
+    if(from&&d<from) return; if(to&&d>=to) return;
+    orders++; const gross=Number(o.total)||0; gmv+=gross;
+    const st=TIKTOK_SETTLEMENTS[o.order_id];
+    const settle=st?Number(st.settlement_amount)||0:gross*0.86;
+    const unit=cogsUnitFor(o.created_at.slice(0,10),null);
+    if(unit!=null){ net+=settle-unit*(1+L.vat/100)*(o.item_count||1); costed++; }
+    else net+=settle;
+  });
+  return { gmv, net, orders, costed };
+}
+function rangeMetrics(range){
+  const w=rangeWindow(range);
+  const cur=metricsIn(w.from,w.to);
+  const prev=w.days?metricsIn(w.prevFrom,w.prevTo):{gmv:0,net:0,orders:0};
+  const pct=(a,b)=>b>0?Math.round((a-b)/b*100):null;
+  return { ...cur, dGmv:pct(cur.gmv,prev.gmv), dNet:pct(cur.net,prev.net), dOrders:pct(cur.orders,prev.orders), window:w };
+}
+/* Weekly GMV + order buckets for the charts, built from real orders. */
+function weeklyBuckets(){
+  const mon=new Date(TODAY); mon.setDate(mon.getDate()-((TODAY.getDay()+6)%7));
+  const starts=[...Array(8)].map((_,i)=>{ const d=new Date(mon); d.setDate(d.getDate()-(7-i)*7); return d; });
+  const gmv=Array(8).fill(0), vids=Array(8).fill(0);
+  (TIKTOK_ORDERS||[]).forEach(o=>{
+    if(!o.created_at) return;
+    const t=new Date(o.created_at);
+    for(let i=7;i>=0;i--){ if(t>=starts[i]){ const end=new Date(starts[i]); end.setDate(end.getDate()+7);
+      if(t<end){ gmv[i]+=Number(o.total)||0; vids[i]++; } break; } }
+  });
+  return { labels:starts.map(d=>d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})), gmv, orders:vids };
+}
 
 /* ============ STATE ============ */
 const state = {
@@ -1389,20 +1435,22 @@ function renderOverview(){
     ? BRAND_IDS().reduce((acc,id)=>{ const x=BRAND_KPIS[id]||{}; ['gmv','net','videos','creators','approvals'].forEach(f=>acc[f]=(acc[f]||0)+(x[f]||0)); return acc; },
         { gmvDelta:'—', netDelta:'—', vidDelta:'—', crDelta:'—' })
     : { gmv:0,net:0,videos:0,creators:0,approvals:0,gmvDelta:'—',netDelta:'—',vidDelta:'—',crDelta:'—' });
-  const f=DATE_FACTOR[state.dateRange];
+  const rm=rangeMetrics(state.dateRange);
   const myTasks=state.tasks.filter(inBrand);
   const outstanding=myTasks.filter(t=>t.status!=='Completed').length;
   const overdue=myTasks.filter(isOverdue).length;
   const retSpend=RETAINERS.filter(r=>state.brand==='all'||r.brand===state.brand||r.brand==='all').reduce((s,r)=>s+r.amount,0);
   const needsLewis=myTasks.filter(t=>t.status==='Waiting on Lewis');
   const dueWeek=myTasks.filter(dueThisWeek).sort((a,b)=>a.due.localeCompare(b.due));
-  const scale=(v)=>Math.round(v*f);
-  const rangeNote = state.dateRange==='This Month'?'vs last month':`for ${state.dateRange.toLowerCase()}`;
+  const rangeNote = state.dateRange==='All Time'?'all time':`vs previous ${rm.window.days} day${rm.window.days===1?'':'s'}`;
 
   const hasData = state.tasks.length||CREATORS.length||RETAINERS.length||k.gmv;
   const overallStatus = !hasData?'Getting Started':overdue>2?'Behind Target':needsLewis.length>3?'Needs Attention':'On Track';
   /* No history yet → show a flat marker rather than a green up-arrow against nothing. */
-  const delta=(d,cls='up')=>(!d||d==='—')?`<span class="delta flat">→ —</span>`:`<span class="delta ${cls}">↑ ${d}</span>`;
+  const delta=(d)=> d==null||d==='—' ? `<span class="delta flat">→ —</span>`
+    : (typeof d==='number'
+        ? (d===0?`<span class="delta flat">→ 0%</span>`:d>0?`<span class="delta up">↑ ${d}%</span>`:`<span class="delta down">↓ ${Math.abs(d)}%</span>`)
+        : `<span class="delta up">↑ ${d}</span>`);
   const kpi=(label,val,icoName,icoStyle,foot)=>`
     <div class="kpi">
       <div class="k-top"><span class="k-ico" style="${icoStyle}">${ICONS[icoName]}</span><span class="k-label">${label}</span></div>
@@ -1435,12 +1483,12 @@ function renderOverview(){
     </div>
 
     <div class="kpi-grid">
-      ${kpi('GMV — '+state.dateRange, money(scale(k.gmv)), 'chart','background:var(--accent-soft);color:var(--accent-ink)',
-        `${delta(k.gmvDelta)}<span>${rangeNote}</span>`)}
-      ${kpi('Net Revenue', money(scale(k.net)), 'card','background:var(--good-soft);color:var(--good-ink)',
-        `${delta(k.netDelta)}<span>${rangeNote}</span>`)}
-      ${kpi('Videos Posted', scale(k.videos), 'video','background:var(--violet-soft);color:var(--violet-ink)',
-        `${delta(k.vidDelta)}<span>${rangeNote}</span>`)}
+      ${kpi('GMV — '+state.dateRange, money(Math.round(rm.gmv)), 'chart','background:var(--accent-soft);color:var(--accent-ink)',
+        `${delta(rm.dGmv)}<span>${rangeNote}</span>`)}
+      ${kpi('Net Revenue', money(Math.round(rm.net)), 'card','background:var(--good-soft);color:var(--good-ink)',
+        `${delta(rm.dNet)}<span>after fees & COGS · ${rangeNote}</span>`)}
+      ${kpi('Orders — '+state.dateRange, rm.orders, 'video','background:var(--violet-soft);color:var(--violet-ink)',
+        `${delta(rm.dOrders)}<span>${rangeNote}</span>`)}
       ${kpi('Active Creators', k.creators, 'users','background:var(--aqua-soft);color:var(--aqua-ink)',
         `${delta(k.crDelta)}<span>this month</span>`)}
       ${kpi('Monthly Retainer Spend', money(retSpend), 'card','background:var(--magenta-soft);color:var(--magenta-ink)',
@@ -1462,7 +1510,7 @@ function renderOverview(){
         <div class="card-b"><div class="chart-box" id="gmvChart"></div></div>
       </div>
       <div class="card">
-        <div class="card-h"><div><div class="t">Videos Posted</div><div class="sub">Per week, last 8 weeks</div></div></div>
+        <div class="card-h"><div><div class="t">Orders Per Week</div><div class="sub">Last 8 weeks, from the TikTok feed</div></div></div>
         <div class="card-b"><div class="chart-box" id="vidChart"></div></div>
       </div>
     </div>
@@ -1555,9 +1603,14 @@ function chartSeries(){
 }
 function niceMax(v){ const p=Math.pow(10,Math.floor(Math.log10(v||1))); const n=v/p; const m=n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10; return m*p; }
 function drawCharts(){
-  const series=chartSeries();
-  drawLineChart('gmvChart', WEEKS, series.map(s=>({label:s.label,color:s.color,data:s.gmv})), v=>'£'+(v>=1000?(v/1000).toFixed(v%1000?1:0)+'k':v), v=>'£'+v.toLocaleString());
-  drawBarChart('vidChart', WEEKS, series.map(s=>({label:s.label,color:s.color,data:s.vids})), v=>v);
+  const wb=weeklyBuckets();
+  const hasLive=(TIKTOK_ORDERS||[]).length>0;
+  const series=hasLive
+    ? [{label:brandInfo(defaultBrand()).name,color:brandInfo(defaultBrand()).solid,gmv:wb.gmv,vids:wb.orders}]
+    : chartSeries();
+  const labels=hasLive?wb.labels:WEEKS;
+  drawLineChart('gmvChart', labels, series.map(s=>({label:s.label,color:s.color,data:s.gmv})), v=>'£'+(v>=1000?(v/1000).toFixed(v%1000?1:0)+'k':v), v=>'£'+v.toLocaleString());
+  drawBarChart('vidChart', labels, series.map(s=>({label:s.label,color:s.color,data:s.vids})), v=>v);
 }
 function drawLineChart(id, labels, series, tickFmt, tipFmt){
   const box=$(id); if(!box) return;
@@ -2026,6 +2079,7 @@ function renderCreators(){
   if(state.creatorFilter==='gmv') list=[...list].sort((a,b)=>b.gmv-a.gmv);
   else if(state.creatorFilter==='videos') list=[...list].sort((a,b)=>b.videos-a.videos);
   else if(state.creatorFilter==='cvr') list=[...list].sort((a,b)=>b.cvr-a.cvr);
+  else list=creatorRank(list);
   const totGmv=all.reduce((s,c)=>s+c.gmv,0);
   $('page-creators').innerHTML=`
     <div class="page-head">
@@ -2071,7 +2125,7 @@ function renderCreators(){
       ${list.map(c=>`
         <tr class="clickable" onclick="openCreatorDetail('${c.id}')">
           <td><div class="cell-user"><span class="av ${c.av}">${c.name.split(' ').map(w=>w[0]).join('')}</span>
-            <div class="main-cell"><div class="t">${c.name}</div><div class="s">${c.handle}</div></div></div></td>
+            <div class="main-cell"><div class="t">${c.name}</div><div class="s">${c.handle}${c.showcaseOnly?' · <span style="color:var(--warn-ink)">showcase only</span>':''}</div></div></div></td>
           <td>${brandBadge(c.brand)}</td>
           <td>${stageBadge(c.stage)}</td>
           <td class="num">${num(c.followers)}</td>
@@ -2080,7 +2134,11 @@ function renderCreators(){
           <td class="num" style="font-weight:700">${c.gmv?money(c.gmv):'—'}</td>
           <td class="num">${c.cvr?c.cvr+'%':'—'}</td>
           <td>${fmtDate(c.lastContact)}</td>
-          <td onclick="event.stopPropagation()"><button class="btn btn-ghost btn-xs" onclick="openCreatorDetail('${c.id}')">View</button></td>
+          <td onclick="event.stopPropagation()" style="white-space:nowrap">
+            ${RETAINERS.some(r=>r.creatorId===c.id)
+              ? `<span class="badge bg-violet" style="cursor:pointer" onclick="navTo('retainers')">On retainer</span>`
+              : `<button class="btn btn-soft btn-xs" onclick="addRetainerFor('${c.id}')">＋ Retainer</button>`}
+            <button class="btn btn-ghost btn-xs" onclick="openCreatorDetail('${c.id}')">View</button></td>
         </tr>`).join('')||`<tr><td colspan="10"><div class="empty">No creators match</div></td></tr>`}
       </tbody></table>
     </div></div>`;
@@ -2186,7 +2244,7 @@ function retEff(r){
   return Math.round((delivery*4 + roi*3 + qual*3)*10)/10;
 }
 function renderRetainers(){
-  const list=RETAINERS.filter(r=>state.brand==='all'||r.brand===state.brand||r.brand==='all');
+  const list=RETAINERS.filter(r=>state.brand==='all'||r.brand===state.brand||r.brand==='all').map(retainerLiveStats);
   const total=list.reduce((s,r)=>s+r.amount,0);
   const perBrand=BRAND_IDS().map(k=>`${BRANDS[k].name} ${money(RETAINERS.filter(r=>r.brand===k).reduce((s,r)=>s+r.amount,0))}`);
   const sharedSpend=RETAINERS.filter(r=>r.brand==='all').reduce((s,r)=>s+r.amount,0);
@@ -2279,6 +2337,49 @@ function openRetainerDetail(id){
     `<button class="btn btn-ghost" onclick="toast('Payment marked as paid (prototype)')">Mark paid</button>
      <button class="btn btn-ghost" onclick="toast('Renewal flow — coming in the full app')">Renew</button>
      <button class="btn ${r.rec==='Cancel'?'btn-danger-soft':'btn-primary'}" onclick="closeModal();toast('Decision logged: ${r.rec}')">${r.rec==='Continue'?'✓ Continue retainer':r.rec==='Review'?'Schedule review call':'Begin cancellation'}</button>`,'wide'));
+}
+function addRetainerFor(cid){
+  const c=creatorById(cid); if(!c) return;
+  openModal(modalShell(`Put ${esc(c.name)} on a retainer`,`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      ${userAvatarLike(c)}
+      <div><div style="font-weight:700">${esc(c.name)}</div>
+        <div style="font-size:.78rem;color:var(--ink-3)">${esc(c.handle)} · ${c.videos||0} videos · ${c.gmv?money(c.gmv)+' GMV':'no GMV yet'}</div></div>
+    </div>
+    <div class="form-grid">
+      <div class="field"><label>Monthly amount (£)</label><input id="arAmount" type="number" placeholder="500"></div>
+      <div class="field"><label>Videos promised / month</label><input id="arPromised" type="number" placeholder="8"></div>
+      <div class="field"><label>Start date</label><input id="arStart" type="date" value="${TODAY_ISO}"></div>
+      <div class="field"><label>Renewal date</label><input id="arRenew" type="date" value="${isoOf(new Date(TODAY.getFullYear(),TODAY.getMonth()+1,TODAY.getDate()))}"></div>
+    </div>
+    <div style="font-size:.76rem;color:var(--ink-3);line-height:1.55;margin-top:10px">
+      The retainer stays linked to this creator — GMV and video counts on the Retainers page update from
+      their live TikTok numbers, so you can see whether the retainer is paying for itself.</div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" onclick="saveRetainerFor('${cid}')">Add retainer</button>`));
+}
+function userAvatarLike(c){ return `<span class="av lg ${c.av}">${c.name.split(' ').map(w=>w[0]).join('').slice(0,2)}</span>`; }
+function saveRetainerFor(cid){
+  const c=creatorById(cid); if(!c) return;
+  const amount=parseFloat($('arAmount').value)||0;
+  if(!amount) return toast('Enter the monthly amount');
+  RETAINERS.push({ id:'r'+Date.now(), person:c.name, creatorId:c.id, role:'Retainer Creator', brand:c.brand||defaultBrand(),
+    amount, start:$('arStart').value||TODAY_ISO, renewal:$('arRenew').value||TODAY_ISO,
+    payDate:$('arStart').value||TODAY_ISO, payStatus:'Due Soon',
+    promised:parseInt($('arPromised').value)||0, delivered:0,
+    gmv:c.gmv||0, sales:c.units||0, videos:c.videos||0,
+    contract:'—', notes:`Linked to ${c.handle} — performance updates from TikTok`, rec:'Continue',
+    quality:c.quality||5, reliability:c.reliability||5 });
+  c.retainer=amount; if(c.stage!=='Retainer Creator') c.stage='Retainer Creator';
+  closeModal(); tikiPush(); toast(`${c.name} added to Retainers`);
+  rerenderAll();
+}
+/* Live link: retainers tied to a creator read GMV/videos from the creator record. */
+function retainerLiveStats(r){
+  if(!r.creatorId) return r;
+  const c=creatorById(r.creatorId);
+  if(!c) return r;
+  return {...r, gmv:c.gmv||r.gmv, videos:c.videos||r.videos, sales:c.units||r.sales};
 }
 function openRetainerModal(){
   openModal(modalShell('Add Retainer',`
@@ -2427,12 +2528,15 @@ async function tiktokSync(days){
     /* real settlement money — separate endpoint, failures here shouldn't kill the sync */
     let fin={};
     try{ fin=await callFn('tiktok','sync settlements','/functions/v1/tiktok-finance?days='+(days||90)); }catch(e){}
+    let cr={};
+    try{ cr=await callFn('tiktok','sync creators','/functions/v1/tiktok-creators'); await creatorsLoad(); }catch(e){}
     await tiktokLoadData(); await settlementsLoad();
     await tiktokLoadStatus();
     const bits=[];
     if(j.orders)   bits.push(`${j.orders} order${j.orders===1?'':'s'}`);
     if(j.products) bits.push(`${j.products} product${j.products===1?'':'s'}`);
     if(fin&&fin.settlements) bits.push(`${fin.settlements} settlement${fin.settlements===1?'':'s'}`);
+    if(cr&&cr.creators) bits.push(`${cr.creators} creator${cr.creators===1?'':'s'}`);
     toast(bits.length?`Synced — pulled ${bits.join(' and ')}`:'Synced — nothing new found');
     if(j.notes&&j.notes.length) console.warn('TikTok sync notes:', j.notes);
     if(!bits.length&&j.notes&&j.notes.length) tiktokShowNotes(j.notes);
@@ -2457,13 +2561,13 @@ function tiktokShowNotes(notes){
 async function tiktokLoadData(){
   try{
     const [oR,pR]=await Promise.all([
-      tikiFetch('/rest/v1/tiktok_orders?select=order_id,created_at,status,total,currency,item_count,sku_summary&order=created_at.desc&limit=200'),
+      tikiFetch('/rest/v1/tiktok_orders?select=order_id,created_at,status,total,currency,item_count,sku_summary&order=created_at.desc&limit=2000'),
       tikiFetch('/rest/v1/tiktok_products?select=product_id,title,status,price,stock,sku_count&order=title.asc')
     ]);
     if(oR.ok){
       const rows=await oR.json();
       TIKTOK_ORDERS=rows;
-      replaceArr(PROFIT_ORDERS, rows.slice(0,60).map(o=>({
+      replaceArr(PROFIT_ORDERS, rows.map(o=>({
         d:o.created_at?new Date(o.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—',
         iso:o.created_at?o.created_at.slice(0,10):TODAY_ISO,
         id:String(o.order_id).slice(-8), fullId:String(o.order_id), productId:null,
@@ -2484,6 +2588,50 @@ async function tiktokLoadData(){
   }catch(e){ /* leave existing data alone */ }
 }
 let TIKTOK_ORDERS=[];
+/* Affiliate creators from Seller Center → Manage Creators. Synced rows are
+   merged into CREATORS (matched by handle) so the existing pipeline, filters
+   and detail views keep working on live data. */
+async function creatorsLoad(){
+  try{
+    const r=await tikiFetch('/rest/v1/tiktok_creators?select=*&order=gmv.desc&limit=500');
+    if(!r.ok) return;
+    const rows=await r.json();
+    if(!rows.length) return;
+    rows.forEach(tc=>{
+      const handle='@'+String(tc.username||tc.creator_id).replace(/^@/,'');
+      let c=CREATORS.find(x=>x.handle.toLowerCase()===handle.toLowerCase());
+      if(!c){
+        c={ id:'tc-'+tc.creator_id, name:tc.nickname||handle.slice(1), handle,
+          av:'av-c'+(1+CREATORS.length%6), email:'—', phone:'—', brand:defaultBrand(),
+          followers:0, avgViews:0, videos:0, samples:0, commission:0, retainer:0,
+          gmv:0, units:0, cvr:0, lastContact:'—', stage:'Prospect', quality:0, reliability:0,
+          notes:'', links:[], live:true };
+        CREATORS.push(c);
+      }
+      c.tiktokId=tc.creator_id; c.live=true;
+      c.followers=Number(tc.followers)||c.followers;
+      c.videos=Number(tc.videos)||0;
+      c.gmv=Number(tc.gmv)||0;
+      c.units=Number(tc.items_sold)||c.units;
+      c.showcaseOnly=!!tc.showcase && !(Number(tc.videos)>0);
+      /* stage reflects reality unless Lewis has moved them further manually */
+      if(c.videos>0 && ['Prospect','Contacted','Interested','Sample Requested','Sample Sent','Content Pending'].includes(c.stage))
+        c.stage=c.gmv>0?'Active Creator':'Content Live';
+      else if(c.showcaseOnly && c.stage==='Prospect') c.stage='Interested';
+    });
+    tikiDirty();
+  }catch(e){}
+}
+/* Performance-first ordering: videos+GMV at the top, showcase-only at the bottom. */
+function creatorRank(list){
+  return [...list].sort((a,b)=>{
+    const aShow=a.showcaseOnly||(!a.videos&&!a.gmv), bShow=b.showcaseOnly||(!b.videos&&!b.gmv);
+    if(aShow!==bShow) return aShow?1:-1;
+    if((b.gmv||0)!==(a.gmv||0)) return (b.gmv||0)-(a.gmv||0);
+    if((b.videos||0)!==(a.videos||0)) return (b.videos||0)-(a.videos||0);
+    return (b.followers||0)-(a.followers||0);
+  });
+}
 
 function tiktokConnect(){
   const url=`${TIKTOK_AUTH_URL}?service_id=${TIKTOK_SERVICE_ID}&state=tiki`;
@@ -2841,6 +2989,14 @@ function cogsGapNote(){
     <b>${n-c} of ${n} orders have no cost batch covering their date</b> — their COGS counts as zero, so profit reads high.
     <button class="link-btn" onclick="state.profitTab='cogs';renderProfit()">Add a batch →</button></div>`;
 }
+function setProfitRange(r){ state.profitRange=r; recomputePnlFromLive(); renderProfit(); }
+function profitRangeChips(){
+  const cur=state.profitRange||'Last 90 Days';
+  return `<div class="chip-row" style="margin:2px 0 14px">
+    ${['Last 3 Days','Last 7 Days','Last 14 Days','Last 30 Days','Last 90 Days','All Time'].map(r=>
+      `<button class="btn ${cur===r?'btn-primary':'btn-ghost'} btn-xs" onclick="setProfitRange('${r}')">${r}</button>`).join('')}
+  </div>`;
+}
 function renderProfit(){
   /* The tracker is wired to one brand's Shop + bank feed at a time. */
   if(state.brand!=='all' && state.brand!==PROFIT_BRAND){
@@ -2863,6 +3019,7 @@ function renderProfit(){
       </div>
     </div>
     <div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${state.profitTab===k?'active':''}" onclick="state.profitTab='${k}';renderProfit()">${l}</button>`).join('')}</div>
+    ${['pnl','orders'].includes(state.profitTab)?profitRangeChips():''}
     <div id="profitBody"></div>`;
   const b=$('profitBody');
   if(state.profitTab==='pnl') b.innerHTML=profitPnl();
@@ -2884,8 +3041,10 @@ function renderProfit(){
 function recomputePnlFromLive(){
   if(!PROFIT_ORDERS.length) return;
   const L=CALC_LEV;
+  const w=rangeWindow(state.profitRange||'Last 90 Days');
+  const inWin=o=>{ if(!w.from) return true; const d=new Date(o.iso+'T12:00:00'); return d>=w.from&&d<w.to; };
   let gross=0, fees=0, settle=0, cogs=0, ads=0, costed=0;
-  PROFIT_ORDERS.forEach(o=>{
+  PROFIT_ORDERS.filter(inWin).forEach(o=>{
     const st=TIKTOK_SETTLEMENTS[o.fullId];
     gross+=o.gross||0;
     const s = st?Number(st.settlement_amount)||0 : (o.set||0);
@@ -2899,10 +3058,10 @@ function recomputePnlFromLive(){
   PNL.gross=gross; PNL.discounts=0; PNL.netSales=gross;
   PNL.fees=fees; PNL.settlement=settle; PNL.cogs=cogs; PNL.ads=ads;
   PNL.contribution=settle-cogs-ads;
-  PNL.nOrders=PROFIT_ORDERS.length;
+  PNL.nOrders=PROFIT_ORDERS.filter(inWin).length;
   PNL.stock=cogsStockValue();
   PNL.costedOrders=costed;
-  const ds=PROFIT_ORDERS.map(o=>o.iso).filter(Boolean).sort();
+  const ds=PROFIT_ORDERS.filter(inWin).map(o=>o.iso).filter(Boolean).sort();
   PNL.period=ds.length?`${fmtDate(ds[0])} – ${fmtDate(ds[ds.length-1])}`:'No data yet';
   PNL.months=ds.length?Math.max(1,Math.round((new Date(ds[ds.length-1])-new Date(ds[0]))/2.63e9*10)/10):0;
   /* Keep the KPI tiles honest too. */
@@ -3303,7 +3462,7 @@ function profitOrders(){
       <select style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:.8rem" onchange="toast('Sorted (visual only)')">
         <option>Newest first</option><option>Highest net</option><option>Lowest margin</option></select>
       <span style="margin-left:auto;display:flex;align-items:center;gap:10px;font-size:.76rem;color:var(--ink-3)">
-        ${PROFIT_ORDERS.length?`${PROFIT_ORDERS.length} order${PROFIT_ORDERS.length===1?'':'s'} from TikTok Shop${TIKTOK_STATUS&&TIKTOK_STATUS.last_sync?` · synced ${new Date(TIKTOK_STATUS.last_sync).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}`:''}`:'No orders yet — pull them from TikTok Shop'}
+        ${PROFIT_ORDERS.length?`${PROFIT_ORDERS.length>100?'showing 100 of ':''}${PROFIT_ORDERS.length} order${PROFIT_ORDERS.length===1?'':'s'} from TikTok Shop${TIKTOK_STATUS&&TIKTOK_STATUS.last_sync?` · synced ${new Date(TIKTOK_STATUS.last_sync).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}`:''}`:'No orders yet — pull them from TikTok Shop'}
         ${TIKTOK_STATUS&&TIKTOK_STATUS.shop_id?`<button class="btn btn-soft btn-xs" data-ttsync onclick="tiktokSync(90)">Sync now</button>`:`<button class="btn btn-soft btn-xs" onclick="navTo('settings')">Connect TikTok →</button>`}
       </span>
     </div>
@@ -3312,7 +3471,7 @@ function profitOrders(){
       <th class="num">Platform fee</th><th class="num">Affiliate</th><th class="num">Settlement</th>
       <th class="num">COGS</th><th class="num">Ad</th><th class="num">Ovh</th><th class="num">Net</th><th class="num">Margin</th>
     </tr></thead><tbody>
-    ${PROFIT_ORDERS.map(o=>{
+    ${PROFIT_ORDERS.slice(0,100).map(o=>{
       const st=TIKTOK_SETTLEMENTS[o.fullId];
       /* real money if the finance feed has this order, otherwise an estimate */
       const settle = st ? Number(st.settlement_amount)||0 : o.set;
@@ -5730,7 +5889,7 @@ async function tikiEnter(inviteType){
   resolveMe();
   await tiktokLoadStatus();
   await cogsLoad();
-  if(TIKTOK_STATUS&&TIKTOK_STATUS.shop_id){ await tiktokLoadData(); await settlementsLoad(); }
+  if(TIKTOK_STATUS&&TIKTOK_STATUS.shop_id){ await tiktokLoadData(); await settlementsLoad(); await creatorsLoad(); }
   rerenderAll(); renderNotifs();
   navTo('overview');
   setInterval(tikiPush, 4000);
