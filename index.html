@@ -2327,8 +2327,49 @@ function apiStatusBadge(s){
     : s==='error'?'<span class="badge bg-crit">● Action needed</span>'
     : '<span class="badge bg-neutral">○ Not connected</span>';
 }
+/* --- Live TikTok Shop connection ------------------------------------
+   The Service ID is public (it only identifies which app to authorise).
+   The App Key and Secret live as Supabase secrets, server-side only. */
+const TIKTOK_SERVICE_ID='7668565937055418119';
+const TIKTOK_AUTH_URL='https://services.tiktokshop.com/open/authorize';
+let TIKTOK_STATUS=null;
+
+async function tiktokLoadStatus(){
+  try{
+    const r=await tikiFetch('/rest/v1/tiktok_auth?id=eq.shop&select=shop_id,shop_name,seller_name,last_sync,last_error,connected_at,access_expires');
+    if(!r.ok) return null;
+    const rows=await r.json();
+    TIKTOK_STATUS=rows[0]||null;
+    /* Mirror the real connection state onto the TikTok rows in the list. */
+    const live=!!(TIKTOK_STATUS&&TIKTOK_STATUS.shop_id);
+    API_CONNS.forEach(c=>{ if(c.provider==='TikTok'&&c.id!=='tt-ads'){
+      c.status=live?'connected':'off';
+      c.last=live&&TIKTOK_STATUS.last_sync?new Date(TIKTOK_STATUS.last_sync).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):null;
+    }});
+    return TIKTOK_STATUS;
+  }catch(e){ return null; }
+}
+function tiktokConnect(){
+  const url=`${TIKTOK_AUTH_URL}?service_id=${TIKTOK_SERVICE_ID}&state=tiki`;
+  openModal(modalShell('Connect your TikTok Shop',`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <span style="font-size:1.8rem">🎵</span>
+      <div><div style="font-weight:700">TikTok Shop — Lytes</div>
+        <div style="font-size:.78rem;color:var(--ink-3)">Orders, stock, settlement and analytics</div></div>
+    </div>
+    <div class="timeline-mini" style="margin-bottom:16px">
+      <div class="tm-item"><b>1 · You'll go to TikTok</b><div style="color:var(--ink-2)">A TikTok page opens asking you to authorise Tiki. Make sure you're logged in as the account that owns the Lytes shop.</div></div>
+      <div class="tm-item"><b>2 · Pick the shop and approve</b><div style="color:var(--ink-2)">Select Lytes and hit Authorize. TikTok sends you straight back here.</div></div>
+      <div class="tm-item"><b>3 · Done</b><div style="color:var(--ink-2)">Tokens are stored server-side and refresh themselves. Your orders and stock start flowing into Profit.</div></div>
+    </div>
+    ${TIKTOK_STATUS&&TIKTOK_STATUS.last_error?`<div style="background:var(--crit-soft);border:1px solid #f3caca;border-radius:11px;padding:11px 13px;font-size:.78rem;color:var(--crit-ink);line-height:1.5;margin-bottom:4px">
+      <b>Last attempt failed:</b> ${esc(String(TIKTOK_STATUS.last_error).slice(0,220))}</div>`:''}`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+     <a class="btn btn-primary" href="${url}" style="text-decoration:none">Authorise with TikTok →</a>`));
+}
 function apiConnect(id){
   const c=API_CONNS.find(x=>x.id===id);
+  if(c.provider==='TikTok'&&c.id!=='tt-ads') return tiktokConnect();
   openModal(modalShell(`Connect ${c.name}`,`
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
       <span style="font-size:1.8rem">${c.icon}</span>
@@ -2447,6 +2488,10 @@ function apiSection(){
    PAGE: SETTINGS
    ===================================================================== */
 function renderSettings(){
+  tiktokLoadStatus().then(st=>{ if(state.page==='settings'&&st!==undefined) renderSettingsInner(); });
+  renderSettingsInner();
+}
+function renderSettingsInner(){
   $('page-settings').innerHTML=`
     <div class="page-head"><div><h1>Settings</h1><div class="desc">Workspace, brands, team, notifications and API connections</div></div></div>
     <div class="grid g-2">
