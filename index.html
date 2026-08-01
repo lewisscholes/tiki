@@ -2436,10 +2436,10 @@ const API_CONNS = [
     status:'off', last:null, freq:'Hourly', auth:'Partner Center OAuth', webhook:null,
     scopes:['order.info','finance.info','product.basic','inventory.read','shop_analytics.read'],
     feeds:'Profit → Orders & Bank · Products stock · Overview KPIs' },
-  { id:'tt-ads',  provider:'TikTok',  icon:'🎵', name:'TikTok Ads — Reporting', desc:'Daily ad cost → per-order ad allocation',
-    status:'off', last:null, freq:'Daily, 06:00', auth:'TikTok for Business OAuth', scopes:['reporting.read'], webhook:null, feeds:'Profit → adCost per order-day' },
-  { id:'xero',    provider:'Xero',    icon:'📚', name:'Xero', desc:'Bank transactions & categorised overheads — replaces manual statements',
-    status:'off', last:null, freq:'On sync', auth:'OAuth 2.0 · rotating refresh token', scopes:['accounting.transactions.read','accounting.reports.read'], webhook:null, feeds:'Profit → Bank, Overheads organiser, payout matching' },
+  { id:'tt-ads',  provider:'TikTok',  icon:'🎵', name:'TikTok Ads — Reporting', desc:'Not set up — GMV Max spend is entered by hand for now',
+    status:'off', last:null, freq:'—', auth:'Separate TikTok for Business app', scopes:['reporting.read'], webhook:null, feeds:'Profit → ad spend per order-day' },
+  { id:'xero',    provider:'Xero',    icon:'📚', name:'Xero', desc:'Bank transactions & paid bills — rebuilds your overheads automatically',
+    status:'off', last:null, freq:'On sync', auth:'OAuth 2.0 · rotating refresh token', scopes:['accounting.banktransactions.read','accounting.invoices.read','accounting.settings.read','accounting.contacts.read'], webhook:null, feeds:'Profit → Bank, Overheads organiser, payout matching' },
   { id:'shp',     provider:'Shopify', icon:'🛍️', name:'Shopify', desc:'DTC stock, orders and payout reconciliation',
     status:'off', last:null, freq:'Hourly', auth:'Admin API access token', webhook:'Available',
     scopes:['read_inventory','read_orders','read_payouts'], feeds:'Products stock split · Profit → Orders (DTC channel)' }
@@ -2882,6 +2882,40 @@ async function xeroSync(){
   await xeroLoadData(); await xeroLoadStatus();
   return j;
 }
+/* Standalone Xero sync — the TikTok sync pulls Xero too, but overheads change on
+   their own schedule (a bill gets reconciled, a subscription renews) and waiting
+   on a full 365-day TikTok pull to see that is silly. */
+let XERO_SYNCING=false;
+async function xeroSyncNow(){
+  if(XERO_SYNCING) return;
+  if(!XERO_STATUS||!XERO_STATUS.tenant_id) return toast('Connect Xero first');
+  XERO_SYNCING=true;
+  const btns=[...document.querySelectorAll('[data-xsync]')];
+  btns.forEach(b=>{ b.dataset.label=b.textContent; b.textContent='Syncing…'; b.disabled=true; });
+  toast('Pulling from Xero…');
+  try{
+    const j=await xeroSync();
+    const n=j&&typeof j.transactions==='number'?j.transactions:0;
+    const vendors=PROFIT_VENDORS.filter(v=>v.xero).length;
+    toast(n?`Synced — ${n} transaction${n===1?'':'s'} across ${vendors} payee${vendors===1?'':'s'}`
+           :'Xero returned nothing — see the note');
+    if(!n&&j&&j.notes&&j.notes.length) xeroShowNotes(j.notes);
+    recomputePnlFromLive(); rerenderAll();
+  }catch(e){ toast(e.message||'Xero sync failed'); }
+  btns.forEach(b=>{ b.textContent=b.dataset.label||'Sync now'; b.disabled=false; });
+  XERO_SYNCING=false;
+}
+function xeroShowNotes(notes){
+  openModal(modalShell('Xero returned nothing',`
+    <p style="font-size:.86rem;color:var(--ink-2);line-height:1.6;margin-bottom:12px">
+      The sync ran but found no money-out. Xero reported:</p>
+    <div style="background:var(--surface-2);border:1px solid var(--line-2);border-radius:11px;padding:12px 14px;
+      font-family:monospace;font-size:.74rem;line-height:1.6;white-space:pre-wrap">${esc(notes.join('\n'))}</div>
+    <p style="font-size:.8rem;color:var(--ink-3);line-height:1.55;margin-top:12px">
+      If this mentions a 401 on bills, the connection predates the bills permission —
+      press Connect on Xero again and approve the extra access.</p>`,
+    `<button class="btn btn-primary" onclick="closeModal()">Got it</button>`));
+}
 function tiktokConnect(){
   const url=`${TIKTOK_AUTH_URL}?service_id=${TIKTOK_SERVICE_ID}&state=tiki`;
   openModal(modalShell('Connect your TikTok Shop',`
@@ -3012,6 +3046,8 @@ function apiSection(){
             ${apiStatusBadge(c.status)}
             ${c.id==='tt-shop'&&c.status==='connected'
               ? `<button class="btn btn-soft btn-xs" data-ttsync onclick="tiktokSync(365)">Sync now</button>` : ''}
+            ${c.id==='xero'&&c.status==='connected'
+              ? `<button class="btn btn-soft btn-xs" data-xsync onclick="xeroSyncNow()">Sync now</button>` : ''}
             ${c.status==='connected'
               ? `<button class="btn btn-ghost btn-xs" onclick="apiManage('${c.id}')">Manage</button>`
               : `<button class="btn btn-soft btn-xs" onclick="apiConnect('${c.id}')">Connect</button>`}
@@ -3978,15 +4014,27 @@ function profitBankLegacy(){
         <button class="btn btn-soft btn-xs" onclick="const s=$('pg-${p.id}');if(s.value)acceptPending('${p.id}',s.value);else toast('Pick a group first')">File</button>`}
     </div>`).join('');
   return `
-    <div class="card" style="border-left:3px solid var(--good);margin-bottom:16px">
-      <div class="card-b" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:13px 18px">
-        <span style="font-size:1.3rem">🏦</span>
-        <div style="flex:1;min-width:200px"><div style="font-weight:700">Live Revolut feed <span class="badge bg-good">● Connected</span></div>
-          <div style="font-size:.75rem;color:var(--ink-3)">${REVOLUT.account} · webhook realtime + hourly sweep · last sweep ${REVOLUT.lastSweep} · no more statement uploads</div></div>
-        <button class="btn btn-ghost btn-sm" onclick="openRevolutModal()">${ICONS.eye} How it works</button>
-        <button class="btn btn-soft btn-sm" onclick="revolutSyncNow()">${ICONS.refresh} Sync now</button>
-      </div>
-    </div>
+    ${(()=>{ /* Honest banking status. Revolut is not connected to Tiki — it feeds
+        Xero, and Xero is what we read. Claiming otherwise was the false green dot. */
+      const live=!!(XERO_STATUS&&XERO_STATUS.tenant_id);
+      const last=live&&XERO_STATUS.last_sync
+        ? new Date(XERO_STATUS.last_sync).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
+        : null;
+      return `
+      <div class="card" style="border-left:3px solid ${live?'var(--good)':'var(--line-2)'};margin-bottom:16px">
+        <div class="card-b" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:13px 18px">
+          <span style="font-size:1.3rem">📚</span>
+          <div style="flex:1;min-width:200px">
+            <div style="font-weight:700">Xero bank feed ${live?'<span class="badge bg-good">● Connected</span>':'<span class="badge bg-neutral">○ Not connected</span>'}</div>
+            <div style="font-size:.75rem;color:var(--ink-3)">${live
+              ? `${esc(XERO_STATUS.tenant_name||'Xero')} · bank transactions and paid bills · ${last?`last sync ${last}`:'never synced'}`
+              : 'Revolut feeds Xero, and Tiki reads Xero — connect it in Settings to rebuild your overheads automatically'}</div>
+          </div>
+          ${live
+            ? `<button class="btn btn-soft btn-sm" data-xsync onclick="xeroSyncNow()">${ICONS.refresh} Sync now</button>`
+            : `<button class="btn btn-soft btn-sm" onclick="navTo('settings')">Connect Xero →</button>`}
+        </div>
+      </div>`; })()}
     ${PROFIT_PENDING.length?`
     <div class="card" style="margin-bottom:16px">
       <div class="card-h"><div><div class="t">Review Queue</div><div class="sub">Auto-imported from Revolut — confirm the grouping and they flow into the P&L</div></div>
