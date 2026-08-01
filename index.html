@@ -2591,7 +2591,7 @@ async function tikiFetchAll(pathBase, cap){
 }
 async function tiktokLoadData(){
   try{
-    const [rows,pRrows]=await Promise.all([
+    let [rows,pRrows]=await Promise.all([
       tikiFetchAll('/rest/v1/tiktok_orders?select=order_id,created_at,status,total,currency,item_count,sku_summary&order=created_at.desc'),
       tikiFetch('/rest/v1/tiktok_products?select=product_id,title,status,price,stock,sku_count&order=title.asc')
     ]);
@@ -2601,6 +2601,7 @@ async function tiktokLoadData(){
          doesn't count them either, which is why the dashboard over-read. */
       TIKTOK_CANCELLED=rows.filter(o=>o.status==='CANCELLED').length;
       TIKTOK_ORDERS=rows.filter(o=>o.status!=='CANCELLED');
+      rows=TIKTOK_ORDERS;   // everything downstream (P&L, orders tab) excludes cancelled too
       replaceArr(PROFIT_ORDERS, rows.map(o=>({
         d:o.created_at?new Date(o.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—',
         iso:o.created_at?o.created_at.slice(0,10):TODAY_ISO,
@@ -3163,7 +3164,7 @@ function recomputePnlFromLive(){
   const w=rangeWindow(state.profitRange||'Last 90 Days');
   const inWin=o=>{ if(!w.from) return true; const d=new Date(o.iso+'T12:00:00'); return d>=w.from&&d<w.to; };
   let gross=0, fees=0, settle=0, cogs=0, ads=0, costed=0;
-  const fb={ plat:0, aff:0, ship:0, fulfil:0, other:0, adj:0, revenue:0, settledOrders:0 };
+  const fb={ plat:0, aff:0, ship:0, fulfil:0, other:0, adj:0, revenue:0, settle:0, settledOrders:0 };
   PROFIT_ORDERS.filter(inWin).forEach(o=>{
     const st=TIKTOK_SETTLEMENTS[o.fullId];
     gross+=o.gross||0;
@@ -3171,6 +3172,7 @@ function recomputePnlFromLive(){
     settle+=s;
     if(st){
       fb.settledOrders++;
+      fb.settle+=s;
       fb.revenue+=Number(st.revenue_amount)||0;
       fb.plat+=Number(st.fee_platform)||0;
       fb.aff+=Number(st.fee_affiliate)||0;
@@ -3340,15 +3342,18 @@ function profitPnl(){
   const _gap=cogsGapNote();
   const a=pnlActive();
   const fb=PNL.fb;
+  const unsettledEst = fb ? Math.max(0, PNL.settlement - fb.settle) : 0;
   const wf= fb&&fb.settledOrders ? [
-    ['Gross sales', PNL.gross, 'in'],
+    ['Revenue (settled orders, incl. customer shipping)', fb.revenue, 'in'],
     ['Platform commission', -fb.plat, 'ded'],
     ['Affiliate commissions', -fb.aff, 'ded'],
     ['Shipping (seller-borne)', -fb.ship, 'ded'],
     ...(fb.fulfil>0.005?[['Fulfilment & transaction', -fb.fulfil, 'ded']]:[]),
     ['Other TikTok fees', -fb.other, 'ded'],
     ['Adjustments', fb.adj, fb.adj>=0?'in':'ded'],
-    ['Settlement (payout)', PNL.settlement, 'sub'],
+    ['Settlement — paid out', fb.settle, 'sub'],
+    ...(unsettledEst>0.005?[[`Awaiting settlement (${PNL.nOrders-fb.settledOrders} orders, est.)`, unsettledEst, 'in']]:[]),
+    ['Total payout (paid + pending)', PNL.settlement, 'sub'],
     [`COGS (${m2(CALC_LEV.cost*(1+CALC_LEV.vat/100))}/unit inc VAT)`, -PNL.cogs, 'ded'],
     ['Per-order ad spend', -PNL.ads, 'ded'],
     ['Contribution', PNL.contribution, 'sub'],
@@ -3368,7 +3373,7 @@ function profitPnl(){
     ['One-off costs', -a.one, 'ded'],
     ['Operating result', a.op, 'total']
   ];
-  const maxAbs=PNL.gross;
+  const maxAbs=Math.max(PNL.gross, (PNL.fb&&PNL.fb.revenue)||0);
   const wfRow=([l,v,t])=>{
     const w=Math.abs(v)/maxAbs*100;
     const col = t==='in'?'var(--accent)': t==='ded'?'var(--serious)': t==='total'?(v>=0?'var(--good)':'var(--crit)'):'#98a2b3';
