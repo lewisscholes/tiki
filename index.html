@@ -2581,7 +2581,10 @@ async function tiktokLoadData(){
     ]);
     const pR=pRrows;
     if(rows){
-      TIKTOK_ORDERS=rows;
+      /* Cancelled orders are excluded from all money maths — Seller Center GMV
+         doesn't count them either, which is why the dashboard over-read. */
+      TIKTOK_CANCELLED=rows.filter(o=>o.status==='CANCELLED').length;
+      TIKTOK_ORDERS=rows.filter(o=>o.status!=='CANCELLED');
       replaceArr(PROFIT_ORDERS, rows.map(o=>({
         d:o.created_at?new Date(o.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—',
         iso:o.created_at?o.created_at.slice(0,10):TODAY_ISO,
@@ -2602,7 +2605,7 @@ async function tiktokLoadData(){
     }
   }catch(e){ /* leave existing data alone */ }
 }
-let TIKTOK_ORDERS=[];
+let TIKTOK_ORDERS=[], TIKTOK_CANCELLED=0;
 /* Affiliate creators from Seller Center → Manage Creators. Synced rows are
    merged into CREATORS (matched by handle) so the existing pipeline, filters
    and detail views keep working on live data. */
@@ -3476,7 +3479,7 @@ function profitOrders(){
       <select style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:.8rem" onchange="toast('Sorted (visual only)')">
         <option>Newest first</option><option>Highest net</option><option>Lowest margin</option></select>
       <span style="margin-left:auto;display:flex;align-items:center;gap:10px;font-size:.76rem;color:var(--ink-3)">
-        ${PROFIT_ORDERS.length?`${PROFIT_ORDERS.length>100?'showing 100 of ':''}${PROFIT_ORDERS.length} order${PROFIT_ORDERS.length===1?'':'s'} from TikTok Shop${TIKTOK_STATUS&&TIKTOK_STATUS.last_sync?` · synced ${new Date(TIKTOK_STATUS.last_sync).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}`:''}`:'No orders yet — pull them from TikTok Shop'}
+        ${PROFIT_ORDERS.length?`${PROFIT_ORDERS.length>100?'showing 100 of ':''}${PROFIT_ORDERS.length} order${PROFIT_ORDERS.length===1?'':'s'} from TikTok Shop${TIKTOK_CANCELLED?` · ${TIKTOK_CANCELLED} cancelled excluded`:''}${TIKTOK_STATUS&&TIKTOK_STATUS.last_sync?` · synced ${new Date(TIKTOK_STATUS.last_sync).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}`:''}`:'No orders yet — pull them from TikTok Shop'}
         ${TIKTOK_STATUS&&TIKTOK_STATUS.shop_id?`<button class="btn btn-soft btn-xs" data-ttsync onclick="tiktokSync(365)">Sync now</button>`:`<button class="btn btn-soft btn-xs" onclick="navTo('settings')">Connect TikTok →</button>`}
       </span>
     </div>
