@@ -2377,6 +2377,42 @@ function tiktokCatchReturn(){
   if(st==='ok') setTimeout(()=>{ tiktokLoadStatus().then(()=>{ if(state.page==='settings') renderSettingsInner(); }); },300);
   setTimeout(()=>box.remove(), st==='ok'?9000:20000);
 }
+/* =====================================================================
+   API LOG — every call Tiki makes to an external service, recorded so
+   you can see what ran, when, and what came back.
+   ===================================================================== */
+let API_LOG=[];
+async function apiLogWrite(source, action, ok, status, ms, records, message, meta){
+  const row={ source, action, ok:!!ok, status:status||null, duration_ms:Math.round(ms)||null,
+    records:records??null, message:message?String(message).slice(0,400):null, meta:meta||null };
+  API_LOG.unshift({...row, ts:new Date().toISOString()});
+  if(API_LOG.length>200) API_LOG.length=200;
+  try{ await tikiFetch('/rest/v1/api_log',{method:'POST',body:JSON.stringify(row)}); }catch(e){}
+}
+async function apiLogLoad(){
+  try{
+    const r=await tikiFetch('/rest/v1/api_log?select=*&order=ts.desc&limit=200');
+    if(r.ok) API_LOG=await r.json();
+  }catch(e){}
+}
+/* Call an Edge Function and record the outcome either way. */
+async function callFn(source, action, path, opts){
+  const t0=performance.now();
+  try{
+    const r=await tikiFetch(path, opts||{method:'POST'});
+    const j=await r.json().catch(()=>({}));
+    const recs = j.orders!=null||j.products!=null||j.settlements!=null
+      ? (j.orders||0)+(j.products||0)+(j.settlements||0) : null;
+    const msg = r.ok ? (j.notes&&j.notes.length?j.notes.join(' | '):null) : (j.error||('HTTP '+r.status));
+    await apiLogWrite(source, action, r.ok, r.status, performance.now()-t0, recs, msg, j.notes?{notes:j.notes}:null);
+    if(!r.ok) throw new Error(j.error||'Request failed');
+    return j;
+  }catch(e){
+    await apiLogWrite(source, action, false, 0, performance.now()-t0, null, e.message);
+    throw e;
+  }
+}
+
 /* Pull live data from TikTok via the sync function, then load it into the app. */
 let TIKTOK_SYNCING=false;
 async function tiktokSync(days){
@@ -2387,16 +2423,10 @@ async function tiktokSync(days){
   btns.forEach(b=>{ b.dataset.label=b.textContent; b.textContent='Syncing…'; b.disabled=true; });
   toast('Syncing with TikTok Shop — this can take a minute');
   try{
-    const r=await tikiFetch('/functions/v1/tiktok-sync?days='+(days||90),{method:'POST'});
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(j.error||'Sync failed');
+    const j=await callFn('tiktok','sync orders & products','/functions/v1/tiktok-sync?days='+(days||90));
     /* real settlement money — separate endpoint, failures here shouldn't kill the sync */
     let fin={};
-    try{
-      const fr=await tikiFetch('/functions/v1/tiktok-finance?days='+(days||90),{method:'POST'});
-      fin=await fr.json().catch(()=>({}));
-      if(fin&&fin.notes&&fin.notes.length) console.warn('TikTok finance notes:', fin.notes);
-    }catch(e){}
+    try{ fin=await callFn('tiktok','sync settlements','/functions/v1/tiktok-finance?days='+(days||90)); }catch(e){}
     await tiktokLoadData(); await settlementsLoad();
     await tiktokLoadStatus();
     const bits=[];
@@ -2596,9 +2626,10 @@ function apiSection(){
    PAGE: SETTINGS
    ===================================================================== */
 function renderSettings(){
-  tiktokLoadStatus().then(st=>{ if(state.page==='settings'&&st!==undefined) renderSettingsInner(); });
+  Promise.all([tiktokLoadStatus(), apiLogLoad()]).then(()=>{ if(state.page==='settings') renderSettingsInner(); });
   renderSettingsInner();
 }
+async function apiLogRefresh(){ await apiLogLoad(); if(state.page==='settings') renderSettingsInner(); toast('Log refreshed'); }
 function renderSettingsInner(){
   $('page-settings').innerHTML=`
     <div class="page-head"><div><h1>Settings</h1><div class="desc">Workspace, brands, team, notifications and API connections</div></div></div>
@@ -2644,6 +2675,34 @@ function renderSettingsInner(){
             </div>`).join('')}
           ${teammates().length?'':`<div style="padding:14px 16px;font-size:.78rem;color:var(--ink-3);line-height:1.5">
             Nobody else on the account yet. Invite a member and they get their own task view, day dashboard and Courses progress automatically.</div>`}
+        </div>
+      </div>
+      <div class="card" style="grid-column:1/-1">
+        <div class="card-h">
+          <div><div class="t">📋 API Activity Log</div>
+            <div class="sub">Every call Tiki makes to TikTok, Xero and the assistant — newest first</div></div>
+          <div class="right" style="display:flex;gap:8px;align-items:center">
+            ${API_LOG.length?`<span class="badge ${API_LOG.some(l=>!l.ok)?'bg-warn':'bg-good'}">${API_LOG.filter(l=>!l.ok).length} failed / ${API_LOG.length}</span>`:'<span class="badge bg-neutral">no calls yet</span>'}
+            <button class="btn btn-ghost btn-sm" onclick="apiLogRefresh()">Refresh</button>
+          </div>
+        </div>
+        <div class="card-b flush tbl-wrap" style="max-height:340px;overflow-y:auto">
+          <table class="tbl"><thead><tr>
+            <th>When</th><th>Source</th><th>Action</th><th>Result</th><th class="num">Records</th><th class="num">Took</th><th>Detail</th>
+          </tr></thead><tbody>
+          ${API_LOG.map(l=>`<tr>
+            <td style="white-space:nowrap;font-size:.76rem">${new Date(l.ts).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'})}</td>
+            <td><span class="badge ${l.source==='tiktok'?'bg-accent':l.source==='xero'?'bg-aqua':'bg-neutral'}">${esc(l.source)}</span></td>
+            <td style="font-size:.8rem">${esc(l.action)}</td>
+            <td>${l.ok?'<span class="badge bg-good">✓ ok</span>':`<span class="badge bg-crit">✕ ${l.status||'failed'}</span>`}</td>
+            <td class="num">${l.records!=null?l.records:'—'}</td>
+            <td class="num" style="color:var(--ink-3)">${l.duration_ms!=null?l.duration_ms+'ms':'—'}</td>
+            <td style="font-size:.74rem;color:${l.ok?'var(--ink-3)':'var(--crit-ink)'};max-width:340px;white-space:normal">${esc(l.message||'—')}</td>
+          </tr>`).join('')||`<tr><td colspan="7"><div class="empty" style="padding:44px 20px"><div class="e-ico">📋</div>
+            <div style="font-weight:700;color:var(--ink);margin-bottom:6px">Nothing logged yet</div>
+            Every sync, connection and assistant call will appear here with its result.
+            If a sync silently does nothing, this is where you'll see why.</div></td></tr>`}
+          </tbody></table>
         </div>
       </div>
       <div class="card">
