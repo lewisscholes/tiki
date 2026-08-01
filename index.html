@@ -1035,19 +1035,29 @@ function rangeWindow(range){
 }
 /* Sum live TikTok orders + settlements + batch COGS inside a window. */
 function metricsIn(from, to){
-  const L=CALC_LEV; let gmv=0, net=0, orders=0, costed=0;
+  /* Gross profit: GMV minus every TikTok fee, minus ad spend, minus COGS.
+     Overheads and one-offs are NOT deducted here — they belong to Operating
+     profit on the Profit tab. Two different questions, two different numbers. */
+  const apo=adPerOrder();
+  let gmv=0, net=0, orders=0, costed=0, fees=0, cogs=0, ads=0;
   (TIKTOK_ORDERS||[]).forEach(o=>{
     if(!o.created_at) return;
     const d=new Date(o.created_at);
     if(from&&d<from) return; if(to&&d>=to) return;
-    orders++; const gross=Number(o.total)||0; gmv+=gross;
+    orders++;
+    const iso=o.created_at.slice(0,10);
+    const gross=Number(o.total)||0; gmv+=gross;
     const st=TIKTOK_SETTLEMENTS[o.order_id];
     const settle=st?Number(st.settlement_amount)||0:gross*0.86;
-    const unit=cogsUnitInc(o.created_at.slice(0,10),null);
-    if(unit!=null){ net+=settle-unit*(o.item_count||1); costed++; }
-    else net+=settle;
+    fees += Math.max(0, gross-settle);
+    const ad=apo[iso]||0; ads+=ad;
+    const unit=cogsUnitInc(iso,null);
+    const c = unit!=null ? unit*(o.item_count||1) : 0;
+    if(unit!=null) costed++;
+    cogs+=c;
+    net += settle - ad - c;
   });
-  return { gmv, net, orders, costed };
+  return { gmv, net, orders, costed, fees, cogs, ads };
 }
 function rangeMetrics(range){
   const w=rangeWindow(range);
@@ -1450,6 +1460,14 @@ function renderOverview(){
   const hasData = state.tasks.length||CREATORS.length||RETAINERS.length||k.gmv;
   const overallStatus = !hasData?'Getting Started':overdue>2?'Behind Target':needsLewis.length>3?'Needs Attention':'On Track';
   /* No history yet → show a flat marker rather than a green up-arrow against nothing. */
+  /* Say plainly what's in the number, and warn if COGS coverage is partial. */
+  const grossProfitNote=(m)=>{
+    if(!m.orders) return 'after TikTok fees, ads &amp; COGS';
+    const gap=m.orders-m.costed;
+    const pct=m.gmv?Math.round(m.net/m.gmv*100):0;
+    if(gap>0) return `<span style="color:var(--warn-ink)">${gap} order${gap===1?'':'s'} missing a cost batch</span>`;
+    return `${pct}% margin · after TikTok fees, ads &amp; COGS`;
+  };
   const delta=(d)=> d==null||d==='—' ? `<span class="delta flat">→ —</span>`
     : (typeof d==='number'
         ? (d===0?`<span class="delta flat">→ 0%</span>`:d>0?`<span class="delta up">↑ ${d}%</span>`:`<span class="delta down">↓ ${Math.abs(d)}%</span>`)
@@ -1488,8 +1506,8 @@ function renderOverview(){
     <div class="kpi-grid">
       ${kpi('GMV — '+state.dateRange, money(Math.round(rm.gmv)), 'chart','background:var(--accent-soft);color:var(--accent-ink)',
         `${delta(rm.dGmv)}<span>${rangeNote}</span>`)}
-      ${kpi('Net Revenue', money(Math.round(rm.net)), 'card','background:var(--good-soft);color:var(--good-ink)',
-        `${delta(rm.dNet)}<span>after fees & COGS · ${rangeNote}</span>`)}
+      ${kpi('Gross Profit', money(Math.round(rm.net)), 'card','background:var(--good-soft);color:var(--good-ink)',
+        `${delta(rm.dNet)}<span>${grossProfitNote(rm)}</span>`)}
       ${kpi('Orders — '+state.dateRange, rm.orders, 'video','background:var(--violet-soft);color:var(--violet-ink)',
         `${delta(rm.dOrders)}<span>${rangeNote}</span>`)}
       ${kpi('Active Creators', k.creators, 'users','background:var(--aqua-soft);color:var(--aqua-ink)',
@@ -2548,6 +2566,8 @@ async function tiktokSync(days){
     try{ fin=await callFn('tiktok','sync settlements','/functions/v1/tiktok-finance?days='+(days||90)); }catch(e){}
     let cr={};
     try{ cr=await callFn('tiktok','sync creators','/functions/v1/tiktok-creators'); await creatorsLoad(); }catch(e){}
+    let ads={};
+    try{ ads=await callFn('tiktok','sync GMV Max ad spend','/functions/v1/tiktok-ads?days='+(days||90)); await adSpendLoad(); }catch(e){}
     if(XERO_STATUS&&XERO_STATUS.tenant_id){ try{ await xeroSync(); }catch(e){} }
     await tiktokLoadData(); await settlementsLoad();
     await tiktokLoadStatus();
@@ -2556,6 +2576,7 @@ async function tiktokSync(days){
     if(j.products) bits.push(`${j.products} product${j.products===1?'':'s'}`);
     if(fin&&fin.settlements) bits.push(`${fin.settlements} settlement${fin.settlements===1?'':'s'}`);
     if(cr&&cr.creators) bits.push(`${cr.creators} creator${cr.creators===1?'':'s'}`);
+    if(ads&&ads.days) bits.push(`${ads.days} days of ad spend`);
     toast(bits.length?`Synced — pulled ${bits.join(' and ')}`:'Synced — nothing new found');
     if(j.notes&&j.notes.length) console.warn('TikTok sync notes:', j.notes);
     if(!bits.length&&j.notes&&j.notes.length) tiktokShowNotes(j.notes);
@@ -2623,6 +2644,24 @@ async function tiktokLoadData(){
   }catch(e){ /* leave existing data alone */ }
 }
 let TIKTOK_ORDERS=[], TIKTOK_CANCELLED=0;
+let AD_SPEND={};   // 'YYYY-MM-DD' -> spend
+async function adSpendLoad(){
+  try{
+    const r=await tikiFetch('/rest/v1/tiktok_ad_spend?select=day,spend&order=day.desc&limit=800');
+    if(!r.ok) return;
+    AD_SPEND={};
+    (await r.json()).forEach(x=>AD_SPEND[x.day]=Number(x.spend)||0);
+    recomputePnlFromLive();   // ads land after the other loaders — recompute or the P&L misses them
+  }catch(e){}
+}
+/* Spread a day's ad spend across that day's orders, so per-order margin is fair. */
+function adPerOrder(){
+  const perDay={};
+  (TIKTOK_ORDERS||[]).forEach(o=>{ const d=(o.created_at||'').slice(0,10); if(d) perDay[d]=(perDay[d]||0)+1; });
+  const out={};
+  Object.entries(AD_SPEND).forEach(([d,spend])=>{ if(perDay[d]) out[d]=spend/perDay[d]; });
+  return out;
+}
 /* Affiliate creators from Seller Center → Manage Creators. Synced rows are
    merged into CREATORS (matched by handle) so the existing pipeline, filters
    and detail views keep working on live data. */
@@ -2695,6 +2734,16 @@ async function xeroLoadData(){
 /* Rebuild the overheads organiser from Xero SPEND transactions, grouped by
    payee — the old manual bank-statement workflow, driven by the API.
    Exclude-toggles and frequency overrides survive by label. */
+/* Manual expenses (things the bank feed can't know) and per-vendor overrides
+   (one-off vs monthly, include/exclude). Both persist via tiki_state, so a
+   Xero re-sync never wipes your decisions. */
+let OVERHEAD_MANUAL=[];      // [{label,total,pays,freq,excl,manual:true}]
+let OVERHEAD_RULES={};       // label -> {freq, excl}
+function overheadRule(label){ return OVERHEAD_RULES[label]||{}; }
+function setOverheadRule(label, patch){
+  OVERHEAD_RULES[label]={...(OVERHEAD_RULES[label]||{}), ...patch};
+  tikiPush();
+}
 function xeroBuildOverheads(){
   const spend=XERO_TX.filter(t=>t.type&&t.type.startsWith('SPEND')&&t.status!=='DELETED');
   if(!spend.length) return;
@@ -2707,11 +2756,15 @@ function xeroBuildOverheads(){
   const built=Object.entries(groups).map(([label,txs])=>{
     const total=txs.reduce((n,t)=>n+(Number(t.total)||0),0);
     const months=new Set(txs.map(t=>String(t.tx_date||'').slice(0,7))).size;
-    const freq = txs.length>=3&&months>=3 ? 'monthly' : txs.length>=2&&months>=2 ? 'quarterly' : 'one-off';
-    return { label, total:+total.toFixed(2), pays:txs.length, freq:keep[label]?.freq||freq,
-      excl:keep[label]?.excl||false, xero:true };
+    const guess = txs.length>=3&&months>=3 ? 'monthly' : txs.length>=2&&months>=2 ? 'quarterly' : 'one-off';
+    const rule=overheadRule(label);
+    return { label, total:+total.toFixed(2), pays:txs.length,
+      freq: rule.freq || keep[label]?.freq || guess,
+      excl: rule.excl!==undefined ? rule.excl : (keep[label]?.excl||false), xero:true };
   }).sort((a,b)=>b.total-a.total);
-  replaceArr(PROFIT_VENDORS, built);
+  replaceArr(PROFIT_VENDORS, built.concat(OVERHEAD_MANUAL.map(m=>({...m,
+    freq: overheadRule(m.label).freq || m.freq,
+    excl: overheadRule(m.label).excl!==undefined ? overheadRule(m.label).excl : m.excl }))));
 }
 /* TikTok payouts per statement vs money that landed in the bank
    (Xero RECEIVE lines from TikTok/Stripe — Stripe = TikTok's payer). */
@@ -3126,7 +3179,8 @@ function renderProfit(){
       <button class="btn btn-primary btn-sm" onclick="setBrand('${PROFIT_BRAND}');navTo('profit')">Switch to ${brandInfo(PROFIT_BRAND).name}</button></div></div>`;
     return;
   }
-  const tabs=[['pnl','P&L Overview'],['calc','Calculator'],['orders','Orders'],['cogs','Cost of Goods'],['bank','Bank'],['data','Data & Sync']];
+  const tabs=[['pnl','P&L Overview'],['cogs','Cost of Goods'],['bank','Bank'],['orders','Orders'],['calc','Calculator']];
+  if(!tabs.some(t=>t[0]===state.profitTab)) state.profitTab='pnl';
   const a=pnlActive();
   $('page-profit').innerHTML=`
     <div class="page-head">
@@ -3134,7 +3188,7 @@ function renderProfit(){
         <div class="desc">${hasProfitData()?`Are we making money? · Bank period ${PNL.period} (${PNL.months} months) · ${PNL.nOrders.toLocaleString()} orders`:'Are we making money? · no data yet — connect the bank and settlement feeds below'}</div></div>
       <div class="actions">
         ${hasProfitData()
-          ? `<span class="status-lg ${a.op>=0?'bg-good':'bg-crit'}">${a.op>=0?'● Profitable':'● Operating loss'} ${m2(a.op)}</span>`
+          ? `<span class="status-lg ${a.op>=0?'bg-good':'bg-crit'}">${a.op>=0?'● Operating profit':'● Operating loss'} ${m2(a.op)}</span>`
           : `<span class="status-lg bg-neutral">● Awaiting data</span>`}
       </div>
     </div>
@@ -3143,11 +3197,11 @@ function renderProfit(){
     <div id="profitBody"></div>`;
   const b=$('profitBody');
   if(state.profitTab==='pnl') b.innerHTML=profitPnl();
-  else if(state.profitTab==='calc'){ b.innerHTML=profitCalc(); renderCalcResults(); }
+  else if(state.profitTab==='calc'){ b.innerHTML=profitCalc(); setTimeout(renderCalcResults,0); }
   else if(state.profitTab==='orders') b.innerHTML=profitOrders();
   else if(state.profitTab==='cogs') b.innerHTML=profitCogs();
   else if(state.profitTab==='bank') b.innerHTML=profitBank();
-  else b.innerHTML=profitData();
+  else b.innerHTML=profitCalc();
   if(state.profitTab==='pnl') drawProfitCharts();
 }
 /* =====================================================================
@@ -3164,6 +3218,7 @@ function recomputePnlFromLive(){
   const w=rangeWindow(state.profitRange||'Last 90 Days');
   const inWin=o=>{ if(!w.from) return true; const d=new Date(o.iso+'T12:00:00'); return d>=w.from&&d<w.to; };
   let gross=0, fees=0, settle=0, cogs=0, ads=0, costed=0;
+  const apo=adPerOrder();
   const fb={ plat:0, aff:0, ship:0, fulfil:0, other:0, adj:0, revenue:0, settle:0, settledOrders:0 };
   PROFIT_ORDERS.filter(inWin).forEach(o=>{
     const st=TIKTOK_SETTLEMENTS[o.fullId];
@@ -3184,7 +3239,7 @@ function recomputePnlFromLive(){
     } else fees += Math.max((o.gross||0)-(o.disc||0)-s,0);
     const unitInc=cogsUnitInc(o.iso,o.productId);
     if(unitInc!=null){ cogs+=unitInc*(o.qty||1); costed++; }
-    ads+=o.ad||0;
+    ads+=(apo[o.iso]||o.ad||0);
   });
   PNL.fb=fb;
   PNL.gross=gross; PNL.discounts=0; PNL.netSales=gross;
@@ -3362,10 +3417,10 @@ function profitPnl(){
     ['Total payout (paid + pending)', PNL.settlement, 'sub'],
     [`COGS (${m2(cogsUnitInc(TODAY_ISO,null)||0)}/unit inc VAT)`, -PNL.cogs, 'ded'],
     ['Per-order ad spend', -PNL.ads, 'ded'],
-    ['Contribution', PNL.contribution, 'sub'],
+    ['Gross profit', PNL.contribution, 'sub'],
     ['Monthlies & recurring', -a.mon, 'ded'],
     ['One-off costs', -a.one, 'ded'],
-    ['Operating result', a.op, 'total']
+    ['Operating profit', a.op, 'total']
   ] : [
     ['Gross sales', PNL.gross, 'in'],
     ['Seller discounts', -PNL.discounts, 'ded'],
@@ -3374,10 +3429,10 @@ function profitPnl(){
     ['Settlement (payout)', PNL.settlement, 'sub'],
     [`COGS (${m2(cogsUnitInc(TODAY_ISO,null)||CALC_LEV.cost*vatMult())}/unit inc VAT)`, -PNL.cogs, 'ded'],
     ['Per-order ad spend', -PNL.ads, 'ded'],
-    ['Contribution', PNL.contribution, 'sub'],
+    ['Gross profit', PNL.contribution, 'sub'],
     ['Monthlies & recurring', -a.mon, 'ded'],
     ['One-off costs', -a.one, 'ded'],
-    ['Operating result', a.op, 'total']
+    ['Operating profit', a.op, 'total']
   ];
   const maxAbs=Math.max(PNL.gross, (PNL.fb&&PNL.fb.revenue)||0);
   const wfRow=([l,v,t])=>{
@@ -3403,24 +3458,27 @@ function profitPnl(){
         ${rows.map(v=>{const i=PROFIT_VENDORS.indexOf(v);return `
         <div class="org-row ${v.excl?'off':''}">
           <label class="switch"><input type="checkbox" ${v.excl?'':'checked'} onchange="orgToggle(${i})"><span class="sl"></span></label>
-          <span class="ol">${v.label}</span>
+          <span class="ol">${esc(v.label)}${v.manual?' <span class="badge bg-neutral" style="font-size:.58rem">manual</span>':''}</span>
           <span class="op">${v.pays} payment${v.pays>1?'s':''}</span>
           <select onchange="orgFreq(${i},this.value)">
             ${['one-off','monthly','quarterly','yearly'].map(f=>`<option ${v.freq===f?'selected':''}>${f}</option>`).join('')}
           </select>
           <span class="ov">${m2(v.total)}</span>
-        </div>`;}).join('')}
+          ${v.manual?`<button class="btn btn-ghost btn-xs" style="color:var(--crit-ink)" onclick="orgDeleteManual('${esc(v.label).replace(/'/g,"\\'")}')">✕</button>`:''}
+        </div>`;}).join('')||`<div style="padding:22px 18px;font-size:.8rem;color:var(--ink-3);line-height:1.55">
+          Nothing here yet. ${XERO_STATUS&&XERO_STATUS.tenant_id?'Sync Xero to pull your bank spend, or':'Connect Xero to pull your bank spend, or'}
+          <button class="link-btn" onclick="orgAddManual()">add one manually</button>.</div>`}
       </div></div>`;
   };
   return `
     ${_gap}
     <div class="card" style="border-left:3px solid ${a.op>=0?'var(--good)':'var(--crit)'};margin-bottom:16px">
       <div class="card-b" style="display:flex;gap:26px;flex-wrap:wrap;align-items:center">
-        <div><div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3)">Operating result (actuals)</div>
+        <div><div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3)">Operating profit (actuals)</div>
           <div style="font-size:2rem;font-weight:800;letter-spacing:-.02em" class="${a.op<0?'neg':'pos'}">${m2(a.op)}</div>
           <div style="font-size:.74rem;color:var(--ink-3)">P&L = every bank line, one-offs included · organiser toggles below never affect the Calculator</div></div>
         <div class="divider-v"></div>
-        <div class="mini-stat"><div class="l">Contribution</div><div class="v pos">${m2(PNL.contribution)}</div><div class="s">after fees, COGS & ads</div></div>
+        <div class="mini-stat"><div class="l">Gross profit</div><div class="v ${PNL.contribution<0?'neg':'pos'}">${m2(PNL.contribution)}</div><div class="s">after TikTok fees, ads &amp; COGS — before overheads</div></div>
         <div class="mini-stat"><div class="l">Director loans (funding)</div><div class="v">${m2(PNL.loansTotal)}</div><div class="s">${PNL.loans.map(l=>l[0]+' '+money(l[1])).join(' · ')||'none recorded'}</div></div>
         <div class="mini-stat"><div class="l">Stock on hand (asset)</div><div class="v">${m2(PNL.stock)}</div><div class="s">${COGS_BATCHES.length?`${(COGS_BATCHES.reduce((n,b)=>n+(+b.qty||0),0)).toLocaleString()} units × ${m2(cogsUnitInc(TODAY_ISO,null)||0)} inc VAT`:'add a cost batch to value your stock'}</div></div>
       </div>
@@ -3443,16 +3501,51 @@ function profitPnl(){
       <div class="card"><div class="card-h"><div class="t">Net Result by Month</div><div class="sub">One-offs land where they were paid</div></div>
         <div class="card-b"><div class="chart-box sm" id="pfNetChart"></div></div></div>
     </div>
-    <div class="section-title">Running-costs organiser <span class="badge bg-neutral">Overview-only state</span></div>
+    <div class="section-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      Running-costs organiser
+      ${XERO_STATUS&&XERO_STATUS.tenant_id
+        ? `<span class="badge bg-good">● From Xero · ${XERO_TX.filter(t=>t.type&&t.type.startsWith('SPEND')).length} bank lines</span>`
+        : `<span class="badge bg-warn">Xero not connected — <button class="link-btn" onclick="navTo('settings')">connect to pull your bank spend</button></span>`}
+      <button class="btn btn-soft btn-xs" style="margin-left:auto" onclick="orgAddManual()">＋ Add expense</button>
+    </div>
     <div class="grid g-2">
       ${orgGroup('One-off costs', isOneOff, 'Setup & launch spend — real money, but not the run-rate')}
       ${orgGroup('Monthlies & recurring', f=>f!=='one-off', 'The ongoing cost of operating')}
     </div>`;
 }
 const isOneOff=f=>f==='one-off';
-function orgToggle(i){ PROFIT_VENDORS[i].excl=!PROFIT_VENDORS[i].excl; renderProfit(); }
-function orgFreq(i,f){ PROFIT_VENDORS[i].freq=f; toast(`${PROFIT_VENDORS[i].label} → ${f}`); renderProfit(); }
-function orgAll(oneOff,on){ PROFIT_VENDORS.forEach(v=>{ if(isOneOff(v.freq)===oneOff) v.excl=!on; }); renderProfit(); }
+function orgToggle(i){ const v=PROFIT_VENDORS[i]; v.excl=!v.excl; setOverheadRule(v.label,{excl:v.excl}); recomputePnlFromLive(); renderProfit(); }
+function orgFreq(i,f){ const v=PROFIT_VENDORS[i]; v.freq=f; setOverheadRule(v.label,{freq:f}); toast(`${v.label} → ${f}`); recomputePnlFromLive(); renderProfit(); }
+function orgAll(oneOff,on){ PROFIT_VENDORS.forEach(v=>{ if(isOneOff(v.freq)===oneOff){ v.excl=!on; setOverheadRule(v.label,{excl:!on}); } }); recomputePnlFromLive(); renderProfit(); }
+function orgAddManual(){
+  openModal(modalShell('Add an expense',`
+    <p style="font-size:.83rem;color:var(--ink-2);line-height:1.6;margin-bottom:14px">
+      For costs that don't appear in the bank feed — or that you want counted separately.
+      Anything you add here sits alongside the Xero-sourced rows and toggles the same way.</p>
+    <div class="form-grid">
+      <div class="field"><label>What is it?</label><input id="omLabel" placeholder="e.g. Trade show stand"></div>
+      <div class="field"><label>Amount (£)</label><input id="omTotal" type="number" step="0.01" placeholder="1200"></div>
+      <div class="field"><label>Type</label><select id="omFreq">
+        <option value="one-off">One-off</option><option value="monthly">Monthly</option>
+        <option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select></div>
+      <div class="field"><label>Number of payments</label><input id="omPays" type="number" value="1"></div>
+    </div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" onclick="orgSaveManual()">Add expense</button>`));
+}
+function orgSaveManual(){
+  const label=$('omLabel').value.trim(), total=parseFloat($('omTotal').value);
+  if(!label||!(total>0)) return toast('Give it a name and an amount');
+  OVERHEAD_MANUAL.push({ label, total:+total.toFixed(2), pays:parseInt($('omPays').value)||1,
+    freq:$('omFreq').value, excl:false, manual:true });
+  xeroBuildOverheads();
+  if(!XERO_TX.length) replaceArr(PROFIT_VENDORS, PROFIT_VENDORS.concat([]));
+  closeModal(); tikiPush(); recomputePnlFromLive(); toast(`${label} added`); renderProfit();
+}
+function orgDeleteManual(label){
+  OVERHEAD_MANUAL=OVERHEAD_MANUAL.filter(m=>m.label!==label);
+  xeroBuildOverheads(); tikiPush(); recomputePnlFromLive(); toast('Removed'); renderProfit();
+}
 function donutSvg(segs,size){
   const tot=segs.reduce((s,x)=>s+x[1],0), r=size/2-10, cx=size/2, cy=size/2, sw=20;
   if(!tot) return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
@@ -3610,6 +3703,7 @@ function renderCalcResults(){
 /* ---- Orders ---- */
 function profitOrders(){
   const L=CALC_LEV, ovh=2.33;
+  const apoTable=adPerOrder();
   const nSettled=PROFIT_ORDERS.filter(o=>TIKTOK_SETTLEMENTS[o.fullId]).length;
   const haveCogs=COGS_BATCHES.length>0;
   return `<div class="chip-row" style="margin-bottom:14px">
@@ -3635,7 +3729,8 @@ function profitOrders(){
       const feeAff  = st ? Number(st.fee_affiliate)||0 : 0;
       const unit = cogsUnitInc(o.iso, o.productId);
       const cogs = unit!=null ? unit*o.qty : 0;
-      const net = settle - cogs - (o.ad||0) - ovh;
+      const adCost = apoTable[o.iso] || o.ad || 0;
+      const net = settle - cogs - adCost - ovh;
       const mg = o.gross? net/o.gross*100 : 0;
       return `<tr>
         <td class="main-cell"><div class="t">#${o.id}</div><div class="s">${o.d}${st?'':' · est.'}</div></td>
@@ -3646,7 +3741,7 @@ function profitOrders(){
         <td class="num neg">${feeAff?m2(-feeAff):'—'}</td>
         <td class="num" style="font-weight:600">${m2(settle)}${st?'':'<span title="estimated" style="color:var(--warn-ink)">*</span>'}</td>
         <td class="num ${unit==null?'':'neg'}">${unit==null?'<span title="no cost batch covers this date" style="color:var(--warn-ink)">—</span>':m2(-cogs)}</td>
-        <td class="num neg">${o.ad?m2(-o.ad):'—'}</td>
+        <td class="num neg">${adCost?m2(-adCost):'—'}</td>
         <td class="num neg">${m2(-ovh)}</td>
         <td class="num ${net<0?'neg':'pos'}" style="font-weight:700">${unit==null?'<span style="color:var(--ink-3)">—</span>':m2(net)}</td>
         <td class="num" style="font-weight:600;color:${mg<0?'var(--crit-ink)':mg<15?'var(--warn-ink)':'var(--good-ink)'}">${unit==null?'—':mg.toFixed(0)+'%'}</td>
@@ -3803,55 +3898,7 @@ function profitBankLegacy(){
   </div>`;
 }
 /* ---- Data & Sync ---- */
-function profitData(){
-  const checks=[['Settlement total','£20,340.89'],['Overhead total','£16,831.82'],['Director loans','£14,485.51'],['Stock spend','£11,846.27'],['Period orders (nOrders)','1,446'],['Bank rows','310'],['Config rows','3'],['Operating result (all on)','−£13,068.12']];
-  return `<div class="grid g-2">
-    <div class="card" style="border-left:3px solid var(--good)"><div class="card-h"><div class="t">Revolut Bank Feed</div><span class="badge bg-good">● Connected</span></div>
-      <div class="card-b">
-        <div class="detail-kv">
-          <span class="k">Account</span><span class="v">${REVOLUT.account}</span>
-          <span class="k">Realtime</span><span class="v">Webhook active — TransactionCreated / StateChanged, HMAC-verified</span>
-          <span class="k">Reconciliation</span><span class="v">Hourly sweep · GET /transactions (paged, max 1,000)</span>
-          <span class="k">Last sweep</span><span class="v">${REVOLUT.lastSweep} · next ${REVOLUT.nextSweep}</span>
-          <span class="k">Credentials</span><span class="v" style="font-weight:500">Refresh token in Supabase Vault · access token auto-renews (40 min)</span>
-          <span class="k">Statements</span><span class="v"><span class="badge bg-good">No longer needed</span> — was manual PDF upload</span>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
-          <button class="btn btn-soft btn-sm" onclick="revolutSyncNow()">${ICONS.refresh} Sync now</button>
-          <button class="btn btn-ghost btn-sm" onclick="openRevolutModal()">${ICONS.eye} How it works</button>
-          <button class="btn btn-ghost btn-sm" onclick="navTo('settings')">${ICONS.gear} Manage in Settings → API</button>
-        </div>
-      </div></div>
-    <div class="card"><div class="card-h"><div class="t">Live Backend</div><span class="badge bg-good">● Connected</span></div>
-      <div class="card-b">
-        <div class="detail-kv">
-          <span class="k">Project</span><span class="v">LYTES Profit Tracker (Supabase)</span>
-          <span class="k">Ref</span><span class="v" style="font-family:monospace;font-size:.76rem">pkmanpmvjcjaocszmrfe · eu-west-1</span>
-          <span class="k">Data source</span><span class="v"><span class="badge bg-good">supabase</span> auto-pull on boot</span>
-          <span class="k">Last pull</span><span class="v">Today, 09:12</span>
-          <span class="k">Seeded</span><span class="v">1,446 orders · 310 bank rows · 3 config rows</span>
-          <span class="k">Auth</span><span class="v" style="font-weight:500">anon key + permissive RLS <span class="badge bg-warn">lock down before public</span></span>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
-          <button class="btn btn-soft btn-sm" onclick="toast('Pulled latest from Supabase (prototype)')">${ICONS.download} Pull</button>
-          <button class="btn btn-soft btn-sm" onclick="toast('Pushed to Supabase — delete-all + chunked insert (prototype)')">${ICONS.send} Push</button>
-          <button class="btn btn-ghost btn-sm" onclick="toast('Data pack import (.xlsx, app_data_json tab) — full app')">Import data pack</button>
-          <button class="btn btn-ghost btn-sm" onclick="toast('Raw TikTok export import (fixes broken !ref range) — full app')">Import TikTok export</button>
-          <button class="btn btn-ghost btn-sm" onclick="toast('JSON exported (prototype)')">Export JSON</button>
-        </div>
-      </div></div>
-    <div class="card"><div class="card-h"><div class="t">Reconciliation</div><div class="sub">verify.py — 12-check validation</div></div>
-      <div class="card-b flush">
-        ${checks.map(([l,v])=>`<div class="org-row"><span style="color:var(--good-ink);width:15px;display:inline-block">${ICONS.check}</span><span class="ol" style="font-weight:500">${l}</span><span class="ov">${v}</span></div>`).join('')}
-        <div class="org-row" style="background:var(--good-soft)"><span class="ol" style="font-weight:700;color:var(--good-ink)">All 12 checks passed</span><span class="op">last run: today</span></div>
-      </div></div>
-    <div class="card" style="grid-column:1/-1"><div class="card-h"><div><div class="t">Automated Ingestion Roadmap</div><div class="sub">Replaces manual uploads in the full build</div></div></div>
-      <div class="card-b flush tbl-wrap"><table class="tbl"><thead><tr><th>Source</th><th>Feeds</th><th>API</th><th>Status</th></tr></thead><tbody>
-        ${[['Revolut Business','Bank transactions — webhook + hourly sweep','Business API','Connected'],['TikTok Shop Inventory','Stock per SKU + sample location — 30-min sweep','Products/Inventory API','Connected'],['Shopify Inventory','DTC stock levels — 30-min sweep','Admin API (inventory_levels)','Connected'],['3PL warehouse count','Physical count reconciliation — weekly','CSV / portal export','Connected'],['TikTok Shop Finance','Orders + settlement','Finance/Settlement API','Planned'],['TikTok Ads daily cost','Ad allocation per order-day','Ads Reporting API','Planned'],['Meta Marketing','Shopify (DTC) campaign spend','Marketing API insights','Planned'],['Shopify Admin','DTC orders + payouts','Admin API','Planned']].map(r=>`
-        <tr><td style="font-weight:600">${r[0]}</td><td>${r[1]}</td><td style="font-size:.78rem">${r[2]}</td><td><span class="badge ${r[3]==='Connected'?'bg-good':'bg-neutral'}">${r[3]==='Connected'?'● Connected':r[3]}</span></td></tr>`).join('')}
-      </tbody></table></div></div>
-  </div>`;
-}
+
 
 /* =====================================================================
    PAGE: BRIEFS — Figma-style content brief canvas for affiliates
@@ -6018,6 +6065,7 @@ function collectTikiState(){
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
+    overheadManual:OVERHEAD_MANUAL, overheadRules:OVERHEAD_RULES,
     vaultBlob:TIKI_VAULT.blob };
 }
 function replaceArr(target, src){ if(Array.isArray(src)){ target.length=0; src.forEach(x=>target.push(x)); } }
@@ -6037,6 +6085,8 @@ function applyTikiState(d){
   /* Team and brands are objects, not arrays — merge in place so the constants stay live. */
   if(d.users && Object.keys(d.users).length){ Object.keys(USERS).forEach(k=>delete USERS[k]); Object.assign(USERS,d.users); }
   if(Array.isArray(d.aiChat)) AI.msgs=d.aiChat;
+  if(Array.isArray(d.overheadManual)) OVERHEAD_MANUAL=d.overheadManual;
+  if(d.overheadRules&&typeof d.overheadRules==='object') OVERHEAD_RULES=d.overheadRules;
   if(d.brands && Object.keys(d.brands).length){
     Object.keys(BRANDS).forEach(k=>delete BRANDS[k]); Object.assign(BRANDS,d.brands);
     if(!BRANDS[state.brand] && state.brand!=='all') state.brand=defaultBrand();
@@ -6072,7 +6122,7 @@ async function tikiEnter(inviteType){
   resolveMe();
   await tiktokLoadStatus(); await xeroLoadStatus();
   await cogsLoad();
-  if(TIKTOK_STATUS&&TIKTOK_STATUS.shop_id){ await tiktokLoadData(); await settlementsLoad(); await creatorsLoad(); }
+  if(TIKTOK_STATUS&&TIKTOK_STATUS.shop_id){ await tiktokLoadData(); await settlementsLoad(); await creatorsLoad(); await adSpendLoad(); }
   if(XERO_STATUS&&XERO_STATUS.tenant_id) await xeroLoadData();
   rerenderAll(); renderNotifs();
   navTo('overview');
