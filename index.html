@@ -2420,8 +2420,8 @@ const API_CONNS = [
     feeds:'Profit → Orders & Bank · Products stock · Overview KPIs' },
   { id:'tt-ads',  provider:'TikTok',  icon:'🎵', name:'TikTok Ads — Reporting', desc:'Daily ad cost → per-order ad allocation',
     status:'off', last:null, freq:'Daily, 06:00', auth:'TikTok for Business OAuth', scopes:['reporting.read'], webhook:null, feeds:'Profit → adCost per order-day' },
-  { id:'rev-tx',  provider:'Revolut', icon:'🏦', name:'Revolut Business — Transactions', desc:'Bank feed: webhook realtime + hourly sweep',
-    status:'off', last:null, freq:'Webhook + hourly', auth:'Certificate OAuth · refresh token in Vault', scopes:['READ'], webhook:null, feeds:'Profit → Bank · P&L actuals' },
+  { id:'xero',    provider:'Xero',    icon:'📚', name:'Xero', desc:'Bank transactions & categorised overheads — replaces manual statements',
+    status:'off', last:null, freq:'On sync', auth:'OAuth 2.0 · rotating refresh token', scopes:['accounting.transactions.read','accounting.reports.read'], webhook:null, feeds:'Profit → Bank, Overheads organiser, payout matching' },
   { id:'shp',     provider:'Shopify', icon:'🛍️', name:'Shopify', desc:'DTC stock, orders and payout reconciliation',
     status:'off', last:null, freq:'Hourly', auth:'Admin API access token', webhook:'Available',
     scopes:['read_inventory','read_orders','read_payouts'], feeds:'Products stock split · Profit → Orders (DTC channel)' }
@@ -2466,6 +2466,21 @@ async function tiktokLoadStatus(){
    refuses to render HTML on its own domain. Show the outcome in Tiki's own UI. */
 function tiktokCatchReturn(){
   const q=new URLSearchParams(location.search);
+  const xs=q.get('xero');
+  if(xs){
+    const org=q.get('org')||'', msg=q.get('msg')||'';
+    q.delete('xero'); q.delete('org'); q.delete('msg');
+    history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+location.hash);
+    const box=document.createElement('div');
+    box.className='tt-result '+(xs==='ok'?'ok':'err');
+    box.innerHTML = xs==='ok'
+      ? `<b>✅ Xero connected</b><div>${esc(org)} is linked. Press Sync now and your overheads rebuild from the bank feed.</div>`
+      : `<b>⚠️ Couldn't connect Xero</b><div>${esc(msg||'Unknown error.')}</div>`;
+    box.onclick=()=>box.remove();
+    document.body.appendChild(box);
+    setTimeout(()=>box.classList.add('show'),40);
+    setTimeout(()=>box.remove(), xs==='ok'?9000:20000);
+  }
   const st=q.get('tiktok'); if(!st) return;
   const shop=q.get('shop')||'', msg=q.get('msg')||'';
   q.delete('tiktok'); q.delete('shop'); q.delete('msg');
@@ -2533,6 +2548,7 @@ async function tiktokSync(days){
     try{ fin=await callFn('tiktok','sync settlements','/functions/v1/tiktok-finance?days='+(days||90)); }catch(e){}
     let cr={};
     try{ cr=await callFn('tiktok','sync creators','/functions/v1/tiktok-creators'); await creatorsLoad(); }catch(e){}
+    if(XERO_STATUS&&XERO_STATUS.tenant_id){ try{ await xeroSync(); }catch(e){} }
     await tiktokLoadData(); await settlementsLoad();
     await tiktokLoadStatus();
     const bits=[];
@@ -2651,6 +2667,90 @@ function creatorRank(list){
   });
 }
 
+/* ---- XERO ---------------------------------------------------------- */
+let XERO_STATUS=null, XERO_TX=[];
+async function xeroLoadStatus(){
+  try{
+    const r=await tikiFetch('/rest/v1/xero_auth?id=eq.org&select=tenant_id,tenant_name,last_sync,last_error,connected_at');
+    if(!r.ok) return null;
+    XERO_STATUS=(await r.json())[0]||null;
+    const row=API_CONNS.find(c=>c.id==='xero');
+    if(row){
+      const live=!!(XERO_STATUS&&XERO_STATUS.tenant_id);
+      row.status=live?'connected':'off';
+      row.shopName=live?XERO_STATUS.tenant_name:null;
+      row.last=live&&XERO_STATUS.last_sync?new Date(XERO_STATUS.last_sync).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):null;
+    }
+    return XERO_STATUS;
+  }catch(e){ return null; }
+}
+async function xeroLoadData(){
+  try{
+    XERO_TX=await tikiFetchAll('/rest/v1/xero_transactions?select=tx_id,tx_date,type,status,contact,total,currency,reference&order=tx_date.desc');
+    xeroBuildOverheads();
+    recomputePnlFromLive();
+  }catch(e){}
+}
+/* Rebuild the overheads organiser from Xero SPEND transactions, grouped by
+   payee — the old manual bank-statement workflow, driven by the API.
+   Exclude-toggles and frequency overrides survive by label. */
+function xeroBuildOverheads(){
+  const spend=XERO_TX.filter(t=>t.type&&t.type.startsWith('SPEND')&&t.status!=='DELETED');
+  if(!spend.length) return;
+  const keep=Object.fromEntries(PROFIT_VENDORS.map(v=>[v.label,v]));
+  const groups={};
+  spend.forEach(t=>{
+    const label=(t.contact||t.reference||'Uncategorised').trim()||'Uncategorised';
+    (groups[label]=groups[label]||[]).push(t);
+  });
+  const built=Object.entries(groups).map(([label,txs])=>{
+    const total=txs.reduce((n,t)=>n+(Number(t.total)||0),0);
+    const months=new Set(txs.map(t=>String(t.tx_date||'').slice(0,7))).size;
+    const freq = txs.length>=3&&months>=3 ? 'monthly' : txs.length>=2&&months>=2 ? 'quarterly' : 'one-off';
+    return { label, total:+total.toFixed(2), pays:txs.length, freq:keep[label]?.freq||freq,
+      excl:keep[label]?.excl||false, xero:true };
+  }).sort((a,b)=>b.total-a.total);
+  replaceArr(PROFIT_VENDORS, built);
+}
+/* TikTok payouts per statement vs money that landed in the bank
+   (Xero RECEIVE lines from TikTok/Stripe — Stripe = TikTok's payer). */
+function payoutRows(){
+  const by={};
+  Object.values(TIKTOK_SETTLEMENTS).forEach(st=>{
+    if(!st.statement_id) return;
+    const b=(by[st.statement_id]=by[st.statement_id]||{ id:st.statement_id, date:st.settled_at, amount:0, orders:0 });
+    b.amount+=Number(st.settlement_amount)||0; b.orders++;
+  });
+  const payouts=Object.values(by).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const receipts=XERO_TX.filter(t=>t.type==='RECEIVE'&&/tiktok|stripe|bytedance/i.test((t.contact||'')+' '+(t.reference||'')));
+  payouts.forEach(p=>{
+    p.match=receipts.find(r=>Math.abs((Number(r.total)||0)-p.amount)<0.05
+      && Math.abs(new Date(r.tx_date)-new Date(p.date))<12*864e5)||null;
+  });
+  return payouts;
+}
+function xeroConnect(){
+  openModal(modalShell('Connect Xero',`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <span style="font-size:1.8rem">📚</span>
+      <div><div style="font-weight:700">Xero — Lytes Ltd</div>
+        <div style="font-size:.78rem;color:var(--ink-3)">Bank transactions & categorised overheads, read-only</div></div>
+    </div>
+    <div class="timeline-mini" style="margin-bottom:16px">
+      <div class="tm-item"><b>1 · Approve on Xero</b><div style="color:var(--ink-2)">You'll be sent to Xero to log in and approve read-only access to the Lytes organisation.</div></div>
+      <div class="tm-item"><b>2 · Straight back here</b><div style="color:var(--ink-2)">Tokens stay server-side and refresh themselves (Xero rotates them every ~30 minutes — handled).</div></div>
+      <div class="tm-item"><b>3 · Overheads rebuild automatically</b><div style="color:var(--ink-2)">Bank spend groups by payee into the Running-costs organiser — the old spreadsheet workflow, driven by the API.</div></div>
+    </div>
+    ${XERO_STATUS&&XERO_STATUS.last_error?`<div style="background:var(--crit-soft);border:1px solid #f3caca;border-radius:11px;padding:11px 13px;font-size:.78rem;color:var(--crit-ink);line-height:1.5">
+      <b>Last attempt failed:</b> ${esc(String(XERO_STATUS.last_error).slice(0,200))}</div>`:''}`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+     <a class="btn btn-primary" href="${TIKI_CFG.url}/functions/v1/xero-oauth?start=1" style="text-decoration:none">Connect with Xero →</a>`));
+}
+async function xeroSync(){
+  const j=await callFn('xero','sync bank transactions','/functions/v1/xero-sync');
+  await xeroLoadData(); await xeroLoadStatus();
+  return j;
+}
 function tiktokConnect(){
   const url=`${TIKTOK_AUTH_URL}?service_id=${TIKTOK_SERVICE_ID}&state=tiki`;
   openModal(modalShell('Connect your TikTok Shop',`
@@ -2672,6 +2772,7 @@ function tiktokConnect(){
 function apiConnect(id){
   const c=API_CONNS.find(x=>x.id===id);
   if(c.id==='tt-shop') return tiktokConnect();
+  if(c.id==='xero') return xeroConnect();
   openModal(modalShell(`Connect ${c.name}`,`
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
       <span style="font-size:1.8rem">${c.icon}</span>
@@ -2792,7 +2893,7 @@ function apiSection(){
    PAGE: SETTINGS
    ===================================================================== */
 function renderSettings(){
-  Promise.all([tiktokLoadStatus(), apiLogLoad()]).then(()=>{ if(state.page==='settings') renderSettingsInner(); });
+  Promise.all([tiktokLoadStatus(), xeroLoadStatus(), apiLogLoad()]).then(()=>{ if(state.page==='settings') renderSettingsInner(); });
   renderSettingsInner();
 }
 async function apiLogRefresh(){ await apiLogLoad(); if(state.page==='settings') renderSettingsInner(); toast('Log refreshed'); }
@@ -3062,17 +3163,28 @@ function recomputePnlFromLive(){
   const w=rangeWindow(state.profitRange||'Last 90 Days');
   const inWin=o=>{ if(!w.from) return true; const d=new Date(o.iso+'T12:00:00'); return d>=w.from&&d<w.to; };
   let gross=0, fees=0, settle=0, cogs=0, ads=0, costed=0;
+  const fb={ plat:0, aff:0, ship:0, fulfil:0, other:0, adj:0, revenue:0, settledOrders:0 };
   PROFIT_ORDERS.filter(inWin).forEach(o=>{
     const st=TIKTOK_SETTLEMENTS[o.fullId];
     gross+=o.gross||0;
     const s = st?Number(st.settlement_amount)||0 : (o.set||0);
     settle+=s;
-    fees += st ? (Number(st.fee_platform)||0)+(Number(st.fee_affiliate)||0)+(Number(st.fee_transaction)||0)
-               : Math.max((o.gross||0)-(o.disc||0)-s,0);
+    if(st){
+      fb.settledOrders++;
+      fb.revenue+=Number(st.revenue_amount)||0;
+      fb.plat+=Number(st.fee_platform)||0;
+      fb.aff+=Number(st.fee_affiliate)||0;
+      fb.ship+=(Number(st.fee_shipping)||0);
+      fb.fulfil+=(Number(st.fee_fulfilment)||0)+(Number(st.fee_transaction)||0);
+      fb.other+=Number(st.fee_other)||0;
+      fb.adj+=Number(st.adjustment)||0;
+      fees+=(Number(st.fee_platform)||0)+(Number(st.fee_affiliate)||0)+(Number(st.fee_other)||0)+(Number(st.fee_transaction)||0);
+    } else fees += Math.max((o.gross||0)-(o.disc||0)-s,0);
     const unit=cogsUnitFor(o.iso,o.productId);
     if(unit!=null){ cogs+=unit*(1+L.vat/100)*(o.qty||1); costed++; }
     ads+=o.ad||0;
   });
+  PNL.fb=fb;
   PNL.gross=gross; PNL.discounts=0; PNL.netSales=gross;
   PNL.fees=fees; PNL.settlement=settle; PNL.cogs=cogs; PNL.ads=ads;
   PNL.contribution=settle-cogs-ads;
@@ -3098,7 +3210,7 @@ async function cogsLoad(){
 }
 async function settlementsLoad(){
   try{
-    const rows=await tikiFetchAll('/rest/v1/tiktok_settlements?select=order_id,settlement_amount,revenue_amount,fee_platform,fee_affiliate,fee_shipping,fee_transaction,currency,settled_at&order=settled_at.desc');
+    const rows=await tikiFetchAll('/rest/v1/tiktok_settlements?select=order_id,statement_id,settlement_amount,revenue_amount,fee_platform,fee_affiliate,fee_shipping,fee_transaction,fee_fulfilment,fee_other,adjustment,currency,settled_at&order=settled_at.desc');
     TIKTOK_SETTLEMENTS={};
     rows.forEach(x=>TIKTOK_SETTLEMENTS[x.order_id]=x);
     recomputePnlFromLive();
@@ -3227,7 +3339,23 @@ async function cogsDelete(id){
 function profitPnl(){
   const _gap=cogsGapNote();
   const a=pnlActive();
-  const wf=[
+  const fb=PNL.fb;
+  const wf= fb&&fb.settledOrders ? [
+    ['Gross sales', PNL.gross, 'in'],
+    ['Platform commission', -fb.plat, 'ded'],
+    ['Affiliate commissions', -fb.aff, 'ded'],
+    ['Shipping (seller-borne)', -fb.ship, 'ded'],
+    ...(fb.fulfil>0.005?[['Fulfilment & transaction', -fb.fulfil, 'ded']]:[]),
+    ['Other TikTok fees', -fb.other, 'ded'],
+    ['Adjustments', fb.adj, fb.adj>=0?'in':'ded'],
+    ['Settlement (payout)', PNL.settlement, 'sub'],
+    [`COGS (${m2(CALC_LEV.cost*(1+CALC_LEV.vat/100))}/unit inc VAT)`, -PNL.cogs, 'ded'],
+    ['Per-order ad spend', -PNL.ads, 'ded'],
+    ['Contribution', PNL.contribution, 'sub'],
+    ['Monthlies & recurring', -a.mon, 'ded'],
+    ['One-off costs', -a.one, 'ded'],
+    ['Operating result', a.op, 'total']
+  ] : [
     ['Gross sales', PNL.gross, 'in'],
     ['Seller discounts', -PNL.discounts, 'ded'],
     ['Net sales', PNL.netSales, 'sub'],
@@ -3569,6 +3697,33 @@ for (const t of await tx.json())<br>
 }
 /* ---- Bank ---- */
 function profitBank(){
+  const payouts=payoutRows();
+  if(payouts.length){
+    const matched=payouts.filter(p=>p.match).length;
+    return `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-h"><div><div class="t">TikTok Payouts → Bank</div>
+        <div class="sub">${payouts.length} payout statement${payouts.length===1?'':'s'} · ${matched} matched to a bank receipt${XERO_STATUS&&XERO_STATUS.tenant_id?'':' · connect Xero to match against the bank'}</div></div></div>
+      <div class="card-b flush tbl-wrap" style="max-height:420px;overflow-y:auto">
+        <table class="tbl"><thead><tr>
+          <th>Statement</th><th>Date</th><th class="num">Orders</th><th class="num">Payout</th><th>Bank match</th>
+        </tr></thead><tbody>
+        ${payouts.slice(0,60).map(p=>`<tr>
+          <td class="main-cell"><div class="t">#${esc(String(p.id).slice(-10))}</div></td>
+          <td>${p.date?fmtDate(String(p.date).slice(0,10)):'—'}</td>
+          <td class="num">${p.orders}</td>
+          <td class="num" style="font-weight:700">${m2(p.amount)}</td>
+          <td>${p.match
+            ? `<span class="badge bg-good">✓ landed ${fmtDate(p.match.tx_date)}</span>`
+            : (XERO_STATUS&&XERO_STATUS.tenant_id?'<span class="badge bg-warn">not matched yet</span>':'<span class="badge bg-neutral">—</span>')}</td>
+        </tr>`).join('')}
+        </tbody></table>
+      </div>
+    </div>`+profitBankLegacy();
+  }
+  return profitBankLegacy();
+}
+function profitBankLegacy(){
   const pendingRows = PROFIT_PENDING.map(p=>`
     <div class="org-row">
       <span class="b-dot" style="background:${p.via==='webhook'?'var(--good)':'var(--accent)'};flex-shrink:0" title="${p.via}"></span>
@@ -5904,9 +6059,10 @@ async function tikiEnter(inviteType){
   try{ await tikiPull(); syncStatus('', 'Synced · '+tikiSession.email.split('@')[0]); }
   catch(e){ syncStatus('error','Load failed — using local'); }
   resolveMe();
-  await tiktokLoadStatus();
+  await tiktokLoadStatus(); await xeroLoadStatus();
   await cogsLoad();
   if(TIKTOK_STATUS&&TIKTOK_STATUS.shop_id){ await tiktokLoadData(); await settlementsLoad(); await creatorsLoad(); }
+  if(XERO_STATUS&&XERO_STATUS.tenant_id) await xeroLoadData();
   rerenderAll(); renderNotifs();
   navTo('overview');
   setInterval(tikiPush, 4000);
