@@ -1064,7 +1064,86 @@ function rangeMetrics(range){
   const cur=metricsIn(w.from,w.to);
   const prev=w.days?metricsIn(w.prevFrom,w.prevTo):{gmv:0,net:0,orders:0};
   const pct=(a,b)=>b>0?Math.round((a-b)/b*100):null;
-  return { ...cur, dGmv:pct(cur.gmv,prev.gmv), dNet:pct(cur.net,prev.net), dOrders:pct(cur.orders,prev.orders), window:w };
+  /* Fee drag is a share, so compare it in percentage POINTS. A drag going
+     18% -> 20% is "up 2 points", not "up 11%" — the latter sounds alarming
+     and tells you nothing about the money. */
+  const drag=m=>m.gmv>0?m.fees/m.gmv*100:null;
+  const curDrag=drag(cur), prevDrag=drag(prev);
+  return { ...cur, dGmv:pct(cur.gmv,prev.gmv), dNet:pct(cur.net,prev.net), dOrders:pct(cur.orders,prev.orders),
+    drag:curDrag, dDrag: curDrag!=null&&prevDrag!=null ? +(curDrag-prevDrag).toFixed(1) : null, window:w };
+}
+/* Chart buckets that follow the date picker instead of being stuck on 8 weeks.
+   Granularity adapts so the shape stays readable: a 3-day range plots 3 days,
+   a 90-day range plots weeks, all-time plots months. Each bucket carries GMV and
+   gross profit, because the gap between those two lines IS the story — GMV
+   climbing while profit flatlines is the single most expensive thing to miss. */
+function rangeBuckets(range){
+  const w=rangeWindow(range);
+  const orders=(TIKTOK_ORDERS||[]).filter(o=>o.created_at).map(o=>o.created_at.slice(0,10)).sort();
+  if(!orders.length) return { labels:[], gmv:[], net:[], margin:[], unit:'day' };
+
+  let start, end=new Date(TODAY); end.setDate(end.getDate()+1);
+  if(w.days) start=new Date(w.from); else start=new Date(orders[0]);
+  if(isNaN(start)) start=new Date(orders[0]);
+
+  const span=Math.max(1,Math.round((end-start)/864e5));
+  const unit = span<=16 ? 'day' : span<=95 ? 'week' : 'month';
+
+  /* Bucket edges, oldest first. */
+  const edges=[];
+  if(unit==='day'){
+    for(let d=new Date(start); d<end; d.setDate(d.getDate()+1)) edges.push(new Date(d));
+  } else if(unit==='week'){
+    const m=new Date(start); m.setDate(m.getDate()-((m.getDay()+6)%7));
+    for(let d=new Date(m); d<end; d.setDate(d.getDate()+7)) edges.push(new Date(d));
+  } else {
+    const m=new Date(start.getFullYear(), start.getMonth(), 1);
+    for(let d=new Date(m); d<end; d.setMonth(d.getMonth()+1)) edges.push(new Date(d));
+  }
+  if(!edges.length) edges.push(new Date(start));
+
+  const labels=[], gmv=[], net=[], margin=[], days=[];
+  edges.forEach((from,i)=>{
+    const to=i+1<edges.length?edges[i+1]:end;
+    const m=metricsIn(from,to);
+    gmv.push(+m.gmv.toFixed(2));
+    net.push(+m.net.toFixed(2));
+    margin.push(m.gmv>0?+(m.net/m.gmv*100).toFixed(1):0);
+    days.push(Math.max(1,Math.round((to-from)/864e5)));
+    labels.push(unit==='month'
+      ? from.toLocaleDateString('en-GB',{month:'short',year:'2-digit'})
+      : from.toLocaleDateString('en-GB',{day:'numeric',month:'short'}));
+  });
+  return { labels, gmv, net, margin, days, unit };
+}
+
+/* ---- DECISION METRICS ----------------------------------------------
+   Each of these exists to answer a question you'd act on, not to be looked at.
+   Stock cover -> reorder now or not. Fee drag -> is the platform quietly taking
+   more. Break-even -> is today paying for itself. */
+
+/* Monthly overhead RUN RATE, not total spend. A vendor's stored total is
+   everything we've ever paid them, so it has to be divided by the number of
+   months we've actually observed or a 6-month history reads as a 6x bill. */
+function monthlyOverheads(){
+  return PROFIT_VENDORS
+    .filter(v=>v.freq!=='one-off'&&!v.excl)
+    .reduce((s,v)=>s+(Number(v.total)||0)/Math.max(1,Number(v.months)||1),0);
+}
+function dailyBreakEven(){ return monthlyOverheads()/30.44; }
+
+/* Units bought minus units sold, against how fast they're currently going. */
+function stockCover(){
+  const bought=COGS_BATCHES.reduce((n,b)=>n+(+b.qty||0),0);
+  if(!bought) return { onHand:null, days:null, perDay:0, bought:0, sold:0 };
+  const sold=(TIKTOK_ORDERS||[]).reduce((n,o)=>n+(Number(o.item_count)||1),0);
+  const onHand=bought-sold;
+  /* Velocity from the last 14 days — a 12-month average would hide a ramp. */
+  const since=new Date(TODAY); since.setDate(since.getDate()-14);
+  const recent=(TIKTOK_ORDERS||[]).filter(o=>o.created_at&&new Date(o.created_at)>=since)
+    .reduce((n,o)=>n+(Number(o.item_count)||1),0);
+  const perDay=recent/14;
+  return { onHand, sold, bought, perDay, days: perDay>0 ? Math.round(onHand/perDay) : null };
 }
 /* Weekly GMV + order buckets for the charts, built from real orders. */
 function weeklyBuckets(){
@@ -1447,11 +1526,20 @@ function renderOverview(){
     : { gmv:0,net:0,videos:0,creators:0,approvals:0,gmvDelta:'—',netDelta:'—',vidDelta:'—',crDelta:'—' });
   const rm=rangeMetrics(state.dateRange);
   const myTasks=state.tasks.filter(inBrand);
-  const outstanding=myTasks.filter(t=>t.status!=='Completed').length;
   const overdue=myTasks.filter(isOverdue).length;
   const retSpend=RETAINERS.filter(r=>state.brand==='all'||r.brand===state.brand||r.brand==='all').reduce((s,r)=>s+r.amount,0);
   const needsLewis=myTasks.filter(t=>t.status==='Waiting on Lewis');
-  const dueWeek=myTasks.filter(dueThisWeek).sort((a,b)=>a.due.localeCompare(b.due));
+  /* Charts follow the date picker, so say what you're actually looking at. */
+  const bk=rangeBuckets(state.dateRange);
+  const chartSub = !bk.labels.length ? 'no orders in this period'
+    : `${state.dateRange} · by ${bk.unit}`;
+  const sc=stockCover();
+  const be=dailyBreakEven();
+  /* Daily gross profit actually achieved over the selected window, so the
+     break-even tile compares like with like. */
+  const perDay = rm.window.days
+    ? rm.net/rm.window.days
+    : (bk.days.length ? rm.net/bk.days.reduce((a,b)=>a+b,0) : 0);
   const oldestSync=(TIKTOK_ORDERS||[]).length?TIKTOK_ORDERS[TIKTOK_ORDERS.length-1].created_at?.slice(0,10):null;
   const rangeNote = state.dateRange==='All Time'
     ? (oldestSync?`synced data since ${fmtDate(oldestSync)}`:'all time')
@@ -1479,9 +1567,6 @@ function renderOverview(){
       <div class="k-foot">${foot}</div>
     </div>`;
 
-  const topCreators=CREATORS.filter(c=>inBrand(c)&&c.gmv>0).sort((a,b)=>b.gmv-a.gmv).slice(0,5);
-  const retForOverview=RETAINERS.filter(r=>state.brand==='all'||r.brand===state.brand||r.brand==='all').slice(0,5);
-
   $('page-overview').innerHTML=`
     <div class="page-head">
       <div>
@@ -1508,97 +1593,48 @@ function renderOverview(){
         `${delta(rm.dGmv)}<span>${rangeNote}</span>`)}
       ${kpi('Gross Profit', money(Math.round(rm.net)), 'card','background:var(--good-soft);color:var(--good-ink)',
         `${delta(rm.dNet)}<span>${grossProfitNote(rm)}</span>`)}
-      ${kpi('Orders — '+state.dateRange, rm.orders, 'video','background:var(--violet-soft);color:var(--violet-ink)',
-        `${delta(rm.dOrders)}<span>${rangeNote}</span>`)}
+      ${kpi('Break-even', be>0?money(Math.round(be))+'/day':'—', 'target',
+        be>0&&perDay>=be?'background:var(--good-soft);color:var(--good-ink)':be>0?'background:var(--crit-soft);color:var(--crit-ink)':'background:var(--neutral-soft);color:var(--neutral-ink)',
+        be>0
+          ? `<span class="delta ${perDay>=be?'up':'down'}">${perDay>=be?'↑ above':'↓ below'} by ${money(Math.round(Math.abs(perDay-be)))}/day</span>`
+          : `<span>sync Xero to set the overhead line</span>`)}
+      ${kpi('Fee Drag', rm.drag!=null?rm.drag.toFixed(1)+'%':'—', 'card','background:var(--warn-soft);color:var(--warn-ink)',
+        rm.drag!=null
+          ? `${rm.dDrag==null?'<span class="delta flat">→ —</span>':rm.dDrag===0?'<span class="delta flat">→ 0 pts</span>':rm.dDrag>0?`<span class="delta down">↑ ${rm.dDrag} pts</span>`:`<span class="delta up">↓ ${Math.abs(rm.dDrag)} pts</span>`}<span>${money(Math.round(rm.fees))} of TikTok fees</span>`
+          : `<span>no settled orders in range</span>`)}
+      ${kpi('Stock Cover', sc.days!=null?sc.days+' days':'—', 'box',
+        sc.days!=null&&sc.days<21?'background:var(--crit-soft);color:var(--crit-ink)':sc.days!=null&&sc.days<42?'background:var(--warn-soft);color:var(--warn-ink)':'background:var(--good-soft);color:var(--good-ink)',
+        sc.days!=null
+          ? `<span>${sc.onHand.toLocaleString()} units left · ${sc.perDay.toFixed(1)}/day</span>`
+          : `<span>${sc.bought?'no recent sales to measure':'add a cost batch to track stock'}</span>`)}
       ${kpi('Active Creators', k.creators, 'users','background:var(--aqua-soft);color:var(--aqua-ink)',
         `${delta(k.crDelta)}<span>this month</span>`)}
       ${kpi('Monthly Retainer Spend', money(retSpend), 'card','background:var(--magenta-soft);color:var(--magenta-ink)',
-        `<span class="delta flat">→ unchanged</span>`)}
-      ${kpi('Outstanding Tasks', outstanding, 'tasks','background:var(--neutral-soft);color:var(--neutral-ink)',
-        `<span>${myTasks.filter(t=>t.status==='In Progress').length} in progress</span>`)}
-      ${kpi('Overdue Tasks', overdue, 'clock', overdue?'background:var(--crit-soft);color:var(--crit-ink)':'background:var(--good-soft);color:var(--good-ink)',
-        overdue?`<span class="delta down">needs action</span>`:`<span class="delta up">all clear</span>`)}
-      ${kpi('Videos Awaiting Approval', k.approvals, 'eye','background:var(--warn-soft);color:var(--warn-ink)',
-        `<button class="link-btn" onclick="goNeedsLewis()">Review now →</button>`)}
+        `<span>${retSpend&&rm.net>0?`${m2(rm.net/retSpend)} gross profit per £1`:'no return measured yet'}</span>`)}
     </div>
 
     <div class="grid g-23" style="margin-top:16px">
       <div class="card">
-        <div class="card-h"><div><div class="t">GMV Performance</div><div class="sub">Weekly GMV, last 8 weeks</div></div>
+        <div class="card-h"><div><div class="t">Performance</div><div class="sub">${chartSub}</div></div>
           <div class="right legend-row">
-            ${chartSeries().map(x=>`<span class="li"><span class="sw" style="background:${x.color}"></span>${x.label}</span>`).join('')}
+            <span class="li"><span class="sw" style="background:#2a78d6"></span>GMV</span>
+            <span class="li"><span class="sw" style="background:#1baf7a"></span>Gross profit</span>
+            ${be>0?`<span class="li"><span class="sw" style="background:#d1495b"></span>Break-even</span>`:''}
           </div></div>
         <div class="card-b"><div class="chart-box" id="gmvChart"></div></div>
       </div>
       <div class="card">
-        <div class="card-h"><div><div class="t">Orders Per Week</div><div class="sub">Last 8 weeks, from the TikTok feed</div></div></div>
-        <div class="card-b"><div class="chart-box" id="vidChart"></div></div>
+        <div class="card-h"><div><div class="t">Margin</div><div class="sub">Gross profit as a % of GMV</div></div></div>
+        <div class="card-b"><div class="chart-box" id="marginChart"></div></div>
       </div>
     </div>
 
-    <div class="grid g-2" style="margin-top:16px">
-      <div class="card">
-        <div class="card-h"><div class="t">Top Creators</div><div class="right"><button class="link-btn" onclick="navTo('creators')">View all →</button></div></div>
-        <div class="card-b flush">
-          ${topCreators.map((c,i)=>`
-            <div class="rank-item" style="cursor:pointer" onclick="openCreatorDetail('${c.id}')">
-              <span class="rk">${i+1}</span><span class="av ${c.av}">${c.name.split(' ').map(w=>w[0]).join('')}</span>
-              <div class="ri-meta"><div class="n">${c.name}</div><div class="s">${c.handle} · ${c.videos} videos</div></div>
-              <div class="ri-val"><div class="v">${money(c.gmv)}</div><div class="vs">GMV</div></div>
-            </div>`).join('')||'<div class="empty">No creator sales yet</div>'}
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-h"><div class="t">Needs Lewis's Approval</div><span class="badge bg-crit">${needsLewis.length}</span>
-          <div class="right"><button class="link-btn" onclick="goNeedsLewis()">Open queue →</button></div></div>
-        <div class="card-b flush">
-          ${needsLewis.slice(0,5).map(t=>`
-            <div class="feed-item" style="cursor:pointer" onclick="openTaskDetail('${t.id}')">
-              <div class="fi-body"><div class="fi-top"><span class="fi-title">${esc(t.name)}</span>${isOverdue(t)?'<span class="badge bg-crit">Overdue</span>':''}</div>
-              <div class="fi-meta">${prioBadge(t.priority)}${brandBadge(t.brand)}<span>${t.raisedBy&&USERS[t.raisedBy]?'raised by '+USERS[t.raisedBy].short+' · ':''}due ${fmtDate(t.due)}</span></div></div>
-              <button class="btn btn-primary btn-xs" style="align-self:center" onclick="event.stopPropagation();completeTask('${t.id}')">✓ Approve</button>
-            </div>`).join('')||'<div class="empty">🎉 Nothing waiting on you</div>'}
-        </div>
-      </div>
-    </div>
-
-    <div class="grid g-2" style="margin-top:16px">
-      <div class="card">
-        <div class="card-h"><div class="t">Tasks Due This Week</div><span class="badge bg-neutral">${dueWeek.length}</span>
-          <div class="right"><button class="link-btn" onclick="navTo('tasks')">All tasks →</button></div></div>
-        <div class="card-b flush tbl-wrap">
-          <table class="tbl"><thead><tr><th>Task</th><th>Assignee</th><th>Due</th><th>Status</th></tr></thead><tbody>
-          ${dueWeek.slice(0,6).map(t=>`
-            <tr class="clickable" onclick="openTaskDetail('${t.id}')">
-              <td class="main-cell"><div class="t">${esc(t.name)}</div></td>
-              <td>${userChip(t.assignee)}</td>
-              <td style="${isOverdue(t)?'color:var(--crit-ink);font-weight:700':''}">${fmtDate(t.due)}${isOverdue(t)?' ⚠':''}</td>
-              <td>${statusBadge(t.status)}</td>
-            </tr>`).join('')||'<tr><td colspan="4" class="empty">Nothing due this week</td></tr>'}
-          </tbody></table>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-h"><div class="t">Recent Team Activity</div><div class="right"><button class="link-btn" onclick="openActivityModal()">View all →</button></div></div>
-        <div class="card-b flush" style="max-height:360px;overflow-y:auto">
-          ${ACTIVITY.filter(a=>state.brand==='all'||a.brand===state.brand||a.brand==='all').slice(0,6).map(actItem).join('')}
-        </div>
-      </div>
-    </div>
 
     <div class="grid" style="margin-top:16px">
       <div class="card">
-        <div class="card-h"><div class="t">Retainer Performance</div><div class="right"><button class="link-btn" onclick="navTo('retainers')">Manage →</button></div></div>
-        <div class="card-b flush tbl-wrap">
-          <table class="tbl"><thead><tr><th>Person</th><th class="num">Cost</th><th class="num">GMV</th><th>Deliverables</th><th>Signal</th></tr></thead><tbody>
-          ${retForOverview.map(r=>{
-            const pct=r.promised?Math.round(r.delivered/r.promised*100):100;
-            const sig = r.rec==='Continue'?'On Track':r.rec==='Review'?'Needs Attention':'Behind Target';
-            return `<tr><td class="main-cell"><div class="t">${r.person}</div><div class="s">${r.role}</div></td>
-              <td class="num">${money(r.amount)}/mo</td><td class="num">${r.gmv?money(r.gmv):'—'}</td>
-              <td style="min-width:120px"><div style="display:flex;align-items:center;gap:8px"><div class="prog thin" style="flex:1">${progBar(pct).match(/<div style[^>]+><\/div>/)?'':''}<div style="width:${pct}%;background:${pct>=90?'var(--good)':pct>=60?'var(--warn)':'var(--crit)'}"></div></div><span style="font-size:.72rem;font-weight:700">${r.promised?r.delivered+'/'+r.promised:'n/a'}</span></div></td>
-              <td>${statusBadge(sig)}</td></tr>`;}).join('')}
-          </tbody></table>
+        <div class="card-h"><div class="t">Recent Team Activity</div><div class="right"><button class="link-btn" onclick="openActivityModal()">View all →</button></div></div>
+        <div class="card-b flush" style="max-height:360px;overflow-y:auto">
+          ${ACTIVITY.filter(a=>state.brand==='all'||a.brand===state.brand||a.brand==='all').slice(0,8).map(actItem).join('')}
         </div>
       </div>
     </div>`;
@@ -1624,16 +1660,26 @@ function chartSeries(){
 }
 function niceMax(v){ const p=Math.pow(10,Math.floor(Math.log10(v||1))); const n=v/p; const m=n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10; return m*p; }
 function drawCharts(){
-  const wb=weeklyBuckets();
-  const hasLive=(TIKTOK_ORDERS||[]).length>0;
-  const series=hasLive
-    ? [{label:brandInfo(defaultBrand()).name,color:brandInfo(defaultBrand()).solid,gmv:wb.gmv,vids:wb.orders}]
-    : chartSeries();
-  const labels=hasLive?wb.labels:WEEKS;
-  drawLineChart('gmvChart', labels, series.map(s=>({label:s.label,color:s.color,data:s.gmv})), v=>'£'+(v>=1000?(v/1000).toFixed(v%1000?1:0)+'k':v), v=>'£'+v.toLocaleString());
-  drawBarChart('vidChart', labels, series.map(s=>({label:s.label,color:s.color,data:s.vids})), v=>v);
+  const b=rangeBuckets(state.dateRange);
+  const money1=v=>'£'+(Math.abs(v)>=1000?(v/1000).toFixed(Math.abs(v)%1000?1:0)+'k':Math.round(v));
+  /* The overhead line, scaled to each bucket's length — so on a weekly chart it
+     is a week of overheads, not a day's. Gross profit below this line means the
+     period didn't pay for itself, which is the whole question. */
+  const be=dailyBreakEven();
+  const threshold = be>0 && b.days && b.days.length
+    ? { data:b.days.map(d=>+(be*d).toFixed(2)), color:'#d1495b', label:'Break-even' }
+    : null;
+  drawLineChart('gmvChart', b.labels, [
+      { label:'GMV', color:'#2a78d6', data:b.gmv },
+      { label:'Gross profit', color:'#1baf7a', data:b.net },
+    ], money1, v=>'£'+v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}), threshold);
+  /* Margin, not volume. Volume tells you how busy you were; margin tells you
+     whether being busy was worth it. */
+  drawBarChart('marginChart', b.labels, [
+      { label:'Margin %', color:'#1baf7a', data:b.margin },
+    ], v=>v+'%');
 }
-function drawLineChart(id, labels, series, tickFmt, tipFmt){
+function drawLineChart(id, labels, series, tickFmt, tipFmt, threshold){
   const box=$(id); if(!box) return;
   /* Nothing to plot yet — show a placeholder rather than an SVG full of NaN. */
   if(!labels.length || !series.length || !series.some(x=>(x.data||[]).length)){
@@ -1641,7 +1687,7 @@ function drawLineChart(id, labels, series, tickFmt, tipFmt){
     return;
   }
   const W=680,H=250,padL=44,padR=10,padT=12,padB=26;
-  const maxV=niceMax(Math.max(...series.flatMap(s=>s.data))*1.15);
+  const maxV=niceMax(Math.max(...series.flatMap(s=>s.data), ...(threshold?threshold.data:[]))*1.15);
   const x=i=>padL+(W-padL-padR)*i/(labels.length-1);
   const y=v=>padT+(H-padT-padB)*(1-v/maxV);
   const ticks=[0,.25,.5,.75,1].map(t=>t*maxV);
@@ -1652,6 +1698,10 @@ function drawLineChart(id, labels, series, tickFmt, tipFmt){
     svg+=`<polygon points="${x(0)},${y(0)} ${pts} ${x(labels.length-1)},${y(0)}" fill="${s.color}" opacity="0.07"/>`;
     svg+=`<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
   });
+  if(threshold&&threshold.data.length===labels.length){
+    svg+=`<polyline points="${threshold.data.map((v,i)=>`${x(i)},${y(v)}`).join(' ')}" fill="none"
+      stroke="${threshold.color}" stroke-width="1.5" stroke-dasharray="5,4" vector-effect="non-scaling-stroke"/>`;
+  }
   svg+=`<line x1="${padL}" y1="${y(0)}" x2="${W-padR}" y2="${y(0)}" stroke="#c3c2b7" stroke-width="1"/>`;
   svg+=`<line id="${id}-cross" x1="0" y1="${padT}" x2="0" y2="${y(0)}" stroke="#98a2b3" stroke-width="1" stroke-dasharray="3,3" style="display:none"/>`;
   series.forEach((s,si)=>{ s.data.forEach((v,i)=>{ svg+=`<circle id="${id}-pt-${si}-${i}" cx="${x(i)}" cy="${y(v)}" r="4" fill="${s.color}" stroke="#fff" stroke-width="2" style="display:none"/>`; }); });
@@ -2835,7 +2885,7 @@ function xeroBuildOverheads(){
     const months=new Set(txs.map(t=>String(t.tx_date||'').slice(0,7))).size;
     const guess = txs.length>=3&&months>=3 ? 'monthly' : txs.length>=2&&months>=2 ? 'quarterly' : 'one-off';
     const rule=overheadRule(label);
-    return { label, total:+total.toFixed(2), pays:txs.length,
+    return { label, total:+total.toFixed(2), pays:txs.length, months,
       freq: rule.freq || keep[label]?.freq || guess,
       excl: rule.excl!==undefined ? rule.excl : (keep[label]?.excl||false), xero:true };
   }).sort((a,b)=>b.total-a.total);
@@ -5615,10 +5665,28 @@ function aiSnapshot(){
   /* Compact, current view of the account — enough context to reason with,
      small enough to send on every message. */
   const t=state.tasks, k=BRAND_KPIS[defaultBrand()]||{};
+  /* The assistant is asked to decompose ratios, so give it the parts as well as
+     the ratios — and both the current and previous window, or it has nothing to
+     compare against and will just describe today back at us. */
+  const cur=rangeMetrics(state.dateRange), prevW=cur.window;
+  const prev=prevW.days?metricsIn(prevW.prevFrom,prevW.prevTo):null;
+  const sc=stockCover(), be=dailyBreakEven();
+  const part=m=>m?{ gmv:+m.gmv.toFixed(2), grossProfit:+m.net.toFixed(2), fees:+m.fees.toFixed(2),
+    cogs:+m.cogs.toFixed(2), adSpend:+m.ads.toFixed(2), orders:m.orders,
+    marginPct:m.gmv>0?+(m.net/m.gmv*100).toFixed(1):null,
+    feeDragPct:m.gmv>0?+(m.fees/m.gmv*100).toFixed(1):null }:null;
   return {
     today: TODAY_ISO, brand: brandInfo(defaultBrand()).name,
     me: { id:ME, name:USERS[ME]?.name, role:USERS[ME]?.role },
     team: Object.values(USERS).map(u=>({id:u.id,name:u.name,role:u.role,pending:!!u.pending})),
+    dateRange: state.dateRange,
+    current: part(cur), previousEquivalentWindow: part(prev),
+    breakEven: { dailyGrossProfitNeeded:+be.toFixed(2), monthlyOverheads:+monthlyOverheads().toFixed(2),
+      actualDailyGrossProfit: prevW.days?+(cur.net/prevW.days).toFixed(2):null },
+    stock: { unitsOnHand:sc.onHand, unitsPerDay:+sc.perDay.toFixed(2), daysOfCover:sc.days,
+      unitsBought:sc.bought, unitsSold:sc.sold },
+    costCoverage: { ordersInRange:cur.orders, ordersWithACostBatch:cur.costed,
+      note: cur.orders>cur.costed?'orders without a cost batch count COGS as zero, so gross profit reads HIGH':null },
     kpis: { gmv:k.gmv||0, net:k.net||0, videos:k.videos||0, activeCreators:k.creators||0 },
     tasks: t.slice(0,40).map(x=>({id:x.id,name:x.name,assignee:x.assignee,priority:x.priority,due:x.due,status:x.status,overdue:isOverdue(x)})),
     creators: CREATORS.slice(0,40).map(c=>({id:c.id,name:c.name,handle:c.handle,stage:c.stage,followers:c.followers,gmv:c.gmv,videos:c.videos,retainer:c.retainer,notes:(c.notes||'').slice(0,140)})),
