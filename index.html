@@ -1043,8 +1043,8 @@ function metricsIn(from, to){
     orders++; const gross=Number(o.total)||0; gmv+=gross;
     const st=TIKTOK_SETTLEMENTS[o.order_id];
     const settle=st?Number(st.settlement_amount)||0:gross*0.86;
-    const unit=cogsUnitFor(o.created_at.slice(0,10),null);
-    if(unit!=null){ net+=settle-unit*(1+L.vat/100)*(o.item_count||1); costed++; }
+    const unit=cogsUnitInc(o.created_at.slice(0,10),null);
+    if(unit!=null){ net+=settle-unit*(o.item_count||1); costed++; }
     else net+=settle;
   });
   return { gmv, net, orders, costed };
@@ -3182,8 +3182,8 @@ function recomputePnlFromLive(){
       fb.adj+=Number(st.adjustment)||0;
       fees+=(Number(st.fee_platform)||0)+(Number(st.fee_affiliate)||0)+(Number(st.fee_other)||0)+(Number(st.fee_transaction)||0);
     } else fees += Math.max((o.gross||0)-(o.disc||0)-s,0);
-    const unit=cogsUnitFor(o.iso,o.productId);
-    if(unit!=null){ cogs+=unit*(1+L.vat/100)*(o.qty||1); costed++; }
+    const unitInc=cogsUnitInc(o.iso,o.productId);
+    if(unitInc!=null){ cogs+=unitInc*(o.qty||1); costed++; }
     ads+=o.ad||0;
   });
   PNL.fb=fb;
@@ -3235,7 +3235,12 @@ function cogsWeightedAvg(){
   if(!q) return null;
   return COGS_BATCHES.reduce((n,b)=>n+(+b.qty||0)*(+b.unit_cost||0),0)/q;
 }
-const cogsStockValue = () => COGS_BATCHES.reduce((n,b)=>n+(+b.qty||0)*(+b.unit_cost||0),0);
+const vatMult = () => 1 + (CALC_LEV.vat||0)/100;
+/* Landed cost per unit, VAT included — the figure that hits the P&L. */
+const cogsUnitInc = (dateIso, productId) => { const u=cogsUnitFor(dateIso,productId); return u==null?null:u*vatMult(); };
+/* Total spent on stock, VAT included (batches are entered ex VAT). */
+const cogsStockValue = () => COGS_BATCHES.reduce((n,b)=>n+(+b.qty||0)*(+b.unit_cost||0),0) * vatMult();
+const cogsStockValueEx = () => COGS_BATCHES.reduce((n,b)=>n+(+b.qty||0)*(+b.unit_cost||0),0);
 
 function profitCogs(){
   const cur=cogsCurrent(), avg=cogsWeightedAvg(), vat=CALC_LEV.vat;
@@ -3247,7 +3252,7 @@ function profitCogs(){
         ${stat('Current cost / unit', cur!=null?m2(cur):'—', cur!=null?`ex VAT · ${m2(cur*(1+vat/100))} inc VAT`:'add a batch to set this')}
         ${stat('Weighted average', avg!=null?m2(avg):'—','across all batches')}
         ${stat('Units purchased', totalUnits.toLocaleString(),`${COGS_BATCHES.length} batch${COGS_BATCHES.length===1?'':'es'}`)}
-        ${stat('Total spent on stock', m2(cogsStockValue()),'ex VAT')}
+        ${stat('Total spent on stock', m2(cogsStockValue()),`inc VAT · ${m2(cogsStockValueEx())} ex VAT`)}
       </div>
     </div></div>
 
@@ -3259,7 +3264,7 @@ function profitCogs(){
       <div class="card-b flush tbl-wrap">
         <table class="tbl"><thead><tr>
           <th>Received</th><th>Batch</th><th>Applies to</th><th class="num">Units</th>
-          <th class="num">Cost / unit</th><th class="num">Inc VAT</th><th class="num">Batch value</th><th>Supplier</th><th></th>
+          <th class="num">Cost / unit</th><th class="num">Inc VAT</th><th class="num">Batch value (inc VAT)</th><th>Supplier</th><th></th>
         </tr></thead><tbody>
         ${COGS_BATCHES.map((b,i)=>{
           const isCurrent = cur!=null && b.received_date<=TODAY_ISO &&
@@ -3273,7 +3278,7 @@ function profitCogs(){
             <td class="num">${(+b.qty||0).toLocaleString()}</td>
             <td class="num" style="font-weight:700">${m2(+b.unit_cost||0)}</td>
             <td class="num" style="color:var(--ink-3)">${m2((+b.unit_cost||0)*(1+vat/100))}</td>
-            <td class="num">${m2((+b.qty||0)*(+b.unit_cost||0))}</td>
+            <td class="num">${m2((+b.qty||0)*(+b.unit_cost||0)*vatMult())}</td>
             <td style="font-size:.78rem;color:var(--ink-2)">${esc(b.supplier||'—')}</td>
             <td style="white-space:nowrap">
               <button class="btn btn-ghost btn-xs" onclick="cogsEdit('${b.id}')">Edit</button>
@@ -3287,7 +3292,8 @@ function profitCogs(){
       </div>
     </div>
     <div style="font-size:.75rem;color:var(--ink-3);margin-top:10px;line-height:1.6">
-      Costs are entered <b>ex VAT</b> and VAT is applied at ${vat}% where needed. Change a batch and every order
+      Costs are entered <b>ex VAT</b> and <b>${vat}% VAT is added</b> before anything reaches the P&L —
+      so a ${m2(cur||0)} batch costs ${m2((cur||0)*vatMult())} per unit in the accounts. Change a batch and every order
       on or after its date recosts automatically — nothing is baked in.</div>`;
 }
 
@@ -3354,7 +3360,7 @@ function profitPnl(){
     ['Settlement — paid out', fb.settle, 'sub'],
     ...(unsettledEst>0.005?[[`Awaiting settlement (${PNL.nOrders-fb.settledOrders} orders, est.)`, unsettledEst, 'in']]:[]),
     ['Total payout (paid + pending)', PNL.settlement, 'sub'],
-    [`COGS (${m2(CALC_LEV.cost*(1+CALC_LEV.vat/100))}/unit inc VAT)`, -PNL.cogs, 'ded'],
+    [`COGS (${m2(cogsUnitInc(TODAY_ISO,null)||0)}/unit inc VAT)`, -PNL.cogs, 'ded'],
     ['Per-order ad spend', -PNL.ads, 'ded'],
     ['Contribution', PNL.contribution, 'sub'],
     ['Monthlies & recurring', -a.mon, 'ded'],
@@ -3366,7 +3372,7 @@ function profitPnl(){
     ['Net sales', PNL.netSales, 'sub'],
     ['Platform fees', -PNL.fees, 'ded'],
     ['Settlement (payout)', PNL.settlement, 'sub'],
-    [`COGS (${m2(CALC_LEV.cost*(1+CALC_LEV.vat/100))}/unit inc VAT)`, -PNL.cogs, 'ded'],
+    [`COGS (${m2(cogsUnitInc(TODAY_ISO,null)||CALC_LEV.cost*vatMult())}/unit inc VAT)`, -PNL.cogs, 'ded'],
     ['Per-order ad spend', -PNL.ads, 'ded'],
     ['Contribution', PNL.contribution, 'sub'],
     ['Monthlies & recurring', -a.mon, 'ded'],
@@ -3416,7 +3422,7 @@ function profitPnl(){
         <div class="divider-v"></div>
         <div class="mini-stat"><div class="l">Contribution</div><div class="v pos">${m2(PNL.contribution)}</div><div class="s">after fees, COGS & ads</div></div>
         <div class="mini-stat"><div class="l">Director loans (funding)</div><div class="v">${m2(PNL.loansTotal)}</div><div class="s">${PNL.loans.map(l=>l[0]+' '+money(l[1])).join(' · ')||'none recorded'}</div></div>
-        <div class="mini-stat"><div class="l">Stock on hand (asset)</div><div class="v">${m2(PNL.stock)}</div><div class="s">auto-valued: live stock × ${m2(CALC_LEV.cost*(1+CALC_LEV.vat/100))} · synced ${STOCK_SYNC.last}</div></div>
+        <div class="mini-stat"><div class="l">Stock on hand (asset)</div><div class="v">${m2(PNL.stock)}</div><div class="s">${COGS_BATCHES.length?`${(COGS_BATCHES.reduce((n,b)=>n+(+b.qty||0),0)).toLocaleString()} units × ${m2(cogsUnitInc(TODAY_ISO,null)||0)} inc VAT`:'add a cost batch to value your stock'}</div></div>
       </div>
     </div>
     <div class="grid g-23" style="margin-bottom:16px">
@@ -3627,8 +3633,8 @@ function profitOrders(){
       const settle = st ? Number(st.settlement_amount)||0 : o.set;
       const feePlat = st ? Number(st.fee_platform)||0 : (o.gross-o.disc-o.set);
       const feeAff  = st ? Number(st.fee_affiliate)||0 : 0;
-      const unit = cogsUnitFor(o.iso, o.productId);
-      const cogs = unit!=null ? unit*(1+L.vat/100)*o.qty : 0;
+      const unit = cogsUnitInc(o.iso, o.productId);
+      const cogs = unit!=null ? unit*o.qty : 0;
       const net = settle - cogs - (o.ad||0) - ovh;
       const mg = o.gross? net/o.gross*100 : 0;
       return `<tr>
