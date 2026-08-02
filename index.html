@@ -585,6 +585,16 @@ body.brief-full .main{margin-right:0}
 .brf-el.selected{outline:2px solid var(--accent);outline-offset:3px}
 .brf-el .del-h{position:absolute;top:-12px;right:-12px;width:22px;height:22px;border-radius:50%;background:var(--crit);color:#fff;display:none;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;cursor:pointer;z-index:5}
 .brf-el.selected .del-h{display:flex}
+/* The ✕ now lives on the overlay, not inside the element. Without its own
+   positioning it fell back to static and rendered at the top-LEFT, sitting
+   directly over the first word — so the second click of a double-click landed
+   on delete instead of entering edit mode. Pinned clear of the box, above and
+   to the right, where it cannot be hit by accident. */
+.brf-ovl .del-h{position:absolute;top:-28px;right:-4px;width:22px;height:22px;border-radius:50%;
+  background:var(--crit);color:#fff;display:none;align-items:center;justify-content:center;
+  font-size:.72rem;font-weight:800;cursor:pointer;z-index:9;box-shadow:var(--shadow);border:2px solid #fff}
+.brf-ovl.sel-box .del-h{display:flex}
+.brf-ovl .del-h:hover{transform:scale(1.12)}
 .brf-text{line-height:1.45;min-width:40px;white-space:pre-wrap}
 .brf-text[contenteditable="true"]{outline:2px dashed var(--accent);cursor:text;user-select:text}
 .brf-text.t-h1{font-size:1.35rem;font-weight:800;letter-spacing:-.02em}
@@ -4569,7 +4579,7 @@ function openBriefEditor(id){
   Object.assign(state.brf,{ tool:'select', sel:null, selFrame:null, present:false, openThread:null, zoom:.62, panX:30, panY:20 });
   if(state.page!=='briefs') navTo('briefs'); else renderBriefs();
 }
-function closeBriefEditor(){ rtDisconnect(); state.briefId=null; renderBriefs(); }
+function closeBriefEditor(){ rtDisconnect(); BRF_UNDO=[]; BRF_REDO=[]; state.briefId=null; renderBriefs(); }
 /* ---- editor render ---- */
 function renderBriefEditor(){
   const b=briefById(state.briefId); if(!b){ state.briefId=null; renderBriefs(); return; }
@@ -4755,6 +4765,90 @@ function rtRenderPeers(){
 }
 
 /* ===================================================================
+   UNDO + CLIPBOARD
+   ===================================================================
+   Snapshots of the whole brief rather than a command log. A brief is small
+   enough that copying it is free, and it means every operation — delete, move,
+   restyle, paste — is undoable without each one having to describe its own
+   inverse, which is where undo implementations usually rot. */
+const BRF_UNDO_LIMIT=50;
+let BRF_UNDO=[], BRF_REDO=[], BRF_CLIP=null;
+function brfSnapshot(){
+  const b=briefById(state.briefId); if(!b) return;
+  BRF_UNDO.push(JSON.stringify({ elements:b.elements, comments:b.comments }));
+  if(BRF_UNDO.length>BRF_UNDO_LIMIT) BRF_UNDO.shift();
+  BRF_REDO.length=0;   // a fresh action forks the timeline
+}
+function brfRestore(json){
+  const b=briefById(state.briefId); if(!b) return;
+  const snap=JSON.parse(json);
+  b.elements=snap.elements; b.comments=snap.comments;
+  state.brf.sel=null; state.brf.selFrame=null; state.brf.editing=null;
+  tikiPush(); renderBriefEditor();
+}
+function brfUndo(){
+  const b=briefById(state.briefId); if(!b||!BRF_UNDO.length) return toast('Nothing to undo');
+  BRF_REDO.push(JSON.stringify({ elements:b.elements, comments:b.comments }));
+  brfRestore(BRF_UNDO.pop());
+  toast('Undone');
+}
+function brfRedo(){
+  const b=briefById(state.briefId); if(!b||!BRF_REDO.length) return toast('Nothing to redo');
+  BRF_UNDO.push(JSON.stringify({ elements:b.elements, comments:b.comments }));
+  brfRestore(BRF_REDO.pop());
+  toast('Redone');
+}
+function brfCut(){
+  const b=briefById(state.briefId); const id=state.brf.sel;
+  const el=b&&b.elements.find(x=>x.id===id); if(!el) return;
+  BRF_CLIP=JSON.parse(JSON.stringify(el));
+  brfDelete(id);
+  toast('Cut — ⌘V to paste it back');
+}
+function brfCopy(){
+  const b=briefById(state.briefId); const el=b&&b.elements.find(x=>x.id===state.brf.sel);
+  if(!el) return;
+  BRF_CLIP=JSON.parse(JSON.stringify(el));
+  toast('Copied');
+}
+function brfPaste(){
+  const b=briefById(state.briefId); if(!b||!BRF_CLIP) return;
+  brfSnapshot();
+  const copy=JSON.parse(JSON.stringify(BRF_CLIP));
+  copy.id=(copy.type[0]||'e')+Date.now()%100000+Math.floor(Math.random()*90+10);
+  copy.x=(copy.x||0)+24; copy.y=(copy.y||0)+24;   // offset so it's visibly a new object
+  b.elements.push(copy);
+  state.brf.sel=copy.id;
+  tikiPush(); renderBriefEditor(); toast('Pasted');
+}
+/* Keyboard. The rule that makes this feel right: while a text box is being
+   edited the browser owns every key, so Backspace edits words and ⌘Z is the
+   native text undo. Only when nothing is being typed into do these shortcuts
+   act on the element itself. */
+function brfKeydown(e){
+  if(!state.briefId||state.brf.present) return;
+  const t=e.target;
+  const typing = state.brf.editing
+    || (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)));
+  const meta=e.metaKey||e.ctrlKey;
+
+  if(meta && e.key.toLowerCase()==='z' && !typing){
+    e.preventDefault(); e.shiftKey?brfRedo():brfUndo(); return;
+  }
+  if(typing) return;
+
+  if(meta && e.key.toLowerCase()==='x'){ e.preventDefault(); brfCut(); return; }
+  if(meta && e.key.toLowerCase()==='c'){ e.preventDefault(); brfCopy(); return; }
+  if(meta && e.key.toLowerCase()==='v'){ e.preventDefault(); brfPaste(); return; }
+  if((e.key==='Backspace'||e.key==='Delete') && state.brf.sel){
+    e.preventDefault(); brfDelete(state.brf.sel); return;
+  }
+  if(e.key==='Escape'){
+    state.brf.sel=null; state.brf.selFrame=null; renderBriefEditor(); return;
+  }
+}
+
+/* ===================================================================
    TEXT
    ===================================================================
    Text is stored as a tiny, strictly sanitised subset of HTML rather than as a
@@ -4836,15 +4930,17 @@ function brfTextInput(ev,id){
 }
 function brfEditText(ev,id){
   const node=ev.currentTarget;
+  brfSnapshot();                     // so ⌘Z can undo the whole editing session
   state.brf.editing=id;              // blocks world rebuilds while typing
   node.contentEditable='true';
   node.classList.add('editing');
   node.focus();
-  /* Put the caret where they clicked instead of selecting everything —
-     select-all meant one stray keystroke wiped the whole box. */
+  /* Canva highlights the existing text on double-click so you can just start
+     typing over it. Safe to do now that every keystroke is committed and ⌘Z
+     brings the old wording back. */
   setTimeout(()=>{ try{
-    const r=document.caretRangeFromPoint?document.caretRangeFromPoint(ev.clientX,ev.clientY):null;
-    if(r){ const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+    const r=document.createRange(); r.selectNodeContents(node);
+    const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
   }catch(err){} },0);
 }
 function brfSaveText(ev,id){
@@ -4876,11 +4972,13 @@ function brfTextFormat(id, what){
     const cmd={bold:'bold',italic:'italic',underline:'underline',strike:'strikeThrough'}[what];
     if(cmd){ document.execCommand(cmd,false,null); el.html=brfSanitize(node.innerHTML); delete el.text; tikiPush(); renderBriefSidePanel(); return; }
   }
+  brfSnapshot();
   el[what]=!el[what];
   tikiPush(); renderBriefEditor();
 }
 function brfTextSet(id, key, val){
   const b=briefById(state.briefId); const el=b&&b.elements.find(x=>x.id===id); if(!el) return;
+  brfSnapshot();
   el[key]=val;
   tikiPush(); renderBriefEditor();
 }
@@ -5085,6 +5183,7 @@ function brfBind(b){
       const [eid,edge]=ersNode.dataset.ers.split(':');
       const el=b.elements.find(x=>x.id===eid);
       if(el){
+        brfSnapshot();
         mode='elresize'; moved=false;
         start={mx:e.clientX,my:e.clientY,el,edge,w:el.w,h:el.h,x:el.x,y:el.y,
           ratio: el.type==='video' ? VID_RATIO
@@ -5114,6 +5213,7 @@ function brfBind(b){
     } else if(elNode){
       const el=b.elements.find(x=>x.id===elNode.dataset.el);
       if(el&&el.type!=='frame'){
+        brfSnapshot();   // taken before the move so undo returns it to where it was
         mode='drag'; moved=false; start={mx:e.clientX,my:e.clientY,pos:[{k:el,x:el.x,y:el.y}]};
         if(s.sel!==el.id){ s.sel=el.id;
           world.querySelectorAll('.brf-el.selected').forEach(n=>n.classList.remove('selected'));
@@ -5136,10 +5236,15 @@ function brfBind(b){
     }
     e.preventDefault();
   });
-  if(window._brfH){ document.removeEventListener('mousemove',window._brfH.move); document.removeEventListener('mouseup',window._brfH.up); }
-  window._brfH={move:onMove,up:onUp};
+  if(window._brfH){
+    document.removeEventListener('mousemove',window._brfH.move);
+    document.removeEventListener('mouseup',window._brfH.up);
+    document.removeEventListener('keydown',window._brfH.key);
+  }
+  window._brfH={move:onMove,up:onUp,key:brfKeydown};
   document.addEventListener('mousemove', onMove);
   document.addEventListener('mouseup', onUp);
+  document.addEventListener('keydown', brfKeydown);
   function onMove(e){
     const s=state.brf;
     if(mode==='pan'&&start){ s.panX=start.px+(e.clientX-start.mx); s.panY=start.py+(e.clientY-start.my);
@@ -5232,7 +5337,7 @@ function brfBind(b){
         s.selFrame = s.selFrame===pickedFrame ? null : pickedFrame;
         s.sel=null; renderBriefEditor(); return;
       }
-      if(wasStructural){ tikiPush(); renderBriefEditor(); }   // refresh world bounds only after a real move — a plain click must NOT re-render (it kills double-click)
+      if(wasStructural){ tikiPush(); renderBriefEditor(); }   // snapshot was taken on mousedown   // refresh world bounds only after a real move — a plain click must NOT re-render (it kills double-click)
     }
   }
   /* Figma-style trackpad: two-finger scroll = pan · pinch (ctrl/cmd+wheel) = fast zoom toward cursor */
@@ -5456,6 +5561,7 @@ function brfSetPageColour(id, colour){
 
 function brfAddAt(b,x,y){
   const s=state.brf; const id=(s.tool[0])+Date.now()%100000;
+  brfSnapshot();
   if(s.tool==='image'){ brfPickImage(x,y); return; }
   if(s.tool==='text') b.elements.push({id,type:'text',x,y,w:320,fontSize:15,font:'sans',
     html:'New text \u2014 double-click to edit'});
@@ -5469,20 +5575,9 @@ function brfAddAt(b,x,y){
 }
 function brfDelete(id){
   const b=briefById(state.briefId);
+  brfSnapshot();
   b.elements=b.elements.filter(e=>e.id!==id);
   state.brf.sel=null; renderBriefEditor(); toast('Deleted');
-}
-function brfEditText(ev,id){
-  const node=ev.currentTarget;
-  const del=node.querySelector('.del-h'); if(del) del.remove();
-  node.contentEditable=true; node.focus();
-  document.execCommand&&document.execCommand('selectAll',false,null);
-}
-function brfSaveText(ev,id){
-  const node=ev.currentTarget; node.contentEditable=false;
-  const b=briefById(state.briefId); const el=b.elements.find(x=>x.id===id);
-  if(el){ el.text=node.innerText.trim()||'…'; }
-  renderBriefEditor();
 }
 function brfEditFrameTitle(id){
   const b=briefById(state.briefId); const fr=b.elements.find(x=>x.id===id);
