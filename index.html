@@ -574,7 +574,10 @@ body.brief-full .main{margin-right:0}
 .brf-video .v-cap{font-size:.62rem;opacity:.85;margin-top:1px}
 .brf-video .v-views{position:absolute;top:8px;right:9px;background:rgba(0,0,0,.55);color:#fff;font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:10px}
 .brf-video .v-scrim{position:absolute;inset:0;background:linear-gradient(transparent 45%,rgba(0,0,0,.55))}
-.brf-embed{border:0;border-radius:16px;overflow:hidden;background:#000;display:block}
+/* The box is the layout size; the iframe inside keeps its natural size and is
+   scaled down into it, so the player is never cropped. */
+.brf-embed-box{position:relative;overflow:hidden;border-radius:16px;background:#000}
+.brf-embed{border:0;display:block;position:absolute;top:0;left:0;transform-origin:0 0;background:#000}
 .brf-pin{position:absolute;width:27px;height:27px;border-radius:14px 14px 14px 3px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:.68rem;font-weight:800;cursor:pointer;box-shadow:var(--shadow-lg);z-index:50;border:2px solid #fff;transform:translate(-4px,-23px)}
 .brf-pin.resolved{opacity:.45}
 .brf-thread{position:absolute;width:264px;background:#fff;border-radius:13px;box-shadow:var(--shadow-lg);border:1px solid var(--line);z-index:60;font-size:.8rem}
@@ -4731,13 +4734,30 @@ function brfVideoId(url){
   const m=/\/video\/(\d{6,})/.exec(String(url||''))||/^(\d{15,})$/.exec(String(url||'').trim());
   return m?m[1]:null;
 }
+/* TikTok's embed player lays itself out at a fixed internal size and refuses to
+   reflow below it. Setting the iframe's width and height directly therefore
+   CROPS the player rather than shrinking it — which is exactly the bug: drag the
+   box wide and you'd get the top strip of a video. The fix is to render the
+   iframe at its natural size and CSS-scale the whole thing, so every pixel of
+   the player survives, just smaller. Portrait ratio is locked for the same
+   reason: a landscape box can only ever crop a portrait player. */
+const VID_RATIO = 16/9;          // height ÷ width — TikTok is 9:16
+const VID_BASE_W = 325;          // the narrowest width the embed renders cleanly at
+const VID_BASE_H = Math.round(VID_BASE_W*VID_RATIO);
+const vidHeightFor = w => Math.round((w||200)*VID_RATIO);
+
 function brfVideoHTML(e, opts){
   const live=opts&&opts.live;
-  const w=e.w||200, h=e.h||Math.round((e.w||200)*16/9);
+  const w=e.w||200, h=vidHeightFor(w);   // height is always derived, never trusted
   const id=e.videoId||brfVideoId(e.url);
-  if(live&&id)
-    return `<iframe class="brf-embed" src="https://www.tiktok.com/embed/v2/${id}" style="width:${w}px;height:${h}px"
-      allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; fullscreen" frameborder="0" scrolling="no"></iframe>`;
+  if(live&&id){
+    const k=w/VID_BASE_W;
+    return `<div class="brf-embed-box" style="width:${w}px;height:${h}px">
+      <iframe class="brf-embed" src="https://www.tiktok.com/embed/v2/${id}"
+        style="width:${VID_BASE_W}px;height:${VID_BASE_H}px;transform:scale(${k.toFixed(4)})"
+        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; fullscreen"
+        frameborder="0" scrolling="no"></iframe></div>`;
+  }
   const poster=e.thumb
     ? `background-image:url('${e.thumb}');background-size:cover;background-position:center`
     : 'background:linear-gradient(160deg,#1c2128,#101418)';
@@ -4791,7 +4811,9 @@ function brfWorldHTML(b){
       /* Photos and videos are both "boxed" elements: clipped by their page,
          resizable from any grip, and rendered by the same code Present uses —
          which is the only way the two views can be guaranteed to match. */
-      if(e.type==='video'){ e.w=e.w||200; e.h=e.h||Math.round((e.w||200)*16/9); }
+      /* Height is derived, not stored opinion — this also repairs any video
+         that was stretched out of shape before the ratio was locked. */
+      if(e.type==='video'){ e.w=Math.max(90, e.w||200); e.h=vidHeightFor(e.w); }
       const host=brfHostFrame(b,e);
       /* Inside a page: positioned relative to the clip layer, so overflow crops.
          Loose on the canvas: plain world coordinates, nothing to clip against. */
@@ -4887,7 +4909,9 @@ function brfBind(b){
       if(el){
         mode='elresize'; moved=false;
         start={mx:e.clientX,my:e.clientY,el,edge,w:el.w,h:el.h,x:el.x,y:el.y,
-          ratio:(el.natural&&el.natural.w)?el.natural.h/el.natural.w:(el.h/el.w)};
+          ratio: el.type==='video' ? VID_RATIO
+               : (el.natural&&el.natural.w) ? el.natural.h/el.natural.w
+               : (el.h/el.w)};
         s.sel=eid;
       }
       e.preventDefault(); return;
@@ -4950,20 +4974,22 @@ function brfBind(b){
       const dx=(e.clientX-start.mx)/s.zoom, dy=(e.clientY-start.my)/s.zoom;
       if(Math.abs(dx)+Math.abs(dy)>=2) moved=true;
       const el=start.el, edge=start.edge;
-      const MIN=40;
-      /* Free-form by default so a photo can be stretched to any shape;
-         Shift snaps back to the picture's real proportions. */
+      const isVid=el.type==='video';
+      const MIN=isVid?90:40;      // below this the embed's own controls stop being usable
+      /* Photos are free-form and Shift locks them. Videos are ALWAYS locked to
+         portrait: a landscape box can only crop the player, never fit it. */
+      const ratio = isVid ? VID_RATIO : (e.shiftKey && start.ratio ? start.ratio : null);
       const east=edge.includes('e'), west=edge.includes('w');
       const north=edge.includes('n'), south=edge.includes('s');
       let w=start.w, hgt=start.h, nx=start.x, ny=start.y;
       if(east) w=Math.max(MIN, Math.round(start.w+dx));
       if(west){ w=Math.max(MIN, Math.round(start.w-dx)); nx=start.x+(start.w-w); }
-      if(south) hgt=Math.max(MIN, Math.round(start.h+dy));
-      if(north){ hgt=Math.max(MIN, Math.round(start.h-dy)); ny=start.y+(start.h-hgt); }
-      if(e.shiftKey&&start.ratio){
+      if(south) hgt=Math.max(MIN*VID_RATIO, Math.round(start.h+dy));
+      if(north){ hgt=Math.max(MIN*VID_RATIO, Math.round(start.h-dy)); ny=start.y+(start.h-hgt); }
+      if(ratio){
         /* Whichever axis the grip actually controls drives the other. */
-        if(!east&&!west) w=Math.max(MIN, Math.round(hgt/start.ratio));
-        else hgt=Math.max(MIN, Math.round(w*start.ratio));
+        if(!east&&!west) w=Math.max(MIN, Math.round(hgt/ratio));
+        else hgt=Math.max(MIN, Math.round(w*ratio));
         if(west) nx=start.x+(start.w-w);
         if(north) ny=start.y+(start.h-hgt);
       }
@@ -5138,7 +5164,8 @@ function brfAddAt(b,x,y){
   if(s.tool==='image'){ brfPickImage(x,y); return; }
   if(s.tool==='text') b.elements.push({id,type:'text',x,y,w:320,size:'body',text:'New text — double-click to edit'});
   else if(s.tool==='link') b.elements.push({id,type:'link',x,y,url:'paste-link.com/…',label:'New link — double-click to edit'});
-  else if(s.tool==='video') b.elements.push({id,type:'video',x,y,handle:'@paste-tiktok-url',caption:'double-click a video to swap the link',views:'—'});
+  else if(s.tool==='video') b.elements.push({id,type:'video',x,y,w:200,h:vidHeightFor(200),
+    handle:'@paste-tiktok-url',caption:'double-click a video to swap the link',views:'—'});
   else if(s.tool==='frame') b.elements.unshift({id,type:'frame',x,y,w:560,h:400,title:(b.elements.filter(e=>e.type==='frame').length+1)+' · New page'});
   else if(s.tool==='comment'){ b.comments.push({id:'c'+Date.now()%100000,x,y,resolved:false,thread:[]}); s.tool='select'; s.openThread=b.comments[b.comments.length-1].id; renderBriefEditor(); return; }
   s.tool='select'; s.sel=id; renderBriefEditor();
