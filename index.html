@@ -502,6 +502,16 @@ body.brief-full .main{margin-right:0}
 .sw{aspect-ratio:1;border-radius:8px;border:1px solid rgba(16,24,40,.12);cursor:pointer;position:relative}
 .sw:hover{transform:scale(1.08)}
 .sw.on{outline:2px solid var(--accent);outline-offset:2px}
+/* Canva-style clipping: a photo dropped on a page is bounded by that page.
+   The clip layer sits over the frame and hides anything that runs past its
+   edge, so a stretched photo crops instead of bleeding across the canvas.
+   Handles live in a separate unclipped overlay so they stay grabbable even
+   when the corner they belong to is outside the page. */
+.brf-clip{position:absolute;overflow:hidden;border-radius:14px;pointer-events:none}
+.brf-clip>*{pointer-events:auto}
+.brf-ovl{position:absolute;pointer-events:none;z-index:4}
+.brf-ovl>*{pointer-events:auto}
+.brf-ovl.sel-box{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
 .brf-el{position:absolute;cursor:move;user-select:none}
 .brf-el.selected{outline:2px solid var(--accent);outline-offset:3px}
 .brf-el .del-h{position:absolute;top:-12px;right:-12px;width:22px;height:22px;border-radius:50%;background:var(--crit);color:#fff;display:none;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;cursor:pointer;z-index:5}
@@ -1307,6 +1317,9 @@ const userAv = (uid,sz='') => { const u=USERS[uid]; if(!u) return '';
   if(u.pic) return `<span class="av ${sz} has-pic" title="${u.name}" style="background-image:url('${u.pic}')"></span>`;
   return `<span class="av ${sz} ${u.av}" title="${u.name}">${u.initials}</span>`; };
 const userChip = uid => { const u=USERS[uid]; return u?`<span class="cell-user">${userAv(uid,'sm')}<span style="font-weight:600">${u.short}</span></span>`:'<span style="color:var(--ink-3)">—</span>'; };
+/* Comments outlive the people who wrote them — someone can be removed, or not
+   invited yet. An unknown author must show a name, not crash the thread. */
+const whoName = uid => (USERS[uid] && USERS[uid].short) || (uid ? String(uid).charAt(0).toUpperCase()+String(uid).slice(1) : 'Someone');
 const creatorById = id => CREATORS.find(c=>c.id===id);
 const productById = id => PRODUCTS.find(p=>p.id===id);
 const campaignById = id => CAMPAIGNS.find(c=>c.id===id);
@@ -4437,9 +4450,23 @@ function brfWorldSize(b){
   const xs=b.elements.map(e=>e.x+(e.w||320)), ys=b.elements.map(e=>e.y+(e.h||240));
   return { w:Math.max(2400, ...xs)+500, h:Math.max(1400, ...ys)+500 };
 }
+/* Which page does this element belong to? Its centre decides, so dragging a
+   photo mostly off a page hands it to whatever page now holds its middle —
+   the same feel as Canva. Later frames win when pages overlap. */
+function brfHostFrame(b, el){
+  const cx=el.x+(el.w||0)/2, cy=el.y+(el.h||0)/2;
+  let hit=null;
+  b.elements.forEach(f=>{
+    if(f.type!=='frame') return;
+    if(cx>=f.x&&cx<=f.x+f.w&&cy>=f.y&&cy<=f.y+f.h) hit=f;
+  });
+  return hit;
+}
 function brfWorldHTML(b){
   const s=state.brf;
   let h='';
+  const clips={};      // frame id -> clipped children
+  let overlay='';      // unclipped handles layer
   b.elements.filter(e=>e.type==='frame').forEach(e=>{
     const fs=s.selFrame===e.id?'fsel':'';
     h+=`<div class="brf-frame ${fs}" data-frame="${e.id}" style="left:${e.x}px;top:${e.y}px;width:${e.w}px;height:${e.h}px;background:${e.bg||'#ffffff'};border-color:${e.bg&&e.bg!=='#ffffff'?'transparent':'#dde1e7'}">
@@ -4447,17 +4474,29 @@ function brfWorldHTML(b){
       <div class="fr-rs fr-rs-s" data-rs="${e.id}:s" title="Drag to make this sheet longer"></div>
       <div class="fr-rs fr-rs-se" data-rs="${e.id}:se" title="Drag to resize"></div></div>`;
   });
+  /* Photos slot in here — above the page background, below text and links,
+     so a caption never disappears behind an image. */
+  h+='<!--CLIPS-->';
   b.elements.filter(e=>e.type!=='frame').forEach(e=>{
     const sel=s.sel===e.id?'selected':'';
     if(e.type==='text')
       h+=`<div class="brf-el brf-text t-${e.size} ${sel}" data-el="${e.id}" style="left:${e.x}px;top:${e.y}px;width:${e.w}px" ondblclick="brfEditText(event,'${e.id}')" onblur="brfSaveText(event,'${e.id}')">${esc(e.text)}<span class="del-h" onmousedown="event.stopPropagation()" onclick="brfDelete('${e.id}')">✕</span></div>`;
-    else if(e.type==='image')
-      h+=`<div class="brf-el el-img ${sel}" data-el="${e.id}" style="left:${e.x}px;top:${e.y}px;width:${e.w}px;height:${e.h}px">
-        <img class="brf-img" src="${e.src}" alt="${esc(e.alt||'')}" draggable="false">
+    else if(e.type==='image'){
+      const host=brfHostFrame(b,e);
+      /* Inside a page: positioned relative to the clip layer, so overflow crops.
+         Loose on the canvas: plain world coordinates, nothing to clip against. */
+      const ix=host?e.x-host.x:e.x, iy=host?e.y-host.y:e.y;
+      const body=`<div class="brf-el el-img" data-el="${e.id}" style="left:${ix}px;top:${iy}px;width:${e.w}px;height:${e.h}px">
+        <img class="brf-img" src="${e.src}" alt="${esc(e.alt||'')}" draggable="false"></div>`;
+      if(host) clips[host.id]=(clips[host.id]||'')+body; else h+=body;
+      /* Handles and the delete button ride above the clip so they never vanish. */
+      overlay+=`<div class="brf-ovl ${sel?'sel-box':''}" data-ovl="${e.id}" style="left:${e.x}px;top:${e.y}px;width:${e.w}px;height:${e.h}px">
         <span class="el-rs el-rs-e"  data-ers="${e.id}:e"  title="Drag to stretch width"></span>
         <span class="el-rs el-rs-s"  data-ers="${e.id}:s"  title="Drag to stretch height"></span>
         <span class="el-rs el-rs-se" data-ers="${e.id}:se" title="Drag to resize · hold Shift to keep proportions"></span>
-        <span class="del-h" onmousedown="event.stopPropagation()" onclick="brfDelete('${e.id}')">✕</span></div>`;
+        ${sel?`<span class="del-h" style="display:flex" onmousedown="event.stopPropagation()" onclick="brfDelete('${e.id}')">✕</span>`:''}
+      </div>`;
+    }
     else if(e.type==='link')
       h+=`<div class="brf-el ${sel}" data-el="${e.id}" style="left:${e.x}px;top:${e.y}px"><div class="brf-link" ondblclick="brfEditLink('${e.id}')">
         <span class="lk-ico">${ICONS.link}</span><span><div>${esc(e.label)}</div><div class="lk-url">${esc(e.url)}</div></span></div>
@@ -4482,7 +4521,7 @@ function brfWorldHTML(b){
           <button class="btn btn-ghost btn-xs" onclick="brfResolve('${c.id}')">${c.resolved?'Reopen':'✓ Resolve'}</button>
           <button class="btn btn-ghost btn-xs" onclick="state.brf.openThread=null;renderBriefEditor()">✕</button></span></div>
       <div class="th-msgs">
-        ${c.thread.map(m=>`<div class="comment">${userAv(m.who,'sm')}<div class="c-body"><div class="c-who">${USERS[m.who].short}</div>${esc(m.text)}<div class="c-time">${m.time}</div></div></div>`).join('')||'<div style="font-size:.74rem;color:var(--ink-3);padding:8px 0">New comment — write the first message</div>'}
+        ${c.thread.map(m=>`<div class="comment">${userAv(m.who,'sm')}<div class="c-body"><div class="c-who">${esc(whoName(m.who))}</div>${esc(m.text)}<div class="c-time">${m.time}</div></div></div>`).join('')||'<div style="font-size:.74rem;color:var(--ink-3);padding:8px 0">New comment — write the first message</div>'}
       </div>
       <div style="display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--line-2)">
         <input id="brfReply" placeholder="Reply…" style="flex:1;padding:7px 10px;border:1px solid var(--line);border-radius:8px;outline:none;font-size:.78rem"
@@ -4490,7 +4529,14 @@ function brfWorldHTML(b){
         <button class="btn btn-primary btn-sm" onclick="brfReply('${c.id}')">${ICONS.send}</button>
       </div></div>`;
   }
-  return h;
+  /* Clip layers go in after the frames so photos paint over the page colour,
+     and the handle overlay goes last so it's above everything. */
+  let clipHTML='';
+  Object.entries(clips).forEach(([fid,inner])=>{
+    const f=b.elements.find(x=>x.id===fid); if(!f) return;
+    clipHTML+=`<div class="brf-clip" style="left:${f.x}px;top:${f.y}px;width:${f.w}px;height:${f.h}px">${inner}</div>`;
+  });
+  return h.replace('<!--CLIPS-->', clipHTML)+overlay;
 }
 /* ---- editor interactions ---- */
 function brfSetTool(t){ state.brf.tool=t; state.brf.sel=null; state.brf.openThread=null; state.brf.selFrame=null; renderBriefEditor(); }
@@ -4553,6 +4599,12 @@ function brfBind(b){
         if(s.sel!==el.id){ s.sel=el.id;
           world.querySelectorAll('.brf-el.selected').forEach(n=>n.classList.remove('selected'));
           elNode.classList.add('selected');
+          /* Photos draw their selection on the unclipped overlay, not on the
+             clipped image itself, so the outline is never cropped away. */
+          world.querySelectorAll('.brf-ovl.sel-box').forEach(n=>n.classList.remove('sel-box'));
+          const ov=world.querySelector(`[data-ovl="${el.id}"]`);
+          if(ov){ ov.classList.add('sel-box'); ov.querySelector('.del-h')?.remove();
+            ov.insertAdjacentHTML('beforeend',`<span class="del-h" style="display:flex" onmousedown="event.stopPropagation()" onclick="brfDelete('${el.id}')">✕</span>`); }
         }
       }
     } else {
@@ -4589,10 +4641,15 @@ function brfBind(b){
         if(start.edge==='s') el.w=Math.max(40, Math.round(el.h/start.ratio));
         else el.h=Math.max(40, Math.round(el.w*start.ratio));
       }
-      const n=$('brfWorld')?.querySelector(`[data-el="${el.id}"]`);
-      if(n){ n.style.width=el.w+'px'; n.style.height=el.h+'px';
-        let tag=n.querySelector('.el-size-tag');
-        if(!tag){ tag=document.createElement('div'); tag.className='el-size-tag'; n.appendChild(tag); }
+      const w=$('brfWorld');
+      const n=w?.querySelector(`[data-el="${el.id}"]`);
+      if(n){ n.style.width=el.w+'px'; n.style.height=el.h+'px'; }
+      /* The handle overlay is a separate, unclipped layer — resize it in step
+         or the grab points drift away from the photo's actual edge. */
+      const ov=w?.querySelector(`[data-ovl="${el.id}"]`);
+      if(ov){ ov.style.width=el.w+'px'; ov.style.height=el.h+'px';
+        let tag=ov.querySelector('.el-size-tag');
+        if(!tag){ tag=document.createElement('div'); tag.className='el-size-tag'; ov.appendChild(tag); }
         tag.textContent=`${el.w} × ${el.h}${e.shiftKey?' · locked':''}`;
       }
     }
@@ -6716,8 +6773,10 @@ async function tikiPull(){
   if(rows.length){ applyTikiState(rows[0].value); tikiLastPushed=JSON.stringify(collectTikiState()); }
   else tikiLastPushed='';   // first run — seed data will be pushed
 }
+let TIKI_LOADED=false;   // no successful pull yet -> pushing would destroy data
 async function tikiPush(){
   if(tikiSaving) return;
+  if(!TIKI_LOADED) return;   // the guard that stops a failed load becoming a wipe
   const s=JSON.stringify(collectTikiState());
   if(s===tikiLastPushed) return;
   tikiSaving=true; syncStatus('saving','Saving…');
@@ -6733,8 +6792,23 @@ async function tikiPush(){
 async function tikiEnter(inviteType){
   $('gate').classList.add('hidden');
   syncStatus('saving','Loading…');
-  try{ await tikiPull(); syncStatus('', 'Synced · '+tikiSession.email.split('@')[0]); }
-  catch(e){ syncStatus('error','Load failed — using local'); }
+  /* A failed load must NEVER be followed by a save.
+     Previously a network hiccup on tikiPull left the app holding its empty
+     in-memory defaults, and the 4-second autosave then wrote that emptiness
+     straight over the good server copy — silently destroying work. Saving is
+     now gated on having actually loaded first. */
+  try{ await tikiPull(); TIKI_LOADED=true; syncStatus('', 'Synced · '+tikiSession.email.split('@')[0]); }
+  catch(e){
+    TIKI_LOADED=false;
+    syncStatus('error','Could not load — not saving');
+    openModal(modalShell('Couldn’t load your workspace',`
+      <p style="font-size:.86rem;color:var(--ink-2);line-height:1.6">
+        Your data is safe on the server, but this device couldn’t read it just now.
+        <b>Saving is switched off</b> until it loads, so nothing here can overwrite it.</p>
+      <p style="font-size:.8rem;color:var(--ink-3);line-height:1.55;margin-top:10px">
+        Reload the page to try again. If it keeps failing, check your connection before making any edits.</p>`,
+      `<button class="btn btn-primary" onclick="location.reload()">Reload</button>`));
+  }
   resolveMe();
   await tiktokLoadStatus(); await xeroLoadStatus();
   await cogsLoad();
