@@ -202,6 +202,13 @@ select.vinput{cursor:pointer}
 .vthumb img{width:100%;height:100%;object-fit:cover;display:block}
 .vph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
   background:linear-gradient(150deg,#243056,#4a3aa7 55%,#b4416f);color:rgba(255,255,255,.55);font-size:1.7rem}
+.vplay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:48px;height:48px;
+  border-radius:50%;border:none;background:rgba(255,255,255,.9);color:#111;font-size:1.05rem;
+  padding-left:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  opacity:0;transition:opacity .15s,transform .15s;font-family:inherit;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+.vcard:hover .vplay{opacity:1}
+.vplay:hover{transform:translate(-50%,-50%) scale(1.08)}
+.vthumb[data-playing] .vrank,.vthumb[data-playing] .vdur,.vthumb[data-playing] .vown{display:none}
 .vrank{position:absolute;top:9px;left:9px;background:rgba(0,0,0,.72);color:#fff;border-radius:999px;
   padding:5px 10px;font-size:.76rem;font-weight:700;line-height:1.15}
 .vrank small{display:block;font-size:.62rem;font-weight:500;opacity:.85}
@@ -228,7 +235,7 @@ select.vinput{cursor:pointer}
   -webkit-box-orient:vertical;overflow:hidden}
 /* cancels .modal-b padding so the poster can go edge to edge */
 .vmodal{display:grid;grid-template-columns:330px 1fr;gap:0;margin:-18px -22px;border-radius:0 0 16px 16px;overflow:hidden}
-.vmleft{background:#111;min-height:520px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.vmleft{background:#000;width:330px;height:587px;position:relative;overflow:hidden}
 .vmleft img{width:100%;height:100%;object-fit:cover}
 .vmrow{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line-2);font-size:.85rem}
 .vmrow span:first-child{color:var(--ink-3)}
@@ -236,7 +243,7 @@ select.vinput{cursor:pointer}
 .vspark{display:flex;align-items:flex-end;gap:3px;height:56px;margin:12px 0 4px}
 .vspark i{flex:1;background:var(--accent-soft);border-radius:2px 2px 0 0;min-height:2px}
 .vspark i.hi{background:var(--accent)}
-@media(max-width:820px){.vmodal{grid-template-columns:1fr}.vmleft{min-height:320px}}
+@media(max-width:820px){.vmodal{grid-template-columns:1fr}.vmleft{width:100%;height:auto;aspect-ratio:9/16;max-height:60vh}}
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 .g-2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .g-3{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -6716,7 +6723,7 @@ function renderVideos(){
   <div class="page-head">
     <div><h1>Videos</h1><div class="desc">Every shop video with a named creator — what it was watched and what it sold</div></div>
     <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn" onclick="vidSync()" data-vsync>Sync videos</button>
+      <button class="btn btn-primary" onclick="vidSync()" data-vsync>Sync videos</button>
     </div>
   </div>
 
@@ -6743,12 +6750,12 @@ function renderVideos(){
   </div>
 
   <div class="kpi-grid" style="margin:16px 0 18px;grid-template-columns:repeat(5,1fr)">
-    <div class="kpi"><div class="k-label">Videos</div><div class="k-val">${tot.n}</div>
-      <div class="k-foot">${new Set(list.map(v=>v.username)).size} creators</div></div>
-    <div class="kpi"><div class="k-label">Views</div><div class="k-val">${vShort(tot.views)}</div>
-      <div class="k-foot">${tot.n?vShort(Math.round(tot.views/tot.n)):0} avg per video</div></div>
     <div class="kpi"><div class="k-label">GMV</div><div class="k-val">${money(tot.gmv)}</div>
       <div class="k-foot">in this period</div></div>
+    <div class="kpi"><div class="k-label">Views</div><div class="k-val">${vShort(tot.views)}</div>
+      <div class="k-foot">${tot.n?vShort(Math.round(tot.views/tot.n)):0} avg per video</div></div>
+    <div class="kpi"><div class="k-label">Videos</div><div class="k-val">${tot.n}</div>
+      <div class="k-foot">${new Set(list.map(v=>v.username)).size} creators</div></div>
     <div class="kpi"><div class="k-label">Items sold</div><div class="k-val">${tot.items}</div>
       <div class="k-foot">${tot.items?moneyDec(tot.gmv/tot.items):'—'} avg</div></div>
     <div class="kpi"><div class="k-label">GPM</div><div class="k-val">${moneyDec(gpm)}</div>
@@ -6791,6 +6798,7 @@ function vidCard(v,rank){
   return `<div class="vcard" onclick="vidOpen('${v.id}')">
     <div class="vthumb" id="vt-${v.id}">
       ${t&&t.thumb?`<img src="${vEsc(t.thumb)}" alt="" loading="lazy">`:`<div class="vph">▶</div>`}
+      <button class="vplay" title="Play here" onclick="vidPlay(event,'${v.id}')">▶</button>
       <div class="vrank">#${rank}<small>${vShort(v.views)} views</small></div>
       ${v.duration?`<div class="vdur">${vDur(v.duration)}</div>`:''}
       ${v.account==='OFFICIAL_ACCOUNTS'?`<div class="vown">OURS</div>`:''}
@@ -6813,6 +6821,22 @@ function vidCard(v,rank){
       ${prod?`<div class="vprod"><div class="pn">${vEsc(prod.name||prod.title||'')}</div></div>`:''}
     </div>
   </div>`;
+}
+
+/* Play in place. TikTok's embed refuses to reflow below its natural size — set
+   the iframe smaller and it CROPS. Same fix the brief canvas uses: render at
+   natural size, CSS-scale the whole thing. Clicks inside an iframe don't bubble,
+   so the card's own onclick stops firing once the player is in. */
+function vidPlay(ev,id){
+  ev.stopPropagation();
+  const host=$('vt-'+id); if(!host || host.dataset.playing) return;
+  const w=host.clientWidth||240, h=host.clientHeight||Math.round(240*16/9);
+  const k=Math.max(w/VID_BASE_W, h/VID_BASE_H);
+  host.dataset.playing='1';
+  host.innerHTML=`<iframe class="brf-embed" src="https://www.tiktok.com/embed/v2/${id}"
+      style="width:${VID_BASE_W}px;height:${VID_BASE_H}px;transform:scale(${k.toFixed(4)})"
+      allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; fullscreen"
+      frameborder="0" scrolling="no"></iframe>`;
 }
 
 /* Thumbnails come from TikTok oEmbed via the existing edge function. The signed
@@ -6849,7 +6873,10 @@ function vidOpen(id){
   openModal(modalShell(`@${vEsc(v.username)}`,`
     <div class="vmodal">
       <div class="vmleft">
-        ${t&&t.thumb?`<img src="${vEsc(t.thumb)}" alt="">`:`<div class="vph" style="font-size:2.4rem">▶</div>`}
+        <iframe class="brf-embed" src="https://www.tiktok.com/embed/v2/${v.id}"
+          style="width:${VID_BASE_W}px;height:${VID_BASE_H}px;transform:scale(${(330/VID_BASE_W).toFixed(4)})"
+          allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; fullscreen"
+          frameborder="0" scrolling="no"></iframe>
       </div>
       <div style="padding:20px 22px">
         <div style="color:var(--ink-3);font-size:.8rem">
@@ -6869,8 +6896,8 @@ function vidOpen(id){
         <div style="font-size:.72rem;color:var(--ink-3)">${v.days.length} day${v.days.length===1?'':'s'} of stored detail in this window</div>
       </div>
     </div>`,
-    `<a class="btn" href="${link}" target="_blank" rel="noopener">Open on TikTok</a>
-     <button class="btn primary" onclick="vidToBrief('${v.id}')">Brief this</button>`,'wide'));
+    `<a class="btn btn-ghost" href="${link}" target="_blank" rel="noopener">Open on TikTok</a>
+     <button class="btn btn-primary" onclick="vidToBrief('${v.id}')">Brief this</button>`,'wide'));
 }
 
 /* Parks the video on the brief shelf. The brief editor picks these up as a
