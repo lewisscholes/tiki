@@ -191,7 +191,12 @@ a{color:var(--accent-ink);text-decoration:none}
 .kpi .k-ico{display:none}
 .kpi .k-label{font-size:.76rem;font-weight:500;color:var(--ink-3)}
 .kpi .k-val{font-size:1.7rem;font-weight:700;letter-spacing:-.03em;line-height:1.1}
-.kpi .k-foot{display:flex;align-items:center;gap:7px;margin-top:7px;font-size:.72rem;color:var(--ink-3);flex-wrap:wrap}
+/* One line, always. Wrapping here made the tiles different heights and left
+   big pockets of white space in the shorter ones. Anything too long is clipped
+   rather than allowed to push the card taller. */
+.kpi .k-foot{display:flex;align-items:center;gap:7px;margin-top:7px;font-size:.72rem;color:var(--ink-3);flex-wrap:nowrap;white-space:nowrap;overflow:hidden}
+.kpi .k-foot>span{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.kpi .k-foot .delta{flex-shrink:0}
 .delta{display:inline-flex;align-items:center;gap:3px;font-size:.72rem;font-weight:700}
 .delta.up{color:#006300}
 .delta.down{color:var(--crit-ink)}
@@ -1102,19 +1107,20 @@ function rangeBuckets(range){
   }
   if(!edges.length) edges.push(new Date(start));
 
-  const labels=[], gmv=[], net=[], margin=[], days=[];
+  const labels=[], gmv=[], net=[], margin=[], drag=[], days=[];
   edges.forEach((from,i)=>{
     const to=i+1<edges.length?edges[i+1]:end;
     const m=metricsIn(from,to);
     gmv.push(+m.gmv.toFixed(2));
     net.push(+m.net.toFixed(2));
     margin.push(m.gmv>0?+(m.net/m.gmv*100).toFixed(1):0);
+    drag.push(m.gmv>0?+(m.fees/m.gmv*100).toFixed(1):0);
     days.push(Math.max(1,Math.round((to-from)/864e5)));
     labels.push(unit==='month'
       ? from.toLocaleDateString('en-GB',{month:'short',year:'2-digit'})
       : from.toLocaleDateString('en-GB',{day:'numeric',month:'short'}));
   });
-  return { labels, gmv, net, margin, days, unit };
+  return { labels, gmv, net, margin, drag, days, unit };
 }
 
 /* ---- DECISION METRICS ----------------------------------------------
@@ -1132,18 +1138,66 @@ function monthlyOverheads(){
 }
 function dailyBreakEven(){ return monthlyOverheads()/30.44; }
 
-/* Units bought minus units sold, against how fast they're currently going. */
+/* Units sold and GMV taken over the last N days — the basis for both velocity
+   and average selling price. Uses real orders, so discounts and promotions are
+   already baked into the price rather than assumed away. */
+function salesWindow(days){
+  const since=new Date(TODAY); since.setDate(since.getDate()-days);
+  let units=0, gmv=0, orders=0;
+  (TIKTOK_ORDERS||[]).forEach(o=>{
+    if(!o.created_at||new Date(o.created_at)<since) return;
+    units+=Number(o.item_count)||1; gmv+=Number(o.total)||0; orders++;
+  });
+  return { units, gmv, orders, days };
+}
+/* Average selling price, actual not listed. Widens the window if 14 days is too
+   quiet to be meaningful, and only falls back to list price as a last resort —
+   list price ignores every discount you've ever run. */
+function avgSellingPrice(){
+  for(const d of [14,30,90]){
+    const w=salesWindow(d);
+    if(w.units>=3) return { asp:w.gmv/w.units, basis:`${d}-day average`, units:w.units };
+  }
+  const w=salesWindow(90);
+  if(w.units>0) return { asp:w.gmv/w.units, basis:'90-day average (thin data)', units:w.units };
+  const live=PRODUCTS.filter(p=>p.price>0);
+  if(live.length) return { asp:live.reduce((n,p)=>n+p.price,0)/live.length, basis:'list price — no sales to average', units:0 };
+  return { asp:null, basis:'no price data', units:0 };
+}
+
+/* Real stock on hand, per channel.
+   TikTok reports actual warehouse inventory, which is the truth — it accounts
+   for returns, damages, samples and manual adjustments that a
+   bought-minus-sold calculation silently gets wrong. That derived figure is
+   kept only as a fallback for before the first product sync. */
+const SHOPIFY_STOCK=null;   // set once the Shopify API/webhook is connected
 function stockCover(){
+  const tiktokProducts=PRODUCTS.filter(p=>p.channel==='tiktok'&&p.status!=='DELETED');
+  const hasFeed=tiktokProducts.length>0;
+  const tiktok=hasFeed?tiktokProducts.reduce((n,p)=>n+(Number(p.stock)||0),0):null;
+  const shopify=SHOPIFY_STOCK;
+
   const bought=COGS_BATCHES.reduce((n,b)=>n+(+b.qty||0),0);
-  if(!bought) return { onHand:null, days:null, perDay:0, bought:0, sold:0 };
   const sold=(TIKTOK_ORDERS||[]).reduce((n,o)=>n+(Number(o.item_count)||1),0);
-  const onHand=bought-sold;
-  /* Velocity from the last 14 days — a 12-month average would hide a ramp. */
-  const since=new Date(TODAY); since.setDate(since.getDate()-14);
-  const recent=(TIKTOK_ORDERS||[]).filter(o=>o.created_at&&new Date(o.created_at)>=since)
-    .reduce((n,o)=>n+(Number(o.item_count)||1),0);
-  const perDay=recent/14;
-  return { onHand, sold, bought, perDay, days: perDay>0 ? Math.round(onHand/perDay) : null };
+
+  const onHand = hasFeed ? (tiktok||0)+(shopify||0) : (bought?bought-sold:null);
+  const source = hasFeed ? 'live' : (bought?'derived':'none');
+
+  const perDay=salesWindow(14).units/14;
+  const { asp, basis }=avgSellingPrice();
+  const unitCost=cogsUnitInc(TODAY_ISO,null);
+
+  return {
+    onHand, source, tiktok, shopify, bought, sold, perDay,
+    days: onHand!=null&&perDay>0 ? Math.round(onHand/perDay) : null,
+    asp, aspBasis: basis,
+    retail: onHand!=null&&asp!=null ? onHand*asp : null,   // what it's worth if it all sells
+    cost:   onHand!=null&&unitCost!=null ? onHand*unitCost : null,  // what it's worth on the balance sheet
+    unitCost,
+    /* A live feed that disagrees with bought-minus-sold is worth surfacing:
+       it usually means samples, returns or a batch that was never entered. */
+    drift: hasFeed&&bought ? (tiktok||0)-(bought-sold) : null,
+  };
 }
 /* Weekly GMV + order buckets for the charts, built from real orders. */
 function weeklyBuckets(){
@@ -1535,6 +1589,10 @@ function renderOverview(){
     : `${state.dateRange} · by ${bk.unit}`;
   const sc=stockCover();
   const be=dailyBreakEven();
+  /* Average drag across the buckets that actually traded — including zero-GMV
+     days would drag the mean down and make every real day look expensive. */
+  const dragTraded=bk.drag?bk.drag.filter((d,i)=>bk.gmv[i]>0):[];
+  const dragAvg=dragTraded.length?dragTraded.reduce((a,b)=>a+b,0)/dragTraded.length:null;
   /* Daily gross profit actually achieved over the selected window, so the
      break-even tile compares like with like. */
   const perDay = rm.window.days
@@ -1549,12 +1607,13 @@ function renderOverview(){
   const overallStatus = !hasData?'Getting Started':overdue>2?'Behind Target':needsLewis.length>3?'Needs Attention':'On Track';
   /* No history yet → show a flat marker rather than a green up-arrow against nothing. */
   /* Say plainly what's in the number, and warn if COGS coverage is partial. */
+  /* Kept deliberately short — these sit on one line and get clipped otherwise. */
   const grossProfitNote=(m)=>{
-    if(!m.orders) return 'after TikTok fees, ads &amp; COGS';
+    if(!m.orders) return 'no orders in range';
     const gap=m.orders-m.costed;
     const pct=m.gmv?Math.round(m.net/m.gmv*100):0;
-    if(gap>0) return `<span style="color:var(--warn-ink)">${gap} order${gap===1?'':'s'} missing a cost batch</span>`;
-    return `${pct}% margin · after TikTok fees, ads &amp; COGS`;
+    if(gap>0) return `<span style="color:var(--warn-ink)">${gap} uncosted</span>`;
+    return `${pct}% margin`;
   };
   const delta=(d)=> d==null||d==='—' ? `<span class="delta flat">→ —</span>`
     : (typeof d==='number'
@@ -1591,26 +1650,33 @@ function renderOverview(){
     <div class="kpi-grid">
       ${kpi('GMV — '+state.dateRange, money(Math.round(rm.gmv)), 'chart','background:var(--accent-soft);color:var(--accent-ink)',
         `${delta(rm.dGmv)}<span>${rangeNote}</span>`)}
-      ${kpi('Gross Profit', money(Math.round(rm.net)), 'card','background:var(--good-soft);color:var(--good-ink)',
+      ${kpi('Gross Profit',
+        `<span style="color:${rm.net<0?'var(--crit-ink)':'var(--good-ink)'}">${money(Math.round(rm.net))}</span>`,
+        'card', rm.net<0?'background:var(--crit-soft);color:var(--crit-ink)':'background:var(--good-soft);color:var(--good-ink)',
         `${delta(rm.dNet)}<span>${grossProfitNote(rm)}</span>`)}
-      ${kpi('Break-even', be>0?money(Math.round(be))+'/day':'—', 'target',
-        be>0&&perDay>=be?'background:var(--good-soft);color:var(--good-ink)':be>0?'background:var(--crit-soft);color:var(--crit-ink)':'background:var(--neutral-soft);color:var(--neutral-ink)',
-        be>0
-          ? `<span class="delta ${perDay>=be?'up':'down'}">${perDay>=be?'↑ above':'↓ below'} by ${money(Math.round(Math.abs(perDay-be)))}/day</span>`
-          : `<span>sync Xero to set the overhead line</span>`)}
-      ${kpi('Fee Drag', rm.drag!=null?rm.drag.toFixed(1)+'%':'—', 'card','background:var(--warn-soft);color:var(--warn-ink)',
-        rm.drag!=null
-          ? `${rm.dDrag==null?'<span class="delta flat">→ —</span>':rm.dDrag===0?'<span class="delta flat">→ 0 pts</span>':rm.dDrag>0?`<span class="delta down">↑ ${rm.dDrag} pts</span>`:`<span class="delta up">↓ ${Math.abs(rm.dDrag)} pts</span>`}<span>${money(Math.round(rm.fees))} of TikTok fees</span>`
-          : `<span>no settled orders in range</span>`)}
-      ${kpi('Stock Cover', sc.days!=null?sc.days+' days':'—', 'box',
-        sc.days!=null&&sc.days<21?'background:var(--crit-soft);color:var(--crit-ink)':sc.days!=null&&sc.days<42?'background:var(--warn-soft);color:var(--warn-ink)':'background:var(--good-soft);color:var(--good-ink)',
-        sc.days!=null
-          ? `<span>${sc.onHand.toLocaleString()} units left · ${sc.perDay.toFixed(1)}/day</span>`
-          : `<span>${sc.bought?'no recent sales to measure':'add a cost batch to track stock'}</span>`)}
       ${kpi('Active Creators', k.creators, 'users','background:var(--aqua-soft);color:var(--aqua-ink)',
         `${delta(k.crDelta)}<span>this month</span>`)}
       ${kpi('Monthly Retainer Spend', money(retSpend), 'card','background:var(--magenta-soft);color:var(--magenta-ink)',
-        `<span>${retSpend&&rm.net>0?`${m2(rm.net/retSpend)} gross profit per £1`:'no return measured yet'}</span>`)}
+        `<span>${retSpend&&rm.net>0?`${m2(rm.net/retSpend)} profit per £1`:'no return yet'}</span>`)}
+
+      ${kpi('Fee Drag', rm.drag!=null?rm.drag.toFixed(1)+'%':'—', 'card','background:var(--warn-soft);color:var(--warn-ink)',
+        rm.drag!=null
+          ? `${rm.dDrag==null?'<span class="delta flat">→ —</span>':rm.dDrag===0?'<span class="delta flat">→ 0 pts</span>':rm.dDrag>0?`<span class="delta down">↑ ${rm.dDrag} pts</span>`:`<span class="delta up">↓ ${Math.abs(rm.dDrag)} pts</span>`}<span>${money(Math.round(rm.fees))} fees</span>`
+          : `<span>no settled orders</span>`)}
+      ${kpi('Stock Cover', sc.days!=null?sc.days+' days':(sc.onHand!=null?sc.onHand.toLocaleString()+' units':'—'), 'box',
+        sc.days!=null&&sc.days<21?'background:var(--crit-soft);color:var(--crit-ink)':sc.days!=null&&sc.days<42?'background:var(--warn-soft);color:var(--warn-ink)':'background:var(--good-soft);color:var(--good-ink)',
+        sc.onHand!=null
+          ? `<span>${sc.onHand.toLocaleString()} units${sc.perDay>0?` · ${sc.perDay.toFixed(1)}/day`:' · no sales'}</span>`
+          : `<span>sync TikTok for stock</span>`)}
+      ${kpi('Stock Value', sc.retail!=null?money(Math.round(sc.retail)):'—', 'card','background:var(--violet-soft);color:var(--violet-ink)',
+        sc.retail!=null
+          ? `<span>${money(Math.round(sc.cost||0))} at cost · ${m2(sc.asp)}/unit</span>`
+          : `<span>${sc.onHand!=null?'no price to value it':'sync TikTok for stock'}</span>`)}
+      ${kpi('Break-even', be>0?money(Math.round(be))+'/day':'—', 'target',
+        be>0&&perDay>=be?'background:var(--good-soft);color:var(--good-ink)':be>0?'background:var(--crit-soft);color:var(--crit-ink)':'background:var(--neutral-soft);color:var(--neutral-ink)',
+        be>0
+          ? `<span class="delta ${perDay>=be?'up':'down'}">${perDay>=be?'↑ above':'↓ below'} by ${money(Math.round(Math.abs(perDay-be)))}</span>`
+          : `<span>sync Xero to set this</span>`)}
     </div>
 
     <div class="grid g-23" style="margin-top:16px">
@@ -1626,6 +1692,19 @@ function renderOverview(){
       <div class="card">
         <div class="card-h"><div><div class="t">Margin</div><div class="sub">Gross profit as a % of GMV</div></div></div>
         <div class="card-b"><div class="chart-box" id="marginChart"></div></div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:16px">
+      <div class="card">
+        <div class="card-h">
+          <div><div class="t">Fee Drag</div><div class="sub">TikTok's cut as a % of GMV · ${chartSub}</div></div>
+          <div class="right legend-row">
+            <span class="li"><span class="sw" style="background:#eda100"></span>Fee drag</span>
+            ${dragAvg!=null?`<span class="li"><span class="sw" style="background:#98a2b3"></span>Average ${dragAvg.toFixed(1)}%</span>`:''}
+          </div>
+        </div>
+        <div class="card-b"><div class="chart-box" id="dragChart" style="height:230px"></div></div>
       </div>
     </div>
 
@@ -1678,6 +1757,14 @@ function drawCharts(){
   drawBarChart('marginChart', b.labels, [
       { label:'Margin %', color:'#1baf7a', data:b.margin },
     ], v=>v+'%');
+  /* Fee drag, with a flat average line behind it. A single day at 22% means
+     nothing on its own; 22% against a 17% average is a question worth asking. */
+  const traded=b.drag?b.drag.filter((d,i)=>b.gmv[i]>0):[];
+  const avg=traded.length?traded.reduce((x,y)=>x+y,0)/traded.length:null;
+  drawLineChart('dragChart', b.labels, [
+      { label:'Fee drag', color:'#eda100', data:b.drag||[] },
+    ], v=>v.toFixed(0)+'%', v=>v.toFixed(1)+'%',
+    avg!=null?{ data:(b.drag||[]).map(()=>+avg.toFixed(1)), color:'#98a2b3', label:'Average' }:null);
 }
 function drawLineChart(id, labels, series, tickFmt, tipFmt, threshold){
   const box=$(id); if(!box) return;
@@ -1687,10 +1774,16 @@ function drawLineChart(id, labels, series, tickFmt, tipFmt, threshold){
     return;
   }
   const W=680,H=250,padL=44,padR=10,padT=12,padB=26;
-  const maxV=niceMax(Math.max(...series.flatMap(s=>s.data), ...(threshold?threshold.data:[]))*1.15);
-  const x=i=>padL+(W-padL-padR)*i/(labels.length-1);
-  const y=v=>padT+(H-padT-padB)*(1-v/maxV);
-  const ticks=[0,.25,.5,.75,1].map(t=>t*maxV);
+  /* The axis has to survive negatives — an unprofitable period is exactly when
+     you most want to look at this chart, and a 0-to-max scale turns it into NaN. */
+  const all=[...series.flatMap(s=>s.data), ...(threshold?threshold.data:[])].filter(Number.isFinite);
+  const maxV=niceMax(Math.max(...all, 0)*1.15)||1;
+  const minRaw=Math.min(...all, 0);
+  const minV=minRaw<0?-niceMax(Math.abs(minRaw)*1.15):0;
+  const span=(maxV-minV)||1;
+  const x=i=>padL+(W-padL-padR)*(labels.length>1?i/(labels.length-1):0.5);
+  const y=v=>padT+(H-padT-padB)*(1-(v-minV)/span);
+  const ticks=[0,.25,.5,.75,1].map(t=>minV+t*span);
   let svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%;display:block">`;
   ticks.forEach(t=>{ svg+=`<line x1="${padL}" y1="${y(t)}" x2="${W-padR}" y2="${y(t)}" stroke="#e1e0d9" stroke-width="1"/>`; });
   series.forEach(s=>{
@@ -1735,20 +1828,25 @@ function drawBarChart(id, labels, series, tickFmt){
     return;
   }
   const W=680,H=250,padL=30,padR=10,padT=12,padB=26;
-  const totals=labels.map((_,i)=>series.reduce((s,sr)=>s+sr.data[i],0));
-  const maxV=niceMax(Math.max(...totals)*1.15);
+  const totals=labels.map((_,i)=>series.reduce((s,sr)=>s+(Number(sr.data[i])||0),0));
+  /* Same negative-safe axis as the line chart — a loss-making week must be able
+     to draw below the baseline instead of producing NaN geometry. */
+  const maxV=niceMax(Math.max(...totals, 0)*1.15)||1;
+  const minRaw=Math.min(...totals, 0);
+  const minV=minRaw<0?-niceMax(Math.abs(minRaw)*1.15):0;
+  const span=(maxV-minV)||1;
   const slot=(W-padL-padR)/labels.length, bw=slot*0.55;
-  const y=v=>padT+(H-padT-padB)*(1-v/maxV);
-  const ticks=[0,.25,.5,.75,1].map(t=>t*maxV);
+  const y=v=>padT+(H-padT-padB)*(1-(v-minV)/span);
+  const ticks=[0,.25,.5,.75,1].map(t=>minV+t*span);
   let svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%;display:block">`;
   ticks.forEach(t=>{ svg+=`<line x1="${padL}" y1="${y(t)}" x2="${W-padR}" y2="${y(t)}" stroke="#e1e0d9" stroke-width="1"/>`; });
   labels.forEach((_,i)=>{
     let acc=0; const cx=padL+slot*i+(slot-bw)/2;
     series.forEach((s,si)=>{
-      const v=s.data[i]; if(!v) { return; }
-      const y1=y(acc+v), y0=y(acc);
+      const v=Number(s.data[i])||0; if(!v) { return; }
+      const y1=Math.min(y(acc+v),y(acc)), y0=Math.max(y(acc+v),y(acc));
       const isTop=acc+v===totals[i];
-      const h=Math.max(y0-y1-(acc>0?2:0),1.5);
+      const h=Math.max(y0-y1,1.5);
       svg+=`<rect x="${cx}" y="${y1}" width="${bw}" height="${h}" fill="${s.color}" rx="${isTop?3:0}" data-i="${i}"/>`;
       acc+=v;
     });
@@ -2664,7 +2762,7 @@ async function tiktokLoadData(){
   try{
     let [rows,pRrows]=await Promise.all([
       tikiFetchAll('/rest/v1/tiktok_orders?select=order_id,created_at,status,total,currency,item_count,sku_summary&order=created_at.desc'),
-      tikiFetch('/rest/v1/tiktok_products?select=product_id,title,status,price,stock,sku_count&order=title.asc')
+      tikiFetch('/rest/v1/tiktok_products?select=product_id,title,status,price,stock,sku_count,synced_at&order=title.asc')
     ]);
     const pR=pRrows;
     if(rows){
@@ -2689,7 +2787,8 @@ async function tiktokLoadData(){
         id:p.product_id, name:p.title||'Untitled', variant:`${p.sku_count||1} SKU${(p.sku_count||1)===1?'':'s'}`,
         brand:defaultBrand(), emoji:['🫐','🍋','🎁','🥤','🏝️','📦'][i%6],
         price:Number(p.price)||0, commission:0, creators:0, videos:0, views:0, units:0, gmv:0,
-        refundRate:0, stock:Number(p.stock)||0, sampleStock:0, campaign:'—', angles:[], live:true })));
+        refundRate:0, stock:Number(p.stock)||0, sampleStock:0, campaign:'—', angles:[], live:true,
+        status:p.status||'', channel:'tiktok', stockAt:p.synced_at||null })));
     }
   }catch(e){ /* leave existing data alone */ }
 }
@@ -3376,6 +3475,15 @@ function renderProfit(){
 /* Rebuild the P&L headline from live orders + real settlements + batch costs,
    so "are we making money" answers itself instead of sitting at zero. */
 function recomputePnlFromLive(){
+  /* Stock is independent of the P&L date window — you can hold stock in a period
+     with no orders — so value it before the early return, not after. */
+  const sc=stockCover();
+  PNL.stock = sc.cost!=null ? sc.cost : cogsStockValue();
+  PNL.stockUnits = sc.onHand;
+  PNL.stockRetail = sc.retail;
+  PNL.stockSource = sc.source;
+  PNL.stockAsp = sc.asp;
+  PNL.stockAspBasis = sc.aspBasis;
   if(!PROFIT_ORDERS.length) return;
   const L=CALC_LEV;
   const w=rangeWindow(state.profitRange||'Last 90 Days');
@@ -3409,7 +3517,8 @@ function recomputePnlFromLive(){
   PNL.fees=fees; PNL.settlement=settle; PNL.cogs=cogs; PNL.ads=ads;
   PNL.contribution=settle-cogs-ads;
   PNL.nOrders=PROFIT_ORDERS.filter(inWin).length;
-  PNL.stock=cogsStockValue();
+  /* Stock ASSET is what's still on the shelf, not everything ever purchased —
+     valued at the top of this function, above the early return. */
   PNL.costedOrders=costed;
   const ds=PROFIT_ORDERS.filter(inWin).map(o=>o.iso).filter(Boolean).sort();
   PNL.period=ds.length?`${fmtDate(ds[0])} – ${fmtDate(ds[ds.length-1])}`:'No data yet';
@@ -3509,12 +3618,71 @@ function profitCogs(){
         </tbody></table>
       </div>
     </div>
+    ${stockCard()}
     ${adSpendCard()}
 
     <div style="font-size:.75rem;color:var(--ink-3);margin-top:10px;line-height:1.6">
       Costs are entered <b>ex VAT</b> and <b>${vat}% VAT is added</b> before anything reaches the P&L —
       so a ${m2(cur||0)} batch costs ${m2((cur||0)*vatMult())} per unit in the accounts. Change a batch and every order
       on or after its date recosts automatically — nothing is baked in.</div>`;
+}
+
+/* Stock position across channels, valued two ways. Cost is the accounting
+   figure; retail is the planning figure. Keeping them side by side stops the
+   nice big retail number from quietly becoming a balance-sheet asset. */
+function stockCard(){
+  const s=stockCover();
+  const chan=(name, units, note, live)=>`
+    <tr>
+      <td class="main-cell"><div class="t">${name}</div><div class="s">${note}</div></td>
+      <td class="num" style="font-weight:${live?'700':'400'};color:${live?'inherit':'var(--ink-3)'}">${units!=null?units.toLocaleString():'—'}</td>
+      <td class="num" style="color:var(--ink-3)">${units!=null&&s.asp!=null?m2(units*s.asp):'—'}</td>
+      <td>${live?'<span class="badge bg-good">● Live</span>':'<span class="badge bg-neutral">○ Not connected</span>'}</td>
+    </tr>`;
+  return `
+    <div class="card" style="margin-top:16px">
+      <div class="card-h">
+        <div><div class="t">Stock position</div>
+          <div class="sub">${s.source==='live'?'Live warehouse levels from TikTok':s.source==='derived'?'Estimated from batches — sync TikTok for real levels':'No stock data yet'}</div></div>
+        <div class="right">${s.days!=null
+          ? `<span class="badge ${s.days<21?'bg-crit':s.days<42?'bg-warn':'bg-good'}">${s.days} days of cover</span>`
+          : ''}</div>
+      </div>
+      <div class="card-b flush tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>Channel</th><th class="num">Units on hand</th><th class="num">Retail value</th><th>Feed</th>
+        </tr></thead><tbody>
+          ${chan('TikTok Shop', s.tiktok, s.tiktok!=null?'warehouse inventory, all SKUs':'sync to read stock levels', s.tiktok!=null)}
+          ${chan('Shopify', s.shopify, 'connect the API or webhook to include DTC stock', false)}
+          <tr style="background:var(--bg-2)">
+            <td style="font-weight:700">Total on hand</td>
+            <td class="num" style="font-weight:800">${s.onHand!=null?s.onHand.toLocaleString():'—'}</td>
+            <td class="num" style="font-weight:800">${s.retail!=null?m2(s.retail):'—'}</td>
+            <td></td>
+          </tr>
+        </tbody></table>
+      </div>
+      <div class="card-b" style="padding-top:0">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+          <div class="mini-stat"><div class="l">Average selling price</div><div class="v">${s.asp!=null?m2(s.asp):'—'}</div><div class="s">${esc(s.aspBasis)}</div></div>
+          <div class="mini-stat"><div class="l">Retail value</div><div class="v">${s.retail!=null?m2(s.retail):'—'}</div><div class="s">if every unit sells at that price</div></div>
+          <div class="mini-stat"><div class="l">Cost value (the asset)</div><div class="v">${s.cost!=null?m2(s.cost):'—'}</div><div class="s">${s.unitCost!=null?`${m2(s.unitCost)}/unit inc VAT`:'add a cost batch'}</div></div>
+          <div class="mini-stat"><div class="l">Sell-through</div><div class="v">${s.perDay>0?s.perDay.toFixed(1)+'/day':'—'}</div><div class="s">last 14 days</div></div>
+        </div>
+        ${s.drift!=null&&Math.abs(s.drift)>=5?`
+        <div style="background:var(--warn-soft);border:1px solid #f3e2c0;border-radius:11px;padding:11px 14px;
+          font-size:.78rem;color:var(--warn-ink);line-height:1.55;margin-top:12px">
+          <b>TikTok says ${Math.abs(s.drift).toLocaleString()} units ${s.drift>0?'more':'fewer'} than your batches imply.</b>
+          Batches say ${(s.bought-s.sold).toLocaleString()} should be left, TikTok reports ${s.tiktok.toLocaleString()}.
+          Usually samples, returns or a delivery that was never entered as a batch — worth a look, because it also
+          shifts your COGS.</div>`:''}
+        <div style="font-size:.75rem;color:var(--ink-3);line-height:1.6;margin-top:12px">
+          Retail value is what the stock is worth <b>if it all sells</b> at the current average price — useful for planning,
+          but it is not what goes on the balance sheet. Inventory is carried at <b>cost</b>, which is the figure used as the
+          stock asset in the P&L. The average price comes from real orders, so discounts and promotions are already in it.
+        </div>
+      </div>
+    </div>`;
 }
 
 /* Advertising spend. Sits with cost of goods because it is the other number the
@@ -3701,7 +3869,12 @@ function profitPnl(){
         <div class="divider-v"></div>
         <div class="mini-stat"><div class="l">Gross profit</div><div class="v ${PNL.contribution<0?'neg':'pos'}">${m2(PNL.contribution)}</div><div class="s">after TikTok fees, ads &amp; COGS — before overheads</div></div>
         <div class="mini-stat"><div class="l">Director loans (funding)</div><div class="v">${m2(PNL.loansTotal)}</div><div class="s">${PNL.loans.map(l=>l[0]+' '+money(l[1])).join(' · ')||'none recorded'}</div></div>
-        <div class="mini-stat"><div class="l">Stock on hand (asset)</div><div class="v">${m2(PNL.stock)}</div><div class="s">${COGS_BATCHES.length?`${(COGS_BATCHES.reduce((n,b)=>n+(+b.qty||0),0)).toLocaleString()} units × ${m2(cogsUnitInc(TODAY_ISO,null)||0)} inc VAT`:'add a cost batch to value your stock'}</div></div>
+        <div class="mini-stat"><div class="l">Stock on hand (asset, at cost)</div><div class="v">${m2(PNL.stock)}</div><div class="s">${PNL.stockUnits!=null&&cogsUnitInc(TODAY_ISO,null)!=null
+          ? `${PNL.stockUnits.toLocaleString()} units × ${m2(cogsUnitInc(TODAY_ISO,null))} inc VAT · ${PNL.stockSource==='live'?'live TikTok stock':'estimated from batches'}`
+          : 'add a cost batch to value your stock'}</div></div>
+        <div class="mini-stat"><div class="l">Stock retail value</div><div class="v">${PNL.stockRetail!=null?m2(PNL.stockRetail):'—'}</div><div class="s">${PNL.stockRetail!=null
+          ? `${PNL.stockUnits.toLocaleString()} units × ${m2(PNL.stockAsp)} ${esc(PNL.stockAspBasis)} — what it's worth if it all sells, not a balance-sheet figure`
+          : 'needs live stock and recent sales'}</div></div>
       </div>
     </div>
     <div class="grid g-23" style="margin-bottom:16px">
@@ -5683,8 +5856,12 @@ function aiSnapshot(){
     current: part(cur), previousEquivalentWindow: part(prev),
     breakEven: { dailyGrossProfitNeeded:+be.toFixed(2), monthlyOverheads:+monthlyOverheads().toFixed(2),
       actualDailyGrossProfit: prevW.days?+(cur.net/prevW.days).toFixed(2):null },
-    stock: { unitsOnHand:sc.onHand, unitsPerDay:+sc.perDay.toFixed(2), daysOfCover:sc.days,
-      unitsBought:sc.bought, unitsSold:sc.sold },
+    stock: { unitsOnHand:sc.onHand, source:sc.source, tiktokUnits:sc.tiktok, shopifyUnits:sc.shopify,
+      unitsPerDay:+sc.perDay.toFixed(2), daysOfCover:sc.days, unitsBought:sc.bought, unitsSold:sc.sold,
+      avgSellingPrice:sc.asp!=null?+sc.asp.toFixed(2):null, aspBasis:sc.aspBasis,
+      retailValue:sc.retail!=null?+sc.retail.toFixed(2):null,
+      costValue:sc.cost!=null?+sc.cost.toFixed(2):null,
+      driftVsBatches:sc.drift },
     costCoverage: { ordersInRange:cur.orders, ordersWithACostBatch:cur.costed,
       note: cur.orders>cur.costed?'orders without a cost batch count COGS as zero, so gross profit reads HIGH':null },
     kpis: { gmv:k.gmv||0, net:k.net||0, videos:k.videos||0, activeCreators:k.creators||0 },
