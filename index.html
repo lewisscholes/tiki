@@ -487,6 +487,35 @@ body.brief-full .main{margin-right:0}
 .brf-img{display:block;width:100%;height:100%;object-fit:fill;border-radius:8px;pointer-events:none;box-shadow:0 2px 10px rgba(16,24,40,.10)}
 .brf-el.el-img{border-radius:8px}
 .el-rs{position:absolute;width:12px;height:12px;background:#fff;border:2px solid var(--accent);border-radius:3px;opacity:0;transition:opacity .12s;z-index:6}
+/* Text boxes get Canva's chrome: a violet frame, round corner grips and pill
+   grips on the sides, because sideways is the only direction that matters when
+   height is driven by the words. */
+.brf-ovl.txt-box.sel-box{outline:none;border-radius:0}
+.brf-ovl.txt-box.sel-box::before{content:'';position:absolute;inset:-4px;border:1.5px solid #8b3dff;border-radius:2px;pointer-events:none}
+.brf-ovl.txt-box .el-rs{border-color:#8b3dff;border-width:1.5px;opacity:0}
+.brf-ovl.txt-box.sel-box .el-rs,.brf-ovl.txt-box:hover .el-rs{opacity:1}
+.brf-ovl.txt-box .el-rs-nw,.brf-ovl.txt-box .el-rs-ne,
+.brf-ovl.txt-box .el-rs-sw,.brf-ovl.txt-box .el-rs-se{width:13px;height:13px;border-radius:50%;box-shadow:0 1px 3px rgba(16,24,40,.2)}
+.brf-ovl.txt-box .el-rs-w,.brf-ovl.txt-box .el-rs-e{width:7px;height:26px;border-radius:5px;margin-top:-13px;box-shadow:0 1px 3px rgba(16,24,40,.2)}
+.brf-ovl.txt-box .el-rs-nw{left:-9px;top:-9px}
+.brf-ovl.txt-box .el-rs-ne{right:-9px;top:-9px}
+.brf-ovl.txt-box .el-rs-sw{left:-9px;bottom:-9px}
+.brf-ovl.txt-box .el-rs-se{right:-9px;bottom:-9px}
+.brf-ovl.txt-box .el-rs-w{left:-8px}
+.brf-ovl.txt-box .el-rs-e{right:-8px}
+.brf-text.editing{outline:1.5px solid #8b3dff;outline-offset:3px;cursor:text;user-select:text}
+.brf-text{cursor:move}
+/* Formatting rail */
+.fmt-row{display:flex;gap:6px;margin-bottom:10px}
+.fmt-btn{flex:1;height:32px;border:1px solid var(--line);border-radius:8px;background:var(--surface);
+  display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:var(--ink-2)}
+.fmt-btn:hover{background:var(--neutral-soft)}
+.fmt-btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.fmt-btn svg{width:15px;height:15px}
+.fmt-num{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden;height:32px}
+.fmt-num button{width:30px;height:100%;font-weight:800;color:var(--ink-2)}
+.fmt-num button:hover{background:var(--neutral-soft)}
+.fmt-num input{width:44px;text-align:center;border:0;outline:none;font-size:.82rem;font-weight:700;padding:0}
 .brf-el.selected .el-rs,.brf-el:hover .el-rs{opacity:1}
 .el-rs-nw{left:-7px;top:-7px;cursor:nwse-resize}
 .el-rs-n{left:50%;top:-7px;margin-left:-6px;cursor:ns-resize}
@@ -4392,7 +4421,7 @@ function profitBankLegacy(){
 const BRIEF_FOLDERS = [];
 const BRIEFS = [];
 state.briefId=null;
-state.brf={ tool:'select', zoom:.62, panX:30, panY:20, sel:null, selFrame:null, dropAt:null, present:false, device:'desktop', showComments:true, openThread:null, pendingPin:null };
+state.brf={ tool:'select', zoom:.62, panX:30, panY:20, sel:null, selFrame:null, dropAt:null, editing:null, present:false, device:'desktop', showComments:true, openThread:null, pendingPin:null };
 function briefById(id){ return BRIEFS.find(b=>b.id===id); }
 function renderBriefs(){
   if(state.briefId){ renderBriefEditor(); return; }
@@ -4589,6 +4618,7 @@ function renderBriefEditor(){
     </div>
     <input type="file" id="brfImgInput" accept="image/*" multiple style="display:none" onchange="brfImageChosen(event)">`;
   brfBind(b);
+  brfSyncTextBoxes();
   /* Reconnect only when the brief actually changes — a re-render happens on
      every drag frame and tearing the socket down each time would be absurd. */
   if(RT.topic!=='realtime:tiki-brief-'+b.id) rtConnect(b.id);
@@ -4724,6 +4754,137 @@ function rtRenderPeers(){
           : '<span style="font-size:.7rem;color:var(--ink-3)">Connecting…</span>');
 }
 
+/* ===================================================================
+   TEXT
+   ===================================================================
+   Text is stored as a tiny, strictly sanitised subset of HTML rather than as a
+   plain string. That's what lets one word be bold inside a sentence, while the
+   allowlist means nothing can arrive from a paste that we didn't intend to
+   render. Anything outside the allowlist is unwrapped, keeping its words.
+
+   The old model stored a plain string and kept the delete button INSIDE the
+   editable node, so the ✕ leaked into the content and a re-render could destroy
+   an uncommitted edit. Content is now committed on every keystroke, so there is
+   no window in which typed text exists only in the DOM. */
+const BRF_FONTS = [
+  ['sans',   'Default',      "'Inter','Segoe UI',system-ui,-apple-system,sans-serif"],
+  ['serif',  'Serif',        "Georgia,'Times New Roman',serif"],
+  ['slab',   'Slab',         "'Rockwell','Courier Bold',Georgia,serif"],
+  ['mono',   'Mono',         "'SF Mono','Consolas','Courier New',monospace"],
+  ['round',  'Rounded',      "'Trebuchet MS','Segoe UI',Verdana,sans-serif"],
+  ['impact', 'Display',      "Impact,'Haettenschweiler','Arial Black',sans-serif"],
+];
+const brfFontStack = key => (BRF_FONTS.find(f=>f[0]===key)||BRF_FONTS[0])[2];
+/* Legacy elements carried a named size; map it once so old briefs keep working. */
+const LEGACY_SIZE = { h1:26, body:15, small:12 };
+const brfFontSize = e => Number(e.fontSize) || LEGACY_SIZE[e.size] || 15;
+
+const TEXT_TAGS = { B:'b', STRONG:'b', I:'i', EM:'i', U:'u', S:'s', STRIKE:'s', DEL:'s' };
+function brfSanitize(html){
+  let doc;
+  try{ doc=new DOMParser().parseFromString('<body><div id="r">'+html+'</div></body>','text/html'); }
+  catch(err){ return esc(String(html||'')); }
+  const root=doc.getElementById('r');
+  if(!root) return esc(String(html||''));
+  const out=[];
+  const walk=node=>{
+    node.childNodes.forEach(n=>{
+      if(n.nodeType===3){ out.push(esc(n.nodeValue)); return; }
+      if(n.nodeType!==1) return;
+      const tag=n.tagName;
+      if(tag==='BR'){ out.push('<br>'); return; }
+      const keep=TEXT_TAGS[tag];
+      if(keep){ out.push('<'+keep+'>'); walk(n); out.push('</'+keep+'>'); return; }
+      if(tag==='DIV'||tag==='P'){
+        /* Browsers wrap Enter in a div or p; turn that back into a hard break. */
+        if(out.length && !/<br>$/.test(out[out.length-1])) out.push('<br>');
+        walk(n); return;
+      }
+      /* Script and style carry code, not words — unwrapping them would paste
+         "alert(1)" into the brief as if it were prose. Drop them whole. */
+      if(tag==='SCRIPT'||tag==='STYLE'||tag==='NOSCRIPT'||tag==='TEMPLATE'||tag==='IFRAME'||tag==='OBJECT') return;
+      walk(n);   // unwrap anything else, keep its words
+    });
+  };
+  walk(root);
+  return out.join('').replace(/(<br>\s*)+$/,'');
+}
+/* One source of truth for what a text box contains, migrating old plain-text
+   elements on read so nothing has to be converted up front. */
+function brfTextHTML(e){
+  if(typeof e.html==='string') return e.html;
+  return esc(e.text||'').replace(/\n/g,'<br>');
+}
+function brfTextStyle(e){
+  const dec=[e.underline?'underline':'', e.strike?'line-through':''].filter(Boolean).join(' ')||'none';
+  return `font-family:${brfFontStack(e.font)};font-size:${brfFontSize(e)}px;`
+    + `font-weight:${e.bold?700:(e.font==='impact'?400:500)};`
+    + `font-style:${e.italic?'italic':'normal'};text-decoration:${dec};`
+    + `text-align:${e.align||'left'};color:${e.colour||'inherit'};`
+    + `text-transform:${e.caps==='upper'?'uppercase':e.caps==='lower'?'lowercase':'none'};`
+    + `line-height:${e.lineHeight||1.45};letter-spacing:${e.font==='impact'?'.01em':'-.005em'}`;
+}
+/* Commit on every keystroke. The old code only saved on blur, so a re-render
+   between typing and clicking away threw the edit on the floor — the reported
+   "text disappears then comes back" was exactly that. */
+function brfTextInput(ev,id){
+  const b=briefById(state.briefId); if(!b) return;
+  const el=b.elements.find(x=>x.id===id); if(!el) return;
+  el.html=brfSanitize(ev.currentTarget.innerHTML);
+  delete el.text;                    // the migrated field is no longer the truth
+  state.brf.dirtyText=true;
+}
+function brfEditText(ev,id){
+  const node=ev.currentTarget;
+  state.brf.editing=id;              // blocks world rebuilds while typing
+  node.contentEditable='true';
+  node.classList.add('editing');
+  node.focus();
+  /* Put the caret where they clicked instead of selecting everything —
+     select-all meant one stray keystroke wiped the whole box. */
+  setTimeout(()=>{ try{
+    const r=document.caretRangeFromPoint?document.caretRangeFromPoint(ev.clientX,ev.clientY):null;
+    if(r){ const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+  }catch(err){} },0);
+}
+function brfSaveText(ev,id){
+  const node=ev.currentTarget;
+  node.contentEditable='false';
+  node.classList.remove('editing');
+  const b=briefById(state.briefId); if(!b) return;
+  const el=b.elements.find(x=>x.id===id);
+  if(el){
+    el.html=brfSanitize(node.innerHTML);
+    delete el.text;
+    /* An empty box is kept, not deleted and not filled with a placeholder —
+       deleting on empty makes it impossible to clear a box and retype. */
+    if(!el.html.replace(/<[^>]+>/g,'').trim()) el.html='';
+  }
+  state.brf.editing=null; state.brf.dirtyText=false;
+  tikiPush(); renderBriefEditor();
+}
+/* Toolbar actions. While editing, they apply to the selection; otherwise they
+   apply to the whole box — which is what you'd expect from clicking B with
+   nothing selected. */
+function brfTextFormat(id, what){
+  const b=briefById(state.briefId); const el=b&&b.elements.find(x=>x.id===id); if(!el) return;
+  const node=$('brfWorld')?.querySelector(`[data-el="${id}"]`);
+  const editing=state.brf.editing===id && node && node.isContentEditable;
+  const sel=window.getSelection();
+  const hasSelection=editing && sel && !sel.isCollapsed;
+  if(hasSelection){
+    const cmd={bold:'bold',italic:'italic',underline:'underline',strike:'strikeThrough'}[what];
+    if(cmd){ document.execCommand(cmd,false,null); el.html=brfSanitize(node.innerHTML); delete el.text; tikiPush(); renderBriefSidePanel(); return; }
+  }
+  el[what]=!el[what];
+  tikiPush(); renderBriefEditor();
+}
+function brfTextSet(id, key, val){
+  const b=briefById(state.briefId); const el=b&&b.elements.find(x=>x.id===id); if(!el) return;
+  el[key]=val;
+  tikiPush(); renderBriefEditor();
+}
+
 /* ---- TikTok video embeds --------------------------------------------
    One renderer for both surfaces, so the editor and Present can't drift:
    `live` swaps the poster for the real player, everything else is identical. */
@@ -4775,6 +4936,10 @@ function brfVideoHTML(e, opts){
    a north or west grip moves the origin as well as the size — otherwise the
    opposite edge would walk across the page instead of staying put. */
 const BRF_HANDLES=['nw','n','ne','w','e','sw','s','se'];
+/* Text height follows the words, so vertical-only grips would be lying about
+   what they do — corners and sides only, exactly like Canva. */
+const BRF_TEXT_HANDLES=['nw','ne','w','e','sw','se'];
+const brfHandlesFor = t => t==='text' ? BRF_TEXT_HANDLES : BRF_HANDLES;
 
 /* Which page does this element belong to? Its centre decides, so dragging a
    photo mostly off a page hands it to whatever page now holds its middle —
@@ -4805,29 +4970,42 @@ function brfWorldHTML(b){
   h+='<!--CLIPS-->';
   b.elements.filter(e=>e.type!=='frame').forEach(e=>{
     const sel=s.sel===e.id?'selected':'';
-    if(e.type==='text')
-      h+=`<div class="brf-el brf-text t-${e.size} ${sel}" data-el="${e.id}" style="left:${e.x}px;top:${e.y}px;width:${e.w}px" ondblclick="brfEditText(event,'${e.id}')" onblur="brfSaveText(event,'${e.id}')">${esc(e.text)}<span class="del-h" onmousedown="event.stopPropagation()" onclick="brfDelete('${e.id}')">✕</span></div>`;
-    else if(e.type==='image'||e.type==='video'){
-      /* Photos and videos are both "boxed" elements: clipped by their page,
-         resizable from any grip, and rendered by the same code Present uses —
-         which is the only way the two views can be guaranteed to match. */
+    if(e.type==='text'||e.type==='image'||e.type==='video'){
+      /* Text, photos and videos are all "boxed" elements: clipped by their
+         page, resizable from any grip, and rendered by the same code Present
+         uses — the only way the two views can be guaranteed to match.
+         Crucially the delete button and resize grips live on a separate overlay
+         rather than inside the box. When they sat inside the text node they
+         became part of its content, which is what made text vanish. */
       /* Height is derived, not stored opinion — this also repairs any video
          that was stretched out of shape before the ratio was locked. */
       if(e.type==='video'){ e.w=Math.max(90, e.w||200); e.h=vidHeightFor(e.w); }
+      if(e.type==='text'){ e.w=Math.max(40, e.w||320); }
       const host=brfHostFrame(b,e);
       /* Inside a page: positioned relative to the clip layer, so overflow crops.
          Loose on the canvas: plain world coordinates, nothing to clip against. */
       const ix=host?e.x-host.x:e.x, iy=host?e.y-host.y:e.y;
-      const inner = e.type==='image'
-        ? `<img class="brf-img" src="${e.src}" alt="${esc(e.alt||'')}" draggable="false">`
-        : brfVideoHTML(e,{live:false});
-      const body=`<div class="brf-el el-img" data-el="${e.id}" ${e.type==='video'?`ondblclick="brfEditVideo('${e.id}')" title="Double-click to paste a TikTok link"`:''} style="left:${ix}px;top:${iy}px;width:${e.w}px;height:${e.h}px">
-        ${inner}</div>`;
+      let body;
+      if(e.type==='text'){
+        /* Height is a MINIMUM, never a cap — text that outgrows its box must
+           still be readable rather than silently clipped. */
+        body=`<div class="brf-el brf-text" data-el="${e.id}" spellcheck="false"
+          style="left:${ix}px;top:${iy}px;width:${e.w}px;${e.h?`min-height:${e.h}px;`:''}${brfTextStyle(e)}"
+          ondblclick="brfEditText(event,'${e.id}')"
+          oninput="brfTextInput(event,'${e.id}')"
+          onblur="brfSaveText(event,'${e.id}')">${brfTextHTML(e)}</div>`;
+      } else {
+        const inner = e.type==='image'
+          ? `<img class="brf-img" src="${e.src}" alt="${esc(e.alt||'')}" draggable="false">`
+          : brfVideoHTML(e,{live:false});
+        body=`<div class="brf-el el-img" data-el="${e.id}" ${e.type==='video'?`ondblclick="brfEditVideo('${e.id}')" title="Double-click to paste a TikTok link"`:''} style="left:${ix}px;top:${iy}px;width:${e.w}px;height:${e.h}px">
+          ${inner}</div>`;
+      }
       if(host) clips[host.id]=(clips[host.id]||'')+body; else h+=body;
       /* Handles and the delete button ride above the clip so they never vanish. */
-      overlay+=`<div class="brf-ovl ${sel?'sel-box':''}" data-ovl="${e.id}" style="left:${e.x}px;top:${e.y}px;width:${e.w}px;height:${e.h}px">
-        ${BRF_HANDLES.map(g=>`<span class="el-rs el-rs-${g}" data-ers="${e.id}:${g}" title="${
-          g.length===2?'Drag to resize · Shift keeps proportions':'Drag to stretch'}"></span>`).join('')}
+      overlay+=`<div class="brf-ovl ${e.type==='text'?'txt-box':''} ${sel?'sel-box':''}" data-ovl="${e.id}" style="left:${e.x}px;top:${e.y}px;width:${e.w}px;height:${e.type==='text'?(e.h||28):e.h}px">
+        ${brfHandlesFor(e.type).map(g=>`<span class="el-rs el-rs-${g}" data-ers="${e.id}:${g}" title="${
+          e.type==='text'?'Drag to set the text width':g.length===2?'Drag to resize · Shift keeps proportions':'Drag to stretch'}"></span>`).join('')}
         ${sel?`<span class="del-h" style="display:flex" onmousedown="event.stopPropagation()" onclick="brfDelete('${e.id}')">✕</span>`:''}
       </div>`;
     }
@@ -4946,10 +5124,13 @@ function brfBind(b){
           const ov=world.querySelector(`[data-ovl="${el.id}"]`);
           if(ov){ ov.classList.add('sel-box'); ov.querySelector('.del-h')?.remove();
             ov.insertAdjacentHTML('beforeend',`<span class="del-h" style="display:flex" onmousedown="event.stopPropagation()" onclick="brfDelete('${el.id}')">✕</span>`); }
+          s.selFrame=null;
+          renderBriefSidePanel();   // targeted, so an in-progress edit survives
         }
       }
     } else {
       if(s.sel||s.openThread||s.selFrame){ s.sel=null; s.openThread=null; s.selFrame=null; renderBriefEditor(); return; }
+      if(s.editing) return;   // let the blur handler commit before anything else runs
       mode='pan'; start={mx:e.clientX,my:e.clientY,px:s.panX,py:s.panY};
       vp.classList.add('panning');
     }
@@ -4968,13 +5149,22 @@ function brfBind(b){
       if(Math.abs(dx)+Math.abs(dy)<2 && !moved) return;   // ignore jitter — keeps double-click intact
       moved=true;
       start.pos.forEach(p=>{ p.k.x=Math.round(p.x+dx); p.k.y=Math.round(p.y+dy); });
-      const w=$('brfWorld'); if(w) w.innerHTML=brfWorldHTML(b);
+      /* Never rebuild the world while a text box is being edited — the node
+         under the caret would be replaced mid-keystroke. */
+      if(state.brf.editing){
+        start.pos.forEach(p=>{
+          const n=$('brfWorld')?.querySelector(`[data-el="${p.k.id}"],[data-frame="${p.k.id}"]`);
+          if(n){ n.style.left=p.k.x+'px'; n.style.top=p.k.y+'px'; }
+        });
+      } else {
+        const w=$('brfWorld'); if(w) w.innerHTML=brfWorldHTML(b);
+      }
     }
     else if(mode==='elresize'&&start){
       const dx=(e.clientX-start.mx)/s.zoom, dy=(e.clientY-start.my)/s.zoom;
       if(Math.abs(dx)+Math.abs(dy)>=2) moved=true;
       const el=start.el, edge=start.edge;
-      const isVid=el.type==='video';
+      const isVid=el.type==='video', isTxt=el.type==='text';
       const MIN=isVid?90:40;      // below this the embed's own controls stop being usable
       /* Photos are free-form and Shift locks them. Videos are ALWAYS locked to
          portrait: a landscape box can only crop the player, never fit it. */
@@ -4993,16 +5183,22 @@ function brfBind(b){
         if(west) nx=start.x+(start.w-w);
         if(north) ny=start.y+(start.h-hgt);
       }
-      el.w=w; el.h=hgt; el.x=nx; el.y=ny;
+      /* Text height is whatever the words need, so we set width only and let
+         the box grow or shrink as it rewraps. */
+      el.w=w; el.x=nx;
+      if(!isTxt){ el.h=hgt; el.y=ny; }
       const wl=$('brfWorld');
       const host=brfHostFrame(b,el);
       const n=wl?.querySelector(`[data-el="${el.id}"]`);
-      if(n){ n.style.width=el.w+'px'; n.style.height=el.h+'px';
+      if(n){ n.style.width=el.w+'px';
+        if(!isTxt) n.style.height=el.h+'px';
         n.style.left=(host?el.x-host.x:el.x)+'px'; n.style.top=(host?el.y-host.y:el.y)+'px'; }
       /* The handle overlay is a separate, unclipped layer — resize it in step
          or the grab points drift away from the photo's actual edge. */
       const ov=wl?.querySelector(`[data-ovl="${el.id}"]`);
-      if(ov){ ov.style.width=el.w+'px'; ov.style.height=el.h+'px';
+      if(ov){ ov.style.width=el.w+'px';
+        /* Follow the rewrapped height so the frame hugs the words as they reflow. */
+        ov.style.height=(isTxt&&n?n.getBoundingClientRect().height/(state.brf.zoom||1):el.h)+'px';   // rewrapped height
         ov.style.left=el.x+'px'; ov.style.top=el.y+'px';
         let tag=ov.querySelector('.el-size-tag');
         if(!tag){ tag=document.createElement('div'); tag.className='el-size-tag'; ov.appendChild(tag); }
@@ -5120,7 +5316,106 @@ const BRF_PAGE_COLOURS=[
   '#e8f2ff','#e6f7f1','#eefbe6','#fff1d6','#ffe8f0',
   '#101828','#1f2937','#2a78d6','#1baf7a','#d1495b'
 ];
+const BRF_TEXT_COLOURS=[
+  '#101828','#475467','#98a2b3','#ffffff','#8b3dff',
+  '#2a78d6','#1baf7a','#eda100','#d1495b','#ec4899'
+];
+/* Swap the rail in place rather than re-rendering the editor — a full render
+   would tear down the node being typed into. */
+function renderBriefSidePanel(){
+  const b=briefById(state.briefId); if(!b) return;
+  const html=brfSidePanel(b);
+  const existing=document.querySelector('.brf-side');
+  if(existing){
+    if(html) existing.outerHTML=html; else existing.remove();
+  } else if(html){
+    const host=document.querySelector('.brf-body');
+    if(host) host.insertAdjacentHTML('beforeend',html);
+  }
+}
+function brfTextPanel(b, el){
+  const id=el.id;
+  const sz=brfFontSize(el);
+  const btn=(label,active,onclick,title)=>
+    `<button class="fmt-btn ${active?'on':''}" title="${title||label}" onclick="${onclick}">${label}</button>`;
+  const cur=(el.colour||'#101828').toLowerCase();
+  return `
+    <div class="brf-side">
+      <div class="sd-h">Text</div>
+
+      <select style="width:100%;margin-bottom:10px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;font-size:.8rem"
+        onchange="brfTextSet('${id}','font',this.value)">
+        ${BRF_FONTS.map(f=>`<option value="${f[0]}" ${(el.font||'sans')===f[0]?'selected':''} style="font-family:${f[2]}">${f[1]}</option>`).join('')}
+      </select>
+
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <div class="fmt-num">
+          <button onclick="brfTextSet('${id}','fontSize',Math.max(8,${sz}-2))">−</button>
+          <input type="number" min="8" max="200" value="${sz}"
+            onchange="brfTextSet('${id}','fontSize',Math.max(8,Math.min(200,+this.value||15)))">
+          <button onclick="brfTextSet('${id}','fontSize',Math.min(200,${sz}+2))">＋</button>
+        </div>
+        <span style="font-size:.7rem;color:var(--ink-3)">px</span>
+      </div>
+
+      <div class="fmt-row">
+        ${btn('<b>B</b>', el.bold, `brfTextFormat('${id}','bold')`, 'Bold')}
+        ${btn('<i>I</i>', el.italic, `brfTextFormat('${id}','italic')`, 'Italic')}
+        ${btn('<u>U</u>', el.underline, `brfTextFormat('${id}','underline')`, 'Underline')}
+        ${btn('<s>S</s>', el.strike, `brfTextFormat('${id}','strike')`, 'Strikethrough')}
+      </div>
+
+      <div class="sd-h" style="margin-top:14px">Alignment</div>
+      <div class="fmt-row">
+        ${['left','center','right'].map(a=>btn(
+          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+             <path d="M4 6h16"/><path d="${a==='left'?'M4 12h10':a==='center'?'M7 12h10':'M10 12h10'}"/>
+             <path d="M4 18h16"/></svg>`,
+          (el.align||'left')===a, `brfTextSet('${id}','align','${a}')`, a)).join('')}
+      </div>
+
+      <div class="sd-h" style="margin-top:14px">Case</div>
+      <div class="fmt-row">
+        ${btn('AG', el.caps==='upper', `brfTextSet('${id}','caps','${el.caps==='upper'?'':'upper'}')`, 'UPPERCASE')}
+        ${btn('ag', el.caps==='lower', `brfTextSet('${id}','caps','${el.caps==='lower'?'':'lower'}')`, 'lowercase')}
+        ${btn('Ag', !el.caps, `brfTextSet('${id}','caps','')`, 'As typed')}
+      </div>
+
+      <div class="sd-h" style="margin-top:14px">Colour</div>
+      <div class="sw-grid">
+        ${BRF_TEXT_COLOURS.map(c=>`<div class="sw ${cur===c?'on':''}" style="background:${c}" title="${c}"
+          onclick="brfTextSet('${id}','colour','${c}')"></div>`).join('')}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+        <input type="color" value="${cur}" style="width:34px;height:30px;padding:0;border:1px solid var(--line);border-radius:7px;background:none;cursor:pointer"
+          oninput="brfTextSet('${id}','colour',this.value)">
+        <span style="font-size:.72rem;color:var(--ink-3)">Custom</span>
+      </div>
+
+      <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:14px;color:var(--crit-ink)" onclick="brfDelete('${id}')">Delete text box</button>
+      <div style="font-size:.68rem;color:var(--ink-3);line-height:1.5;margin-top:12px">
+        Double-click to edit. Select a few words first and B, I, U or S applies to just those.
+        Drag the side grips to set the width — text rewraps to fit.
+      </div>
+    </div>`;
+}
+/* A text box's height is whatever the words need, which is only knowable once
+   the browser has laid them out. So the selection frame is measured from the
+   rendered node after every render rather than guessed at render time —
+   otherwise the violet frame floats above short text and clips tall text. */
+function brfSyncTextBoxes(){
+  const world=$('brfWorld'); if(!world) return;
+  const z=state.brf.zoom||1;
+  world.querySelectorAll('.brf-ovl.txt-box').forEach(ov=>{
+    const n=world.querySelector(`[data-el="${ov.dataset.ovl}"]`);
+    if(n) ov.style.height=(n.getBoundingClientRect().height/z)+'px';
+  });
+}
 function brfSidePanel(b){
+  /* A selected text box takes priority: you're more likely to be styling the
+     thing you just clicked than the page behind it. */
+  const tx=b.elements.find(e=>e.id===state.brf.sel&&e.type==='text');
+  if(tx) return brfTextPanel(b,tx);
   const fr=b.elements.find(e=>e.id===state.brf.selFrame&&e.type==='frame');
   if(!fr) return '';
   const cur=(fr.bg||'#ffffff').toLowerCase();
@@ -5162,7 +5457,8 @@ function brfSetPageColour(id, colour){
 function brfAddAt(b,x,y){
   const s=state.brf; const id=(s.tool[0])+Date.now()%100000;
   if(s.tool==='image'){ brfPickImage(x,y); return; }
-  if(s.tool==='text') b.elements.push({id,type:'text',x,y,w:320,size:'body',text:'New text — double-click to edit'});
+  if(s.tool==='text') b.elements.push({id,type:'text',x,y,w:320,fontSize:15,font:'sans',
+    html:'New text \u2014 double-click to edit'});
   else if(s.tool==='link') b.elements.push({id,type:'link',x,y,url:'paste-link.com/…',label:'New link — double-click to edit'});
   else if(s.tool==='video') b.elements.push({id,type:'video',x,y,w:200,h:vidHeightFor(200),
     handle:'@paste-tiktok-url',caption:'double-click a video to swap the link',views:'—'});
@@ -5295,7 +5591,9 @@ function renderBriefPresent(b){
       if(e.type==='image')
         return `<img class="brf-img" src="${e.src}" alt="${esc(e.alt||'')}" style="position:absolute;left:${x}px;top:${y}px;width:${e.w}px;height:${e.h}px">`;
       if(e.type==='text')
-        return `<div class="brf-text t-${e.size}" style="position:absolute;left:${x}px;top:${y}px;width:${e.w}px;${dark?'color:#fff':''}">${esc(e.text)}</div>`;
+        return `<div class="brf-text" style="position:absolute;left:${x}px;top:${y}px;width:${e.w}px;${
+          e.h?`min-height:${e.h}px;`:''}${brfTextStyle(e)}${
+          (!e.colour&&dark)?';color:#fff':''}">${brfTextHTML(e)}</div>`;
       if(e.type==='link')
         return `<div style="position:absolute;left:${x}px;top:${y}px"><a class="brf-link" href="${esc(brfUrl(e.url))}" target="_blank" rel="noopener" style="text-decoration:none">
           <span class="lk-ico">${ICONS.link}</span><span><div>${esc(e.label)}</div><div class="lk-url">${esc(e.url)}</div></span></a></div>`;
