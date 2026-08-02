@@ -5621,11 +5621,84 @@ function brfLayerIcon(e){
   if(e.type==='video'&&e.thumb) return `<img src="${e.thumb}" alt="">`;
   return ICONS[{text:'type',image:'image',video:'video',link:'link'}[e.type]||'frame'];
 }
+/* Page order used to be implied by canvas position, which meant you could only
+   change the reading order of a brief by physically dragging pages around the
+   canvas. Pages now carry an explicit `ord`, falling back to position for any
+   brief that predates it, so the layers panel and Present agree on the order and
+   you can rearrange it without moving anything. */
+function brfPageOrder(b){
+  const frames=b.elements.filter(e=>e.type==='frame');
+  const byPos=frames.slice().sort((a,c)=>(a.y-c.y)||(a.x-c.x));
+  return frames.slice().sort((a,c)=>{
+    const ao=a.ord!==undefined?a.ord:byPos.indexOf(a);
+    const co=c.ord!==undefined?c.ord:byPos.indexOf(c);
+    return ao-co;
+  });
+}
+function brfSetPageOrder(b, ordered){
+  ordered.forEach((f,i)=>{ f.ord=i; });
+}
+function brfMovePage(id, delta){
+  const b=briefById(state.briefId); if(!b) return;
+  const order=brfPageOrder(b);
+  const i=order.findIndex(f=>f.id===id);
+  const j=i+delta;
+  if(i<0||j<0||j>=order.length) return toast(delta<0?'Already first':'Already last');
+  brfSnapshot();
+  const [f]=order.splice(i,1); order.splice(j,0,f);
+  brfSetPageOrder(b,order);
+  tikiPush(); renderBriefEditor();
+}
+/* Pages drag against each other only. Dropping a page onto a layer row, or a
+   layer onto a page row, would be ambiguous — so the two lists stay separate. */
+let BRF_PAGE_DRAG=null;
+function brfPageDragStart(ev,id){
+  BRF_PAGE_DRAG=id; BRF_LAYER_DRAG=null; ev.stopPropagation();
+  ev.dataTransfer.effectAllowed='move';
+  try{ ev.dataTransfer.setData('text/plain','page:'+id); }catch(e){}
+  ev.currentTarget.classList.add('dragging');
+}
+function brfPageDragEnd(ev){
+  ev.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.lay-row').forEach(n=>n.classList.remove('drop-above','drop-below'));
+  BRF_PAGE_DRAG=null;
+}
+function brfPageDragOver(ev,id){
+  if(!BRF_PAGE_DRAG||BRF_PAGE_DRAG===id) return;
+  ev.preventDefault(); ev.stopPropagation(); ev.dataTransfer.dropEffect='move';
+  const r=ev.currentTarget.getBoundingClientRect();
+  const above=(ev.clientY-r.top)<r.height/2;
+  ev.currentTarget.classList.toggle('drop-above',above);
+  ev.currentTarget.classList.toggle('drop-below',!above);
+}
+function brfPageDrop(ev,targetId){
+  ev.preventDefault(); ev.stopPropagation();
+  const d=brfDragKind(ev);
+  document.querySelectorAll('.lay-row').forEach(n=>n.classList.remove('drop-above','drop-below'));
+  if(d.kind!=='page') return;              // a layer dropped on a page row is a no-op
+  const dragId=d.id;
+  if(!dragId||dragId===targetId) return;
+  const b=briefById(state.briefId); if(!b) return;
+  const r=ev.currentTarget.getBoundingClientRect();
+  const above=(ev.clientY-r.top)<r.height/2;
+  const order=brfPageOrder(b);
+  const from=order.findIndex(f=>f.id===dragId);
+  if(from<0) return;
+  brfSnapshot();
+  const [f]=order.splice(from,1);
+  const t=order.findIndex(x=>x.id===targetId);
+  if(t<0){ order.splice(from,0,f); return; }
+  /* Pages read top-to-bottom, so above in the panel is earlier in the order —
+     the opposite of the layers list, where top means front of the stack. */
+  order.splice(above?t:t+1, 0, f);
+  brfSetPageOrder(b,order);
+  tikiPush(); renderBriefEditor(); toast('Page moved');
+}
 function brfLayersPanel(b){
   /* Figma's shape: each page is a bold parent row you can collapse, with the
      things on it nested underneath in stacking order. Loose objects that aren't
      over any page get their own group at the end rather than being hidden. */
-  const frames=b.elements.filter(e=>e.type==='frame').slice().sort((a,c)=>(a.y-c.y)||(a.x-c.x));
+  const frames=brfPageOrder(b);
   const stack=brfStackables(b);
   const sel=state.brf.sel;
   const childrenOf=fr=>stack.filter(e=>{ const h=brfHostFrame(b,e); return h&&h.id===fr.id; }).reverse();
@@ -5654,8 +5727,14 @@ function brfLayersPanel(b){
   const group=(fr)=>{
     const kids=childrenOf(fr);
     const open=!fr.collapsed;
-    return `<div class="lay-row page ${state.brf.selFrame===fr.id?'on':''}" data-page="${fr.id}"
-        onclick="brfSelectPageLayer('${fr.id}')" title="${esc(fr.title)}">
+    return `<div class="lay-row page ${state.brf.selFrame===fr.id?'on':''}" data-page="${fr.id}" draggable="true"
+        onclick="brfSelectPageLayer('${fr.id}')" title="${esc(fr.title)} — drag to reorder pages"
+        oncontextmenu="brfPageMenu(event,'${fr.id}')"
+        ondragstart="brfPageDragStart(event,'${fr.id}')"
+        ondragover="brfPageDragOver(event,'${fr.id}')"
+        ondragleave="brfLayerDragLeave(event)"
+        ondrop="brfPageDrop(event,'${fr.id}')"
+        ondragend="brfPageDragEnd(event)">
         <button class="lay-chev ${open?'open':''}" onclick="event.stopPropagation();brfToggleGroup('${fr.id}')">${ICONS.chev}</button>
         <span class="lay-ico page-ico">${ICONS.frame}</span>
         <span class="lay-name">${esc(fr.title)}</span>
@@ -5733,10 +5812,23 @@ function brfLayerToEnd(id, front){
    layers-panel bug. */
 let BRF_LAYER_DRAG=null;
 function brfLayerDragStart(ev,id){
-  BRF_LAYER_DRAG=id;
+  BRF_LAYER_DRAG=id; BRF_PAGE_DRAG=null;   // only one drag can be in flight
   ev.dataTransfer.effectAllowed='move';
-  try{ ev.dataTransfer.setData('text/plain',id); }catch(e){}
+  try{ ev.dataTransfer.setData('text/plain','layer:'+id); }catch(e){}
   ev.currentTarget.classList.add('dragging');
+}
+/* Read the kind of thing being dragged from the payload rather than trusting a
+   module-level variable. dragend is not guaranteed to fire — a cancelled drag
+   can leave a stale id behind, and a page id left over from an earlier drag
+   would otherwise be picked up by the next drop on a page row. */
+function brfDragKind(ev){
+  let raw='';
+  try{ raw=ev.dataTransfer.getData('text/plain')||''; }catch(e){}
+  if(raw.startsWith('page:')) return {kind:'page', id:raw.slice(5)};
+  if(raw.startsWith('layer:')) return {kind:'layer', id:raw.slice(6)};
+  if(BRF_PAGE_DRAG) return {kind:'page', id:BRF_PAGE_DRAG};
+  if(BRF_LAYER_DRAG) return {kind:'layer', id:BRF_LAYER_DRAG};
+  return {kind:null, id:null};
 }
 function brfLayerDragEnd(ev){
   ev.currentTarget.classList.remove('dragging');
@@ -5754,8 +5846,10 @@ function brfLayerDragOver(ev,id){
 function brfLayerDragLeave(ev){ ev.currentTarget.classList.remove('drop-above','drop-below'); }
 function brfLayerDrop(ev,targetId){
   ev.preventDefault();
-  const dragId=BRF_LAYER_DRAG||ev.dataTransfer.getData('text/plain');
+  const d=brfDragKind(ev);
   document.querySelectorAll('.lay-row').forEach(n=>n.classList.remove('drop-above','drop-below'));
+  if(d.kind!=='layer') return;             // a page dropped on a layer row is a no-op
+  const dragId=d.id;
   if(!dragId||dragId===targetId) return;
   const b=briefById(state.briefId); if(!b) return;
   const r=ev.currentTarget.getBoundingClientRect();
@@ -5775,6 +5869,26 @@ function brfLayerDrop(ev,targetId){
   tikiPush(); renderBriefEditor();
 }
 /* Right-click menu */
+function brfPageMenu(ev,id){
+  ev.preventDefault(); ev.stopPropagation();
+  brfCloseLayerMenu();
+  state.brf.selFrame=id; state.brf.sel=null;
+  const m=document.createElement('div');
+  m.className='lay-menu';
+  m.innerHTML=`
+    <button onclick="brfCloseLayerMenu();brfMovePage('${id}',-1)"><span style="display:flex;transform:rotate(-90deg)">${ICONS.chev}</span>Move page up</button>
+    <button onclick="brfCloseLayerMenu();brfMovePage('${id}',1)"><span style="display:flex;transform:rotate(90deg)">${ICONS.chev}</span>Move page down</button>
+    <div class="sep"></div>
+    <button onclick="brfCloseLayerMenu();brfEditFrameTitle('${id}')">${ICONS.edit}Rename page</button>`;
+  document.body.appendChild(m);
+  const w=m.offsetWidth, h=m.offsetHeight;
+  m.style.left=Math.min(ev.clientX, window.innerWidth-w-8)+'px';
+  m.style.top=Math.min(ev.clientY, window.innerHeight-h-8)+'px';
+  setTimeout(()=>{
+    const close=e=>{ if(!e.target.closest('.lay-menu')){ brfCloseLayerMenu(); document.removeEventListener('mousedown',close); } };
+    document.addEventListener('mousedown',close);
+  },0);
+}
 function brfCloseLayerMenu(){ document.querySelector('.lay-menu')?.remove(); }
 function brfLayerMenu(ev,id){
   ev.preventDefault(); ev.stopPropagation();
@@ -5861,7 +5975,10 @@ function brfAddAt(b,x,y){
   else if(s.tool==='link') b.elements.push({id,type:'link',x,y,url:'paste-link.com/…',label:'New link — double-click to edit'});
   else if(s.tool==='video') b.elements.push({id,type:'video',x,y,w:200,h:vidHeightFor(200),
     handle:'@paste-tiktok-url',caption:'double-click a video to swap the link',views:'—'});
-  else if(s.tool==='frame') b.elements.unshift({id,type:'frame',x,y,w:560,h:400,title:(b.elements.filter(e=>e.type==='frame').length+1)+' · New page'});
+  else if(s.tool==='frame'){
+    const n=b.elements.filter(e=>e.type==='frame').length;
+    b.elements.unshift({id,type:'frame',x,y,w:560,h:400,ord:n,title:(n+1)+' · New page'});
+  }
   else if(s.tool==='comment'){ b.comments.push({id:'c'+Date.now()%100000,x,y,resolved:false,thread:[]}); s.tool='select'; s.openThread=b.comments[b.comments.length-1].id; renderBriefEditor(); return; }
   s.tool='select'; s.sel=id; renderBriefEditor();
   toast('Added — drag to position');
@@ -5959,7 +6076,7 @@ function brfResolve(cid){
 /* ---- present mode (affiliate view) ---- */
 function renderBriefPresent(b){
   const s=state.brf;
-  const frames=b.elements.filter(e=>e.type==='frame').slice().sort((a,c)=> (a.y-c.y)||(a.x-c.x));
+  const frames=brfPageOrder(b);   // same order the layers panel shows
   /* Present is now a true rendering of the canvas rather than a reflowed
      document. Each page is drawn at its real pixel size with everything
      absolutely positioned exactly where it sits in the editor, then the whole
