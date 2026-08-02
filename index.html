@@ -608,6 +608,9 @@ body.brief-full .main{margin-right:0}
 /* Live cursors. The label counter-scales with zoom so a cursor stays the same
    size on screen whether you're at 15% or 300% — a cursor that grows with the
    canvas looks broken. */
+body.public-view .sidebar,body.public-view .sb-toggle-btn{display:none}
+body.public-view .main{margin-left:0}
+body.public-view .brf-editor{height:100vh;border:0;border-radius:0;box-shadow:none}
 .brf-cursors{position:absolute;top:0;left:0;width:100%;height:100%;transform-origin:0 0;pointer-events:none;z-index:80}
 .rt-cur{position:absolute;transform-origin:0 0;transition:left .08s linear,top .08s linear;will-change:left,top}
 .rt-cur svg{width:20px;height:20px;display:block;filter:drop-shadow(0 1px 2px rgba(16,24,40,.35))}
@@ -4529,7 +4532,7 @@ function renderBriefs(){
             <div style="font-weight:700;font-size:.9rem">${esc(b.name)}</div>
             <div style="display:flex;align-items:center;gap:7px;margin-top:8px;flex-wrap:wrap">
               ${brandBadge(b.brand)}
-              <span class="badge ${b.status==='Shared'?'bg-good':'bg-neutral'}">${b.status}</span>
+              <span class="badge ${b.shareToken?'bg-good':'bg-neutral'}">${b.shareToken?'🔗 Link live':'Draft'}</span>
               <span style="font-size:.7rem;color:var(--ink-3);margin-left:auto">${esc(b.updated||'')}</span>
             </div>
             ${(b.sharedWith||[]).length?`<div style="font-size:.7rem;color:var(--ink-3);margin-top:7px">Shared with ${esc(b.sharedWith.join(', '))}</div>`:''}
@@ -4698,8 +4701,10 @@ function renderBriefEditor(){
   brfBind(b);
   brfSyncTextBoxes();
   /* Reconnect only when the brief actually changes — a re-render happens on
-     every drag frame and tearing the socket down each time would be absurd. */
-  if(RT.topic!=='realtime:tiki-brief-'+b.id) rtConnect(b.id);
+     every drag frame and tearing the socket down each time would be absurd.
+     A public viewer never joins: creators shouldn't see the team's cursors,
+     and the team shouldn't see theirs. */
+  if(!state.brf.publicView && RT.topic!=='realtime:tiki-brief-'+b.id) rtConnect(b.id);
   rtPaint(); rtRenderPeers();
 }
 function brfWorldSize(b){
@@ -6124,20 +6129,20 @@ function renderBriefPresent(b){
   $('page-briefs').innerHTML=`
     <div class="brf-editor">
       <div class="brf-top">
-        <button class="sb-toggle-btn" onclick="document.body.classList.toggle('sb-hidden')" title="Collapse / expand sidebar">${ICONS.panel}</button>
-        <button class="tb-icon-btn" style="width:32px;height:32px" onclick="state.brf.present=false;renderBriefEditor()" title="Back to canvas">${ICONS.arrow.replace('M5 12h14M12 5l7 7-7 7','M19 12H5M12 19l-7-7 7-7')}</button>
+        ${s.publicView?'':`<button class="sb-toggle-btn" onclick="document.body.classList.toggle('sb-hidden')" title="Collapse / expand sidebar">${ICONS.panel}</button>
+        <button class="tb-icon-btn" style="width:32px;height:32px" onclick="state.brf.present=false;renderBriefEditor()" title="Back to canvas">${ICONS.arrow.replace('M5 12h14M12 5l7 7-7 7','M19 12H5M12 19l-7-7 7-7')}</button>`}
         <div><div style="font-weight:700;font-size:.92rem">${esc(b.name)}</div>
-        <div style="font-size:.7rem;color:var(--ink-3)">Affiliate preview — read-only, exactly what they'll see</div></div>
+        <div style="font-size:.7rem;color:var(--ink-3)">${s.publicView?'Content brief · read-only':'Affiliate preview — read-only, exactly what they\'ll see'}</div></div>
         <div style="margin-left:auto;display:flex;gap:9px;align-items:center">
           <div class="seg">
             <button class="${s.device==='desktop'?'active':''}" onclick="state.brf.device='desktop';renderBriefEditor()">🖥 Desktop</button>
             <button class="${s.device==='phone'?'active':''}" onclick="state.brf.device='phone';renderBriefEditor()">📱 Phone</button>
           </div>
-          <div class="seg">
+          ${s.publicView?'':`<div class="seg">
             <button onclick="state.brf.present=false;renderBriefEditor()">✏️ Edit</button>
             <button class="active">▶ Present</button>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="openBriefShare('${b.id}')">${ICONS.send} Share</button>
+          <button class="btn btn-primary btn-sm" onclick="openBriefShare('${b.id}')">${ICONS.send} Share</button>`}
         </div>
       </div>
       <div class="present-scroll" style="padding:${s.device==='phone'?'22px 10px':'0'}">
@@ -6145,21 +6150,134 @@ function renderBriefPresent(b){
       </div>
     </div>`;
 }
+/* ===================================================================
+   SHARING
+   ===================================================================
+   A creator has no account, so the link has to work with nothing but the anon
+   key. Publishing writes a read-only SNAPSHOT of the brief to brief_shares,
+   addressed by an unguessable token, and the viewer reads it back through a
+   security-definer function. It has to be a function rather than a table policy:
+   any anon-readable policy would let someone with the public key list every
+   shared brief, and the token would be protecting nothing.
+
+   The link points at wherever this app is actually hosted, taken from the
+   current URL rather than hardcoded — the old link pointed at tiki.app, a
+   domain nobody owns, which is why it landed on a GoDaddy sales page. */
+const shareToken = () => {
+  const a=new Uint8Array(16); crypto.getRandomValues(a);
+  return [...a].map(x=>x.toString(36).padStart(2,'0')).join('').slice(0,24);
+};
+const shareUrlFor = tok => `${location.origin}${location.pathname}?b=${tok}`;
+
+async function briefPublish(id, existingToken){
+  const b=briefById(id); if(!b) return null;
+  const token=existingToken||b.shareToken||shareToken();
+  const row={ token, brief_id:b.id, brief_name:b.name,
+    brief:{ ...b, comments:[] },       // comments are internal, never shared
+    revoked:false, updated_at:new Date().toISOString() };
+  const r=await tikiFetch('/rest/v1/brief_shares?on_conflict=token',{ method:'POST',
+    headers:{ Prefer:'resolution=merge-duplicates' }, body:JSON.stringify(row) });
+  if(!r.ok) throw new Error('Could not publish the link');
+  b.shareToken=token; b.status='Shared'; b.sharedAt=new Date().toISOString();
+  tikiPush();
+  return token;
+}
+async function briefRevoke(id){
+  const b=briefById(id); if(!b||!b.shareToken) return;
+  await tikiFetch(`/rest/v1/brief_shares?token=eq.${encodeURIComponent(b.shareToken)}`,{
+    method:'PATCH', body:JSON.stringify({ revoked:true, updated_at:new Date().toISOString() }) });
+  b.shareToken=null; b.status='Draft';
+  tikiPush();
+}
 function openBriefShare(id){
-  const b=briefById(id);
-  openModal(modalShell('Share Brief with Affiliates',`
-    <p style="font-size:.82rem;color:var(--ink-2);line-height:1.55;margin-bottom:14px">Affiliates get a clean, read-only link — no canvas, no comments, mobile-optimised. You keep editing here; their view updates live.</p>
-    <div class="field" style="margin-bottom:12px"><label>Share link</label>
+  const b=briefById(id); if(!b) return;
+  const live=!!b.shareToken;
+  openModal(modalShell('Share this brief',`
+    <p style="font-size:.82rem;color:var(--ink-2);line-height:1.55;margin-bottom:14px">
+      Anyone with the link can read the brief — no account, no sign-in. They see the same pages you see in
+      Present, on any device. Comments stay private to the team.</p>
+    <div class="field" style="margin-bottom:6px"><label>Share link</label>
       <div style="display:flex;gap:8px">
-        <input readonly value="tiki.app/b/${b.id}-${b.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,24)}" style="flex:1;font-family:monospace;font-size:.76rem">
-        <button class="btn btn-primary btn-sm" onclick="briefById('${b.id}').status='Shared';toast('Link copied — read-only affiliate view');closeModal();renderBriefs()">Copy</button>
+        <input id="shLink" readonly placeholder="Publish to create the link"
+          value="${live?esc(shareUrlFor(b.shareToken)):''}"
+          style="flex:1;font-family:monospace;font-size:.74rem">
+        <button class="btn btn-primary btn-sm" id="shBtn" onclick="briefShareAction('${id}')">${live?'Copy':'Publish'}</button>
       </div></div>
-    <div class="field" style="margin-bottom:12px"><label>Share directly with</label>
-      <select><option>Sophie Lang (@sophlangwellness)</option><option>Jake Osborne (@jakelifts_)</option><option>Freya Dunn (@freyadunnhome)</option><option>All active Lytes creators</option></select></div>
-    <label style="display:flex;gap:9px;align-items:center;font-size:.8rem;margin-bottom:6px"><input type="checkbox" checked style="width:15px;height:15px;accent-color:var(--accent)">Watermark with the affiliate's name</label>
-    <label style="display:flex;gap:9px;align-items:center;font-size:.8rem"><input type="checkbox" style="width:15px;height:15px;accent-color:var(--accent)">Require them to tap "I've read this" (notifies the team)</label>`,
-    `<button class="btn btn-ghost" onclick="closeModal()">Close</button>
-     <button class="btn btn-primary" onclick="briefById('${id}').status='Shared';closeModal();toast('Brief shared');if(state.briefId)renderBriefEditor();else renderBriefs()">Send</button>`));
+    <div id="shNote" style="font-size:.75rem;color:var(--ink-3);line-height:1.5;min-height:18px">${
+      live?`Published${b.sharedAt?' '+new Date(b.sharedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''} — press Update after you make changes.`
+         :'The link is a snapshot, so nothing goes public until you publish it.'}</div>
+    ${live?`<div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-soft btn-sm" onclick="briefShareUpdate('${id}')">Update with my latest changes</button>
+      <button class="btn btn-ghost btn-sm" style="color:var(--crit-ink);margin-left:auto" onclick="briefShareRevoke('${id}')">Turn off link</button>
+    </div>`:''}`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Close</button>`));
+}
+async function briefShareAction(id){
+  const b=briefById(id);
+  const inp=$('shLink'), btn=$('shBtn'), note=$('shNote');
+  if(b.shareToken){
+    inp.select();
+    try{ await navigator.clipboard.writeText(inp.value); toast('Link copied'); }
+    catch(e){ document.execCommand&&document.execCommand('copy'); toast('Link copied'); }
+    return;
+  }
+  btn.disabled=true; btn.textContent='Publishing…';
+  try{
+    const tok=await briefPublish(id);
+    inp.value=shareUrlFor(tok);
+    btn.disabled=false; btn.textContent='Copy';
+    note.textContent='Published. Anyone with this link can read the brief.';
+    try{ await navigator.clipboard.writeText(inp.value); toast('Link published and copied'); }
+    catch(e){ toast('Link published'); }
+    openBriefShare(id);
+    if(state.briefId) renderBriefEditor(); else renderBriefs();
+  }catch(e){
+    btn.disabled=false; btn.textContent='Publish';
+    note.innerHTML='<span style="color:var(--crit-ink)">'+esc(e.message||'Publish failed')+'</span>';
+  }
+}
+async function briefShareUpdate(id){
+  const b=briefById(id);
+  try{ await briefPublish(id, b.shareToken); toast('Shared copy updated'); openBriefShare(id); }
+  catch(e){ toast(e.message||'Update failed'); }
+}
+async function briefShareRevoke(id){
+  if(!confirm('Turn off this link? Anyone holding it will stop being able to open the brief.')) return;
+  try{
+    await briefRevoke(id);
+    toast('Link turned off'); closeModal();
+    if(state.briefId) renderBriefEditor(); else renderBriefs();
+  }catch(e){ toast('Could not turn the link off'); }
+}
+
+/* ---- the public viewer -------------------------------------------------
+   Opened with ?b=<token>. No sign-in, no sidebar, no editing. */
+async function tikiOpenSharedBrief(token){
+  document.body.classList.add('brief-full','public-view');
+  const gate=$('gate'); if(gate) gate.classList.add('hidden');
+  $('page-briefs').innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:60vh;
+    font-size:.85rem;color:var(--ink-3)">Loading brief…</div>`;
+  navTo('briefs');
+  try{
+    const r=await fetch(`${TIKI_CFG.url}/rest/v1/rpc/get_shared_brief`,{ method:'POST',
+      headers:{ apikey:TIKI_CFG.key, Authorization:`Bearer ${TIKI_CFG.key}`, 'Content-Type':'application/json' },
+      body:JSON.stringify({ p_token:token }) });
+    const data=r.ok?await r.json():null;
+    if(!data||!data.brief) throw new Error('gone');
+    BRIEFS.length=0; BRIEFS.push(data.brief);
+    state.briefId=data.brief.id;
+    Object.assign(state.brf,{ present:true, publicView:true, device:'desktop', zoom:.62, sel:null, selFrame:null });
+    renderBriefEditor();
+    fetch(`${TIKI_CFG.url}/rest/v1/rpc/bump_share_view`,{ method:'POST',
+      headers:{ apikey:TIKI_CFG.key, Authorization:`Bearer ${TIKI_CFG.key}`, 'Content-Type':'application/json' },
+      body:JSON.stringify({ p_token:token }) }).catch(()=>{});
+  }catch(e){
+    $('page-briefs').innerHTML=`<div style="max-width:420px;margin:14vh auto;text-align:center;padding:0 20px">
+      <div style="font-size:2rem;margin-bottom:10px">🔗</div>
+      <div style="font-weight:800;font-size:1.05rem;margin-bottom:8px">This link isn't available</div>
+      <div style="font-size:.85rem;color:var(--ink-2);line-height:1.6">It may have been turned off, or the address
+        may be incomplete. Ask whoever sent it for a fresh link.</div></div>`;
+  }
 }
 
 /* =====================================================================
@@ -8036,6 +8154,10 @@ async function tikiEnter(inviteType){
 async function init(){
   renderBrandUI(); renderNewMenu(); renderSidebar(); renderNotifs();
   navTo('overview');
+  /* A shared brief is a public page: no session, no gate, nothing loaded from
+     the workspace. Handled before auth so a creator is never asked to sign in. */
+  const shared=new URLSearchParams(location.search).get('b');
+  if(shared){ await tikiOpenSharedBrief(shared); return; }
   tiktokCatchReturn();
   const invite=tikiParseInviteHash();
   if(invite){ await tikiEnter(invite.type); return; }
