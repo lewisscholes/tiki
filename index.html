@@ -235,6 +235,7 @@ select.vinput{cursor:pointer}
   -webkit-box-orient:vertical;overflow:hidden}
 /* cancels .modal-b padding so the poster can go edge to edge */
 .vmodal{display:grid;grid-template-columns:330px 1fr;gap:0;margin:-18px -22px;border-radius:0 0 16px 16px;overflow:hidden}
+.vplayer{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:#000}
 .vmleft{background:#000;width:330px;height:587px;position:relative;overflow:hidden}
 .vmleft img{width:100%;height:100%;object-fit:cover}
 .vmrow{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line-2);font-size:.85rem}
@@ -2510,10 +2511,19 @@ function creatorGmvWindowShort(){ return '<span style="font-weight:400;color:var
 
 function renderCreators(){
   const all=CREATORS.filter(inBrand);
+  /* Period-aware figures. When we hold daily video rows, every number in this
+     table is recomputed for the chosen window rather than showing whatever the
+     last sync happened to write. Falls back to the stored values otherwise. */
+  const PM=creatorPeriodMap(), hasPeriod=PM.size>0;
+  const cp=c=>PM.get(String(c.handle||'').replace(/^@/,'').trim().toLowerCase())||{gmv:0,views:0,items:0,videos:0,gpm:0};
+  const cGmv=c=>hasPeriod?cp(c).gmv:c.gmv;
+  const cVids=c=>hasPeriod?cp(c).videos:c.videos;
+  const cGpm=c=>hasPeriod?cp(c).gpm:0;
+  const cViews=c=>{ const s=cp(c); return hasPeriod ? (s.videos? Math.round(s.views/s.videos) : 0) : c.avgViews; };
   const smartFilters=[
     ['all','All creators',c=>true],
-    ['gmv','Highest GMV',c=>c.gmv>0],
-    ['videos','Most videos',c=>c.videos>0],
+    ['gmv','Highest GMV',c=>cGmv(c)>0],
+    ['videos','Most videos',c=>cVids(c)>0],
     ['cvr','Best conversion',c=>c.cvr>0],
     ['retainer','Retainer creators',c=>c.stage==='Retainer Creator'],
     ['stopped','Stopped posting',c=>c.stage==='Paused'],
@@ -2525,11 +2535,15 @@ function renderCreators(){
   let list=all.filter(active[2]);
   if(state.creatorStage!=='All') list=list.filter(c=>c.stage===state.creatorStage);
   if(state.creatorSearch) list=list.filter(c=>(c.name+' '+c.handle).toLowerCase().includes(state.creatorSearch.toLowerCase()));
-  if(state.creatorFilter==='gmv') list=[...list].sort((a,b)=>b.gmv-a.gmv);
-  else if(state.creatorFilter==='videos') list=[...list].sort((a,b)=>b.videos-a.videos);
+  if(state.creatorFilter==='gmv') list=[...list].sort((a,b)=>cGmv(b)-cGmv(a));
+  else if(state.creatorFilter==='videos') list=[...list].sort((a,b)=>cVids(b)-cVids(a));
   else if(state.creatorFilter==='cvr') list=[...list].sort((a,b)=>b.cvr-a.cvr);
+  else if(hasPeriod) list=[...list].sort((a,b)=>cGmv(b)-cGmv(a)||cVids(b)-cVids(a));
   else list=creatorRank(list);
-  const totGmv=all.reduce((s,c)=>s+c.gmv,0);
+  const totGmv=all.reduce((s,c)=>s+cGmv(c),0);
+  const totVids=all.reduce((s,c)=>s+cVids(c),0);
+  const totViews=all.reduce((s,c)=>s+cp(c).views,0);
+  const totGpm=totViews? totGmv/totViews*1000 : 0;
   $('page-creators').innerHTML=`
     <div class="page-head">
       <div><h1>Creators</h1><div class="desc">${all.length} creators in the ${brandInfo(state.brand).name} pipeline · ${money(totGmv)} GMV ${creatorGmvWindow()}</div></div>
@@ -2538,6 +2552,13 @@ function renderCreators(){
         <button class="btn btn-primary btn-sm" onclick="openCreatorModal()">${ICONS.plus} Add creator</button>
       </div>
     </div>
+    ${hasPeriod?`${vidPeriodBar('renderCreators', false)}
+    <div class="vnote" style="margin-bottom:16px">
+      <b>${vLongDate(state.videoFrom)} – ${vLongDate(state.videoTo)}.</b>
+      Videos, avg views, GMV and GPM below are all measured over this window —
+      ${totVids} video${totVids===1?'':'s'}, ${money(totGmv)} GMV, ${moneyDec(totGpm)} GPM.
+      Same window as the Videos page; change it in either place.
+    </div>`:''}
     <div class="chip-row" style="margin-bottom:18px;gap:9px">
       <div style="position:relative;flex:1;max-width:280px">
         <input placeholder="Search creators…" value="${esc(state.creatorSearch)}" oninput="state.creatorSearch=this.value;renderCreators()"
@@ -2569,7 +2590,7 @@ function renderCreators(){
     </div>
     <div class="card"><div class="card-b flush tbl-wrap">
       <table class="tbl"><thead><tr>
-        <th>Creator</th><th>Brand</th><th>Stage</th><th class="num">Followers</th><th class="num">Avg Views</th><th class="num">Videos</th><th class="num" title="Creator GMV is measured over a window, not lifetime — see the Videos page to change it">GMV ${creatorGmvWindowShort()}</th><th class="num">CVR</th><th>Last Contact</th><th></th>
+        <th>Creator</th><th>Brand</th><th>Stage</th><th class="num">Followers</th><th class="num">Avg Views</th><th class="num">Videos</th><th class="num" title="Creator GMV is measured over the chosen window, not lifetime">GMV ${creatorGmvWindowShort()}</th><th class="num" title="GMV generated per 1,000 views — the cleanest read on whether a creator converts">GPM</th><th class="num">CVR</th><th>Last Contact</th><th></th>
       </tr></thead><tbody>
       ${list.map(c=>`
         <tr class="clickable" onclick="openCreatorDetail('${c.id}')">
@@ -2578,9 +2599,10 @@ function renderCreators(){
           <td>${brandBadge(c.brand)}</td>
           <td>${stageBadge(c.stage)}</td>
           <td class="num">${num(c.followers)}</td>
-          <td class="num">${c.avgViews?num(c.avgViews):'—'}</td>
-          <td class="num">${c.videos||'—'}</td>
-          <td class="num" style="font-weight:700">${c.gmv?money(c.gmv):'—'}</td>
+          <td class="num">${cViews(c)?num(cViews(c)):'—'}</td>
+          <td class="num">${cVids(c)||'—'}</td>
+          <td class="num" style="font-weight:700">${cGmv(c)?money(cGmv(c)):'—'}</td>
+          <td class="num">${cGpm(c)?moneyDec(cGpm(c)):'—'}</td>
           <td class="num">${c.cvr?c.cvr+'%':'—'}</td>
           <td>${fmtDate(c.lastContact)}</td>
           <td onclick="event.stopPropagation()" style="white-space:nowrap">
@@ -2588,7 +2610,7 @@ function renderCreators(){
               ? `<span class="badge bg-violet" style="cursor:pointer" onclick="navTo('retainers')">On retainer</span>`
               : `<button class="btn btn-soft btn-xs" onclick="addRetainerFor('${c.id}')">＋ Retainer</button>`}
             <button class="btn btn-ghost btn-xs" onclick="openCreatorDetail('${c.id}')">View</button></td>
-        </tr>`).join('')||`<tr><td colspan="10"><div class="empty">No creators match</div></td></tr>`}
+        </tr>`).join('')||`<tr><td colspan="11"><div class="empty">No creators match</div></td></tr>`}
       </tbody></table>
     </div></div>`;
 }
@@ -6621,7 +6643,7 @@ function vidEnsureRange(){
   state.videoTo = hi;
   state.videoFrom = cov && wanted<cov.lo ? cov.lo : wanted;
 }
-function vidSetPreset(p){
+function vidSetPreset(p, after){
   const cov=vidCoverage();
   const hi = cov? cov.hi : vIso(new Date());
   state.videoPreset=p;
@@ -6632,13 +6654,53 @@ function vidSetPreset(p){
     state.videoFrom = cov && from<cov.lo ? cov.lo : from;
     state.videoTo = hi;
   }
-  renderVideos();
+  (window[after]||renderVideos)();
 }
-function vidSetDate(which,val){
+function vidSetDate(which,val,after){
   if(!val) return;
   if(which==='from') state.videoFrom=val; else state.videoTo=val;
   state.videoPreset='custom';
-  renderVideos();
+  (window[after]||renderVideos)();
+}
+
+/* One period control, shared by Videos and Creators, driving one window in
+   state. Change it on either page and both agree — which is the point: the
+   Creators GMV column and the Videos grid should never disagree about "when". */
+function vidPeriodBar(after, showBasis){
+  vidEnsureRange();
+  const cov=vidCoverage();
+  const presets=[['7','7 days'],['30','30 days'],['90','90 days'],['all','All time']];
+  return `<div class="vperiod" style="margin-bottom:4px">
+    <span class="plab">Period</span>
+    ${presets.map(([k,l])=>`<button class="vchip ${state.videoPreset===k?'on':''}" onclick="vidSetPreset('${k}','${after}')">${l}</button>`).join('')}
+    ${showBasis?`<span class="plab" style="margin-left:10px">Count by</span>
+    <span class="vbasis">
+      <button class="${state.videoBasis==='earned'?'on':''}" onclick="state.videoBasis='earned';${after}()">Earned in period</button>
+      <button class="${state.videoBasis==='posted'?'on':''}" onclick="state.videoBasis='posted';${after}()">Posted in period</button>
+    </span>`:''}
+    <span class="vdates">
+      <input type="date" value="${state.videoFrom}" ${cov?`min="${cov.lo}" max="${cov.hi}"`:''} onchange="vidSetDate('from',this.value,'${after}')">
+      <span>→</span>
+      <input type="date" value="${state.videoTo}" ${cov?`min="${cov.lo}" max="${cov.hi}"`:''} onchange="vidSetDate('to',this.value,'${after}')">
+    </span>
+  </div>`;
+}
+
+/* Per-creator totals for the chosen window, straight out of the daily rows.
+   Keyed on lowercased handle so it survives @ prefixes and casing. */
+function creatorPeriodMap(){
+  vidEnsureRange();
+  const from=state.videoFrom, to=state.videoTo, m=new Map();
+  for(const r of VIDEO_DAILY){
+    if(r.stat_date<from || r.stat_date>to) continue;
+    const u=String(r.username||'').trim().toLowerCase(); if(!u) continue;
+    let s=m.get(u);
+    if(!s){ s={gmv:0,views:0,items:0,_v:new Set()}; m.set(u,s); }
+    s.gmv+=Number(r.gmv)||0; s.views+=Number(r.views)||0; s.items+=Number(r.items_sold)||0;
+    s._v.add(r.video_id);
+  }
+  m.forEach(s=>{ s.videos=s._v.size; s.gpm=s.views? s.gmv/s.views*1000 : 0; delete s._v; });
+  return m;
 }
 
 /* Aggregate the daily rows into one object per video for the chosen window. */
@@ -6722,25 +6784,12 @@ function renderVideos(){
   $('page-videos').innerHTML=`
   <div class="page-head">
     <div><h1>Videos</h1><div class="desc">Every shop video with a named creator — what it was watched and what it sold</div></div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn btn-primary" onclick="vidSync()" data-vsync>Sync videos</button>
+    <div class="actions">
+      <button class="btn btn-primary btn-sm" onclick="vidSync()" data-vsync>Sync videos</button>
     </div>
   </div>
 
-  <div class="vperiod" style="margin-bottom:4px">
-    <span class="plab">Period</span>
-    ${presets.map(([k,l])=>`<button class="vchip ${state.videoPreset===k?'on':''}" onclick="vidSetPreset('${k}')">${l}</button>`).join('')}
-    <span class="plab" style="margin-left:10px">Count by</span>
-    <span class="vbasis">
-      <button class="${state.videoBasis==='earned'?'on':''}" onclick="state.videoBasis='earned';renderVideos()">Earned in period</button>
-      <button class="${state.videoBasis==='posted'?'on':''}" onclick="state.videoBasis='posted';renderVideos()">Posted in period</button>
-    </span>
-    <span class="vdates">
-      <input type="date" value="${state.videoFrom}" ${cov?`min="${cov.lo}" max="${cov.hi}"`:''} onchange="vidSetDate('from',this.value)">
-      <span>→</span>
-      <input type="date" value="${state.videoTo}" ${cov?`min="${cov.lo}" max="${cov.hi}"`:''} onchange="vidSetDate('to',this.value)">
-    </span>
-  </div>
+  ${vidPeriodBar('renderVideos', true)}
   <div class="vnote">
     <b>${vLongDate(state.videoFrom)} – ${vLongDate(state.videoTo)}.</b>
     ${state.videoBasis==='earned'
@@ -6823,18 +6872,22 @@ function vidCard(v,rank){
   </div>`;
 }
 
-/* Play in place. TikTok's embed refuses to reflow below its natural size — set
-   the iframe smaller and it CROPS. Same fix the brief canvas uses: render at
-   natural size, CSS-scale the whole thing. Clicks inside an iframe don't bubble,
-   so the card's own onclick stops firing once the player is in. */
+/* Play in place, one click.
+   embed/v2 (what the brief canvas uses) renders a card you then have to click a
+   SECOND time to start, and it refuses to reflow below its natural size so it
+   needs the CSS-scale trick. player/v1 is TikTok's plain player: it fills its
+   iframe properly AND accepts autoplay. Browsers only allow autoplay when muted,
+   so it starts muted — the player's own control unmutes.
+   Clicks inside an iframe don't bubble, so the card's onclick stops firing once
+   the player is in. */
+const vidPlayerSrc = id =>
+  `https://www.tiktok.com/player/v1/${id}?autoplay=1&muted=1&controls=1&description=0&music_info=0&rel=0`;
+
 function vidPlay(ev,id){
   ev.stopPropagation();
   const host=$('vt-'+id); if(!host || host.dataset.playing) return;
-  const w=host.clientWidth||240, h=host.clientHeight||Math.round(240*16/9);
-  const k=Math.max(w/VID_BASE_W, h/VID_BASE_H);
   host.dataset.playing='1';
-  host.innerHTML=`<iframe class="brf-embed" src="https://www.tiktok.com/embed/v2/${id}"
-      style="width:${VID_BASE_W}px;height:${VID_BASE_H}px;transform:scale(${k.toFixed(4)})"
+  host.innerHTML=`<iframe class="vplayer" src="${vidPlayerSrc(id)}"
       allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; fullscreen"
       frameborder="0" scrolling="no"></iframe>`;
 }
@@ -6873,8 +6926,7 @@ function vidOpen(id){
   openModal(modalShell(`@${vEsc(v.username)}`,`
     <div class="vmodal">
       <div class="vmleft">
-        <iframe class="brf-embed" src="https://www.tiktok.com/embed/v2/${v.id}"
-          style="width:${VID_BASE_W}px;height:${VID_BASE_H}px;transform:scale(${(330/VID_BASE_W).toFixed(4)})"
+        <iframe class="vplayer" src="${vidPlayerSrc(v.id)}"
           allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; fullscreen"
           frameborder="0" scrolling="no"></iframe>
       </div>
