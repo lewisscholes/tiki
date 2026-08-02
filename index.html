@@ -465,6 +465,54 @@ body.brief-full .main{margin-right:0}
 .brf-body{flex:1;display:flex;min-height:0}
 .brf-tools{width:52px;border-right:1px solid var(--line-2);display:flex;flex-direction:column;gap:5px;padding:10px 8px;background:var(--surface-2);align-items:center}
 .brf-tool{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--ink-2);position:relative}
+/* ---- Dock: the tools, macOS style, floating over the canvas ---- */
+.brf-dock{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);display:flex;align-items:flex-end;gap:6px;
+  padding:8px 10px;border-radius:18px;background:rgba(255,255,255,.82);backdrop-filter:blur(18px) saturate(180%);
+  -webkit-backdrop-filter:blur(18px) saturate(180%);border:1px solid rgba(255,255,255,.7);
+  box-shadow:0 12px 32px -8px rgba(16,24,40,.28),0 2px 6px rgba(16,24,40,.10);z-index:70}
+.dock-item{position:relative;width:42px;height:42px;border-radius:13px;display:flex;align-items:center;justify-content:center;
+  color:var(--ink-2);background:transparent;transition:transform .16s cubic-bezier(.2,.9,.3,1.4),background .14s;transform-origin:bottom center}
+.dock-item .dk-ico{display:flex}
+.dock-item svg{width:19px;height:19px}
+.dock-item:hover{transform:scale(1.28) translateY(-5px);background:var(--neutral-soft)}
+.dock-item:active{transform:scale(1.12) translateY(-2px)}
+.dock-item.active{background:var(--ink);color:#fff}
+.dock-item.active::after{content:'';position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--ink)}
+.dock-item .dk-tip{position:absolute;bottom:calc(100% + 12px);left:50%;transform:translateX(-50%) scale(.9);
+  background:var(--ink);color:#fff;font-size:.7rem;font-weight:600;padding:4px 9px;border-radius:7px;white-space:nowrap;
+  opacity:0;pointer-events:none;transition:opacity .12s,transform .12s}
+.dock-item:hover .dk-tip{opacity:1;transform:translateX(-50%) scale(1)}
+
+/* ---- Layers ---- */
+.brf-layers{width:212px;flex-shrink:0;border-right:1px solid var(--line-2);background:var(--surface-2);
+  display:flex;flex-direction:column;min-height:0}
+.brf-layers .lay-h{padding:12px 14px 8px;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);
+  display:flex;align-items:center;gap:6px}
+.brf-layers .lay-h svg{width:14px;height:14px;flex-shrink:0}
+.brf-layers .lay-list{flex:1;overflow-y:auto;padding:0 8px 10px}
+.lay-row{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:9px;cursor:pointer;margin-bottom:2px;
+  border:1px solid transparent;transition:background .12s}
+.lay-row:hover{background:var(--neutral-soft)}
+.lay-row.on{background:var(--accent-soft);border-color:var(--accent);}
+.lay-row.dragging{opacity:.4}
+.lay-row.drop-above{border-top-color:var(--accent);border-top-width:2px}
+.lay-row.drop-below{border-bottom-color:var(--accent);border-bottom-width:2px}
+.lay-ico{width:24px;height:24px;border-radius:6px;background:var(--surface);border:1px solid var(--line-2);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--ink-2);overflow:hidden}
+.lay-ico svg{width:12px;height:12px}
+.lay-ico img{width:100%;height:100%;object-fit:cover}
+.lay-name{font-size:.76rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.lay-page{font-size:.63rem;color:var(--ink-3)}
+.lay-menu{position:fixed;z-index:400;background:var(--surface);border:1px solid var(--line);border-radius:11px;
+  box-shadow:var(--shadow-lg);padding:5px;min-width:186px}
+.lay-menu button{display:flex;align-items:center;gap:9px;width:100%;padding:7px 10px;border-radius:7px;font-size:.79rem;
+  color:var(--ink);text-align:left}
+.lay-menu button:hover{background:var(--neutral-soft)}
+.lay-menu button svg{width:15px;height:15px;flex-shrink:0;color:var(--ink-3)}
+.lay-menu button.danger svg{color:var(--crit-ink)}
+.lay-menu button.danger{color:var(--crit-ink)}
+.lay-menu .sep{height:1px;background:var(--line-2);margin:4px 6px}
+.lay-menu kbd{margin-left:auto;font-size:.66rem;color:var(--ink-3);font-family:inherit}
 .brf-tool:hover{background:var(--neutral-soft)}
 .brf-tool.active{background:var(--ink);color:#fff}
 .brf-tool svg{width:17px;height:17px}
@@ -4613,15 +4661,15 @@ function renderBriefEditor(){
         </div>
       </div>
       <div class="brf-body">
-        <div class="brf-tools">
-          ${tools.map(([t,ic,tip])=>`<button class="brf-tool ${s.tool===t?'active':''}" title="${tip}" onclick="brfSetTool('${t}')">${ICONS[ic]}</button>`).join('')}
-          <div style="margin-top:auto;font-size:.58rem;color:var(--ink-3);text-align:center;line-height:1.4">scroll<br>zoom</div>
-        </div>
+        ${brfLayersPanel(b)}
         <div class="brf-viewport ${s.tool!=='select'?'adding':''}" id="brfViewport" onmousemove="brfTrackCursor(event)">
           <div class="brf-world" id="brfWorld" style="transform:translate(${s.panX}px,${s.panY}px) scale(${s.zoom});width:${brfWorldSize(b).w}px;height:${brfWorldSize(b).h}px">
             ${brfWorldHTML(b)}
           </div>
           <div class="brf-cursors" id="brfCursors" style="transform:translate(${s.panX}px,${s.panY}px) scale(${s.zoom})"></div>
+          <div class="brf-dock">
+            ${tools.map(([t,ic,tip])=>`<button class="dock-item ${s.tool===t?'active':''}" onclick="brfSetTool('${t}')"><span class="dk-ico">${ICONS[ic]}</span><span class="dk-tip">${tip.split(' (')[0]}</span></button>`).join('')}
+          </div>
         </div>
         ${brfSidePanel(b)}
       </div>
@@ -4844,7 +4892,14 @@ function brfKeydown(e){
     e.preventDefault(); brfDelete(state.brf.sel); return;
   }
   if(e.key==='Escape'){
+    brfCloseLayerMenu();
     state.brf.sel=null; state.brf.selFrame=null; renderBriefEditor(); return;
+  }
+  if(state.brf.sel && (e.key===']'||e.key==='[')){
+    e.preventDefault();
+    if(meta) brfLayerToEnd(state.brf.sel, e.key===']');
+    else brfLayerMove(state.brf.sel, e.key===']'?1:-1);
+    return;
   }
 }
 
@@ -5107,10 +5162,17 @@ function brfWorldHTML(b){
         ${sel?`<span class="del-h" style="display:flex" onmousedown="event.stopPropagation()" onclick="brfDelete('${e.id}')">✕</span>`:''}
       </div>`;
     }
-    else if(e.type==='link')
-      h+=`<div class="brf-el ${sel}" data-el="${e.id}" style="left:${e.x}px;top:${e.y}px"><div class="brf-link" ondblclick="brfEditLink('${e.id}')">
-        <span class="lk-ico">${ICONS.link}</span><span><div>${esc(e.label)}</div><div class="lk-url">${esc(e.url)}</div></span></div>
-        <span class="del-h" onmousedown="event.stopPropagation()" onclick="brfDelete('${e.id}')">✕</span></div>`;
+    else if(e.type==='link'){
+      /* Links go through the clip layer too. If they rendered separately they
+         would always float above everything else, and "layers" would be a lie. */
+      const host=brfHostFrame(b,e);
+      const ix=host?e.x-host.x:e.x, iy=host?e.y-host.y:e.y;
+      const body=`<div class="brf-el ${sel}" data-el="${e.id}" style="left:${ix}px;top:${iy}px"><div class="brf-link" ondblclick="brfEditLink('${e.id}')">
+        <span class="lk-ico">${ICONS.link}</span><span><div>${esc(e.label)}</div><div class="lk-url">${esc(e.url)}</div></span></div></div>`;
+      if(host) clips[host.id]=(clips[host.id]||'')+body; else h+=body;
+      if(sel) overlay+=`<div class="brf-ovl sel-box" data-ovl="${e.id}" style="left:${e.x}px;top:${e.y}px;width:1px;height:1px">
+        <span class="del-h" style="display:flex;top:-13px;right:-13px" onmousedown="event.stopPropagation()" onclick="brfDelete('${e.id}')">✕</span></div>`;
+    }
   });
   if(s.showComments) b.comments.forEach((c,i)=>{
     h+=`<div class="brf-pin ${c.resolved?'resolved':''}" data-pin="${c.id}" style="left:${c.x}px;top:${c.y}px;background:${c.thread[0]&&c.thread[0].who!==ME?'var(--aqua-ink)':'var(--accent)'}" onclick="event.stopPropagation();brfOpenThread('${c.id}')">${i+1}</div>`;
@@ -5174,6 +5236,7 @@ function brfBind(b){
   let mode=null, start=null, moved=false;
   vp.addEventListener('mousedown', e=>{
     const s=state.brf;
+    if(e.target.closest('.brf-dock')) return;   // the dock floats over the canvas
     const elNode=e.target.closest('[data-el]');
     const fTitle=e.target.closest('[data-fdrag]');
     const rsNode=e.target.closest('[data-rs]');
@@ -5508,6 +5571,167 @@ function brfTextPanel(b, el){
    the browser has laid them out. So the selection frame is measured from the
    rendered node after every render rather than guessed at render time —
    otherwise the violet frame floats above short text and clips tall text. */
+/* ===================================================================
+   LAYERS
+   ===================================================================
+   Position in b.elements IS the z-order — later entries paint on top. The panel
+   shows that list reversed, because "top of the list" reading as "top of the
+   stack" is what every design tool has trained people to expect.
+
+   Frames are kept at the front of the array and out of the panel. They are the
+   pages, not objects on a page, and letting them be reordered against their own
+   contents would only ever be a mistake. */
+const brfStackables = b => b.elements.filter(e=>e.type!=='frame');
+function brfCommitOrder(b, stack){
+  b.elements = b.elements.filter(e=>e.type==='frame').concat(stack);
+}
+function brfLayerLabel(e){
+  if(e.type==='text'){
+    const txt=brfTextHTML(e).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+    return txt ? txt.slice(0,28) : 'Empty text';
+  }
+  if(e.type==='image') return e.alt ? String(e.alt).slice(0,24) : 'Photo';
+  if(e.type==='video') return e.handle && !/paste/i.test(e.handle) ? e.handle : 'TikTok video';
+  if(e.type==='link')  return e.label ? String(e.label).slice(0,24) : 'Link';
+  return e.type;
+}
+function brfLayerIcon(e){
+  if(e.type==='image'&&e.src) return `<img src="${e.src}" alt="">`;
+  if(e.type==='video'&&e.thumb) return `<img src="${e.thumb}" alt="">`;
+  return ICONS[{text:'type',image:'image',video:'video',link:'link'}[e.type]||'frame'];
+}
+function brfLayersPanel(b){
+  const stack=brfStackables(b);
+  const rows=stack.slice().reverse();   // top of the stack first
+  const sel=state.brf.sel;
+  return `
+    <div class="brf-layers">
+      <div class="lay-h">${ICONS.panel}Layers <span style="margin-left:auto;font-weight:600;text-transform:none;letter-spacing:0">${rows.length}</span></div>
+      <div class="lay-list" id="brfLayerList">
+        ${rows.map(e=>{
+          const host=brfHostFrame(b,e);
+          return `<div class="lay-row ${sel===e.id?'on':''}" data-layer="${e.id}" draggable="true"
+            onclick="brfSelectLayer('${e.id}')"
+            oncontextmenu="brfLayerMenu(event,'${e.id}')"
+            ondragstart="brfLayerDragStart(event,'${e.id}')"
+            ondragover="brfLayerDragOver(event,'${e.id}')"
+            ondragleave="brfLayerDragLeave(event)"
+            ondrop="brfLayerDrop(event,'${e.id}')"
+            ondragend="brfLayerDragEnd(event)"
+            title="Drag to reorder · right-click for options">
+            <span class="lay-ico">${brfLayerIcon(e)}</span>
+            <span style="min-width:0;flex:1">
+              <span class="lay-name" style="display:block">${esc(brfLayerLabel(e))}</span>
+              ${host?`<span class="lay-page">${esc(host.title)}</span>`:'<span class="lay-page">loose on canvas</span>'}
+            </span>
+          </div>`;
+        }).join('')||`<div style="font-size:.75rem;color:var(--ink-3);padding:14px 10px;line-height:1.55">
+          Nothing on the canvas yet. Add text, a photo or a video from the dock below.</div>`}
+      </div>
+      <div style="padding:8px 12px 12px;font-size:.66rem;color:var(--ink-3);line-height:1.5;border-top:1px solid var(--line-2)">
+        Top of the list is the front of the stack. Drag to reorder, or right-click a layer.
+      </div>
+    </div>`;
+}
+function brfSelectLayer(id){
+  state.brf.sel=id; state.brf.selFrame=null; state.brf.editing=null;
+  renderBriefEditor();
+}
+/* Forwards means later in the array. */
+function brfLayerMove(id, delta){
+  const b=briefById(state.briefId); if(!b) return;
+  const stack=brfStackables(b);
+  const i=stack.findIndex(e=>e.id===id);
+  const j=i+delta;
+  if(i<0||j<0||j>=stack.length) return toast(delta>0?'Already at the front':'Already at the back');
+  brfSnapshot();
+  const [el]=stack.splice(i,1); stack.splice(j,0,el);
+  brfCommitOrder(b,stack);
+  tikiPush(); renderBriefEditor();
+}
+function brfLayerToEnd(id, front){
+  const b=briefById(state.briefId); if(!b) return;
+  const stack=brfStackables(b);
+  const i=stack.findIndex(e=>e.id===id); if(i<0) return;
+  brfSnapshot();
+  const [el]=stack.splice(i,1);
+  if(front) stack.push(el); else stack.unshift(el);
+  brfCommitOrder(b,stack);
+  tikiPush(); renderBriefEditor();
+}
+/* Drag to reorder. The list is reversed, so dropping ABOVE a row in the panel
+   means going AFTER it in the array — getting this backwards is the classic
+   layers-panel bug. */
+let BRF_LAYER_DRAG=null;
+function brfLayerDragStart(ev,id){
+  BRF_LAYER_DRAG=id;
+  ev.dataTransfer.effectAllowed='move';
+  try{ ev.dataTransfer.setData('text/plain',id); }catch(e){}
+  ev.currentTarget.classList.add('dragging');
+}
+function brfLayerDragEnd(ev){
+  ev.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.lay-row').forEach(n=>n.classList.remove('drop-above','drop-below'));
+  BRF_LAYER_DRAG=null;
+}
+function brfLayerDragOver(ev,id){
+  if(!BRF_LAYER_DRAG||BRF_LAYER_DRAG===id) return;
+  ev.preventDefault(); ev.dataTransfer.dropEffect='move';
+  const r=ev.currentTarget.getBoundingClientRect();
+  const above=(ev.clientY-r.top)<r.height/2;
+  ev.currentTarget.classList.toggle('drop-above',above);
+  ev.currentTarget.classList.toggle('drop-below',!above);
+}
+function brfLayerDragLeave(ev){ ev.currentTarget.classList.remove('drop-above','drop-below'); }
+function brfLayerDrop(ev,targetId){
+  ev.preventDefault();
+  const dragId=BRF_LAYER_DRAG||ev.dataTransfer.getData('text/plain');
+  document.querySelectorAll('.lay-row').forEach(n=>n.classList.remove('drop-above','drop-below'));
+  if(!dragId||dragId===targetId) return;
+  const b=briefById(state.briefId); if(!b) return;
+  const r=ev.currentTarget.getBoundingClientRect();
+  const above=(ev.clientY-r.top)<r.height/2;
+
+  const stack=brfStackables(b);
+  const from=stack.findIndex(e=>e.id===dragId);
+  if(from<0) return;
+  brfSnapshot();
+  const [el]=stack.splice(from,1);
+  let t=stack.findIndex(e=>e.id===targetId);
+  if(t<0){ stack.splice(from,0,el); return; }
+  /* Panel is top-first; array is bottom-first. Above in the panel = after in
+     the array, hence the +1 on "above" rather than on "below". */
+  stack.splice(above?t+1:t, 0, el);
+  brfCommitOrder(b,stack);
+  tikiPush(); renderBriefEditor();
+}
+/* Right-click menu */
+function brfCloseLayerMenu(){ document.querySelector('.lay-menu')?.remove(); }
+function brfLayerMenu(ev,id){
+  ev.preventDefault(); ev.stopPropagation();
+  brfCloseLayerMenu();
+  state.brf.sel=id;
+  document.querySelectorAll('.lay-row').forEach(n=>n.classList.toggle('on',n.dataset.layer===id));
+  const m=document.createElement('div');
+  m.className='lay-menu';
+  m.innerHTML=`
+    <button onclick="brfCloseLayerMenu();brfLayerToEnd('${id}',true)">${ICONS.arrow.replace('M5 12h14M12 5l7 7-7 7','M12 19V5M5 12l7-7 7 7')}Bring to front</button>
+    <button onclick="brfCloseLayerMenu();brfLayerMove('${id}',1)">${ICONS.arrow.replace('M5 12h14M12 5l7 7-7 7','M12 19V5M5 12l7-7 7 7')}Bring forwards</button>
+    <button onclick="brfCloseLayerMenu();brfLayerMove('${id}',-1)">${ICONS.down}Send backwards</button>
+    <button onclick="brfCloseLayerMenu();brfLayerToEnd('${id}',false)">${ICONS.down}Send to back</button>
+    <div class="sep"></div>
+    <button onclick="brfCloseLayerMenu();state.brf.sel='${id}';brfCopy();brfPaste()">${ICONS.plus}Duplicate</button>
+    <button class="danger" onclick="brfCloseLayerMenu();brfDelete('${id}')">${ICONS.x}Delete<kbd>⌫</kbd></button>`;
+  document.body.appendChild(m);
+  /* Keep it on screen when right-clicking near the bottom edge. */
+  const w=m.offsetWidth, h=m.offsetHeight;
+  m.style.left=Math.min(ev.clientX, window.innerWidth-w-8)+'px';
+  m.style.top=Math.min(ev.clientY, window.innerHeight-h-8)+'px';
+  setTimeout(()=>{
+    const close=e=>{ if(!e.target.closest('.lay-menu')){ brfCloseLayerMenu(); document.removeEventListener('mousedown',close); } };
+    document.addEventListener('mousedown',close);
+  },0);
+}
 function brfSyncTextBoxes(){
   const world=$('brfWorld'); if(!world) return;
   const z=state.brf.zoom||1;
