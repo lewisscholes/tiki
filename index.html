@@ -6623,7 +6623,14 @@ let VID_THUMB_RUN = false;
 
 async function videosLoad(){
   try{
-    const rows = await tikiFetchAll('/rest/v1/tiktok_video_daily?select=*&order=stat_date.desc', 20000);
+    /* 180 days of history is ~38k rows and climbing, so: ask for only the
+       columns the grid actually needs (hash_tags, currency, avg_customers and
+       synced_at are dead weight here) and raise the cap well clear of the row
+       count. The old 20,000 cap silently truncated the OLDEST data — the table
+       is ordered newest-first — which is why history looked like it stopped
+       part-way through April when the database already held February. */
+    const cols='video_id,stat_date,username,title,account_type,gmv,items_sold,sku_orders,views,gpm,click_through_rate,duration,posted_at,products';
+    const rows = await tikiFetchAll(`/rest/v1/tiktok_video_daily?select=${cols}&order=stat_date.desc`, 200000);
     if(Array.isArray(rows)) VIDEO_DAILY = rows;
   }catch(e){ /* offline / not signed in — page shows its empty state */ }
 }
@@ -7098,9 +7105,15 @@ function recAction(i, what){
       lastContact:'—', stage:'Prospect', quality:0, reliability:0, notes:'From recommender: '+r.why, links:[] });
     toast(`${r.name} added to pipeline as Prospect`);
   } else if(what==='invite'){
-    const f=OUTREACH_FLOWS.find(x=>x.status==='Running'&&x.name.includes(brandInfo(r.brand).name)) || OUTREACH_FLOWS.find(x=>x.status==='Running');
-    if(f) f.stats.invited++;
-    toast(`Queued — target collab invite goes out on the next run`);
+    /* Move them into the pipeline so the Welcome flow's trigger picks them up.
+       No invite goes out yet — sending is scope-blocked, and saying otherwise
+       would be a lie the Outreach page has already told once. */
+    if(!CREATORS.some(c=>c.handle===r.handle))
+      CREATORS.unshift({ id:'c'+(CREATORS.length+300), name:r.name, handle:r.handle, av:r.av, email:'—', phone:'—', brand:r.brand,
+        followers:parseFloat(r.followers)*1000, avgViews:0, videos:0, samples:0, commission:0, retainer:0, gmv:0, units:0, cvr:0,
+        lastContact:'—', stage:'Prospect', quality:0, reliability:0, notes:'From recommender: '+r.why, links:[] });
+    tikiPush();
+    toast('Added to the outreach queue — sends once TikTok grants the affiliate scope');
   } else {
     PERSONAL_OUTREACH.unshift({ id:'po'+(PERSONAL_OUTREACH.length+10), name:r.name, handle:r.handle, av:r.av, status:'todo',
       why:r.why, draft:`Hi ${r.name.split(' ')[0]} — Lewis here, founder of ${brandInfo(r.brand).name}. ${r.why.split('·')[0].trim()} — genuinely think you'd be a great fit. Can I send you a sample?` });
@@ -7109,45 +7122,273 @@ function recAction(i, what){
   renderOutreach(); renderSidebar();
 }
 /* ---- Auto-invite flows ---- */
+/* ============================================================================
+   OUTREACH FLOWS
+   Everything here is real except the sending. Triggers evaluate against live
+   creator and video data, the queue is genuinely computed, and templates are
+   genuinely stored. The one thing that cannot happen yet is the API call: every
+   sending endpoint (target_collaborations, conversations, sample_applications)
+   lives under affiliate_seller, which is scope-blocked pending the "Seller and
+   Scalable Creator Match-Up" qualification. Nothing on this page pretends
+   otherwise — see flowGateNote().
+   ========================================================================== */
+
+const FLOW_TRIGGERS = {
+  new_affiliate: { label:'New affiliate posts their first video',
+    hint:'Fires the first time a creator we have never contacted appears in the video data.' },
+  sample_received:{ label:'Sample delivered to creator',
+    hint:'Fires when a sample is marked delivered. Until the API is live, mark delivery on the Samples tab.' },
+  gone_quiet:    { label:'Creator has stopped posting',
+    hint:'No video in the chosen number of days, after having posted before.' },
+  high_gpm:      { label:'Creator converts well',
+    hint:'GPM at or above your threshold over the current period — worth a retainer conversation.' }
+};
+const FLOW_STEP_KINDS = {
+  invite:   { label:'Collab invite', api:'POST /affiliate_seller/202508/target_collaborations' },
+  dm:       { label:'Direct message', api:'POST /affiliate_seller/202508/conversations + /202412/conversations/{id}/messages' },
+  followup: { label:'Follow-up message', api:'POST /affiliate_seller/202412/conversations/{id}/messages' },
+  sample:   { label:'Approve sample request', api:'POST /affiliate_seller/202507/sample_applications/{id}/review' }
+};
+const FLOW_VARS = ['{creator}','{brand}','{product}','{commission}','{gmv}','{views}'];
+
+const uid = p => p+Math.random().toString(36).slice(2,9);
+
+function flowDefaults(kind){
+  if(kind==='welcome') return {
+    id:uid('fl-'), name:'Welcome — new affiliate', trigger:'new_affiliate', params:{days:7},
+    status:'Draft', capDay:40, capWeek:200,
+    steps:[
+      { kind:'invite', day:0, commission:15,
+        template:"Hey {creator} — loved your last video. Sending over a {commission}% collab on {product} so you can keep going." },
+      { kind:'dm', day:0,
+        template:"Hi {creator}, Lewis here from {brand}. Just sent you a {commission}% collab on {product}. Your content is exactly the style that works for us — anything you need from me, just ask." },
+      { kind:'followup', day:3,
+        template:"Hey {creator}, no pressure at all — the collab's still open if you fancy it. Happy to send a sample first if that's easier." }
+    ],
+    stats:{ sent:0, accepted:0, live:0, sales:0 }
+  };
+  if(kind==='sample') return {
+    id:uid('fl-'), name:'Sample received', trigger:'sample_received', params:{days:0},
+    status:'Draft', capDay:40, capWeek:200,
+    steps:[
+      { kind:'dm', day:0,
+        template:"Hi {creator} — your {product} should have landed today. Any questions on how to use it, message me here." },
+      { kind:'followup', day:3,
+        template:"Hey {creator}, how are you getting on with the {product}? Happy to share what's been working for other creators if useful." },
+      { kind:'followup', day:7,
+        template:"Hi {creator} — just checking in. Whenever you're ready to post, the {commission}% collab is live on your end." }
+    ],
+    stats:{ sent:0, accepted:0, live:0, sales:0 }
+  };
+  return { id:uid('fl-'), name:'New flow', trigger:'new_affiliate', params:{days:7},
+    status:'Draft', capDay:40, capWeek:200,
+    steps:[{ kind:'dm', day:0, template:"Hi {creator} — " }],
+    stats:{ sent:0, accepted:0, live:0, sales:0 } };
+}
+
+/* Who this flow would contact right now, from live data. */
+function flowMatches(f){
+  const PM = (typeof creatorPeriodMap==='function') ? creatorPeriodMap() : new Map();
+  const stat = c => PM.get(String(c.handle||'').replace(/^@/,'').trim().toLowerCase()) || {gmv:0,views:0,videos:0,gpm:0};
+  const all = CREATORS.filter(inBrand);
+  const contacted = ['Contacted','Interested','Sample Requested','Sample Sent','Content Pending','Active Creator','Content Live','Retainer Creator'];
+  const days = Number(f.params&&f.params.days)||0;
+
+  if(f.trigger==='new_affiliate')
+    return all.filter(c=>stat(c).videos>0 && !contacted.includes(c.stage));
+  if(f.trigger==='sample_received')
+    return all.filter(c=>c.stage==='Sample Sent');
+  if(f.trigger==='gone_quiet'){
+    const cut = new Date(Date.now()-(days||14)*86400000).toISOString().slice(0,10);
+    const last = new Map();
+    for(const r of (typeof VIDEO_DAILY!=='undefined'?VIDEO_DAILY:[])){
+      const u=String(r.username||'').toLowerCase(); if(!u) continue;
+      if(!last.has(u)||r.stat_date>last.get(u)) last.set(u,r.stat_date);
+    }
+    return all.filter(c=>{
+      const l=last.get(String(c.handle||'').replace(/^@/,'').toLowerCase());
+      return l && l<cut;
+    });
+  }
+  if(f.trigger==='high_gpm')
+    return all.filter(c=>stat(c).gpm >= (Number(f.params&&f.params.gpm)||50));
+  return [];
+}
+
+function flowGateNote(){
+  return `<div class="card" style="background:var(--warn-soft);border-color:transparent;margin-bottom:16px">
+    <div class="card-b" style="padding:12px 16px;font-size:.79rem;color:var(--warn-ink);line-height:1.55">
+      <b>Nothing sends yet.</b> Flows, templates, triggers and the queue are all live and saving — but every
+      sending endpoint sits under <code>affiliate_seller</code>, which this app is not yet granted.
+      Blocked on the <b>Seller and Scalable Creator Match-Up</b> qualification (submitted 12 Nov 2025, still under review).
+      The moment that clears, arming a flow starts sending; nothing here needs rebuilding.
+    </div></div>`;
+}
+
 function outFlows(){
-  const tot=OUTREACH_FLOWS.reduce((a,f)=>({invited:a.invited+f.stats.invited,accepted:a.accepted+f.stats.accepted,live:a.live+f.stats.live,sales:a.sales+f.stats.sales}),{invited:0,accepted:0,live:0,sales:0});
+  const queues = OUTREACH_FLOWS.map(f=>({f, n:flowMatches(f).length}));
+  const totQ = queues.reduce((a,q)=>a+q.n,0);
   return `
-    <div class="card" style="background:var(--accent-soft);border-color:transparent;margin-bottom:16px"><div class="card-b" style="padding:11px 16px;font-size:.78rem;color:var(--accent-ink)">
-      Runs on the <b>official partner APIs</b> — target collab invites <b>plus a personalised first-touch DM</b>, exactly how Cruva does it, without the monthly fee. TikTok caps outreach to <b>unconnected</b> creators via a weekly quota based on your 30-day GMV (invites + IMs share the pool, resets Sunday; up to 5 messages before a reply). Once a creator replies, messaging is unlimited.</div></div>
-    <div class="card" style="margin-bottom:16px"><div class="card-b" style="padding:13px 18px">
-      <div class="prog-row"><div class="pr-top"><span class="l">Weekly outreach quota (invites + first-touch DMs)</span><span class="v">412 / 1,000 · resets Sunday</span></div>
-      <div class="prog"><div style="width:41%;background:var(--accent)"></div></div></div>
-      <div style="font-size:.7rem;color:var(--ink-3);margin-top:6px">Flows pause automatically when the quota runs out · connected creators (replied / accepted) don't count against it</div>
-    </div></div>
-    <div class="kpi-grid" style="margin-bottom:16px">
-      <div class="kpi"><div class="k-label" style="margin-bottom:5px">Invited (all time)</div><div class="k-val">${tot.invited}</div></div>
-      <div class="kpi"><div class="k-label" style="margin-bottom:5px">Accepted</div><div class="k-val">${tot.accepted} <span style="font-size:.8rem;color:var(--ink-3);font-weight:600">${Math.round(tot.accepted/tot.invited*100)}%</span></div></div>
-      <div class="kpi"><div class="k-label" style="margin-bottom:5px">Content live</div><div class="k-val">${tot.live}</div></div>
-      <div class="kpi"><div class="k-label" style="margin-bottom:5px">First sales</div><div class="k-val">${tot.sales}</div></div>
+    ${flowGateNote()}
+    <div class="kpi-grid" style="margin-bottom:16px;grid-template-columns:repeat(4,1fr)">
+      <div class="kpi"><div class="k-label" style="margin-bottom:5px">Flows built</div><div class="k-val">${OUTREACH_FLOWS.length}</div>
+        <div class="k-foot">${OUTREACH_FLOWS.filter(f=>f.status==='Armed').length} armed and waiting</div></div>
+      <div class="kpi"><div class="k-label" style="margin-bottom:5px">Creators queued</div><div class="k-val">${totQ}</div>
+        <div class="k-foot">would be contacted today</div></div>
+      <div class="kpi"><div class="k-label" style="margin-bottom:5px">Messages sent</div><div class="k-val">0</div>
+        <div class="k-foot">blocked on API scope</div></div>
+      <div class="kpi"><div class="k-label" style="margin-bottom:5px">Steps configured</div><div class="k-val">${OUTREACH_FLOWS.reduce((a,f)=>a+f.steps.length,0)}</div>
+        <div class="k-foot">invites, DMs and follow-ups</div></div>
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="toast('Flow builder — thresholds, collab template, caps (full build)')">${ICONS.plus} New flow</button></div>
-    ${OUTREACH_FLOWS.map(f=>`
-    <div class="card" style="margin-bottom:13px"><div class="card-b" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
-      <label class="switch" style="margin-top:3px"><input type="checkbox" ${f.status==='Running'?'checked':''} onchange="flowToggle('${f.id}')"><span class="sl"></span></label>
-      <div style="flex:1;min-width:240px">
-        <div style="display:flex;align-items:center;gap:9px"><span style="font-weight:700">${f.name}</span>${statusBadge(f.status==='Running'?'Active':'Paused')}</div>
-        <div style="font-size:.74rem;color:var(--ink-2);margin-top:5px"><b style="color:var(--ink-3);font-weight:600">IF</b> ${f.trigger}</div>
-        <div style="font-size:.74rem;color:var(--ink-2);margin-top:2px"><b style="color:var(--ink-3);font-weight:600">THEN</b> ${f.action} · cap ${f.cap}</div>
-        <div style="font-size:.68rem;color:var(--ink-3);margin-top:6px">${f.last}</div>
-      </div>
-      <div style="display:flex;gap:16px">
-        <div class="mini-stat"><div class="l">Invited</div><div class="v">${f.stats.invited}</div></div>
-        <div class="mini-stat"><div class="l">Accepted</div><div class="v">${f.stats.accepted}</div></div>
-        <div class="mini-stat"><div class="l">Live</div><div class="v">${f.stats.live}</div></div>
-        <div class="mini-stat"><div class="l">Sales</div><div class="v">${f.stats.sales}</div></div>
-      </div>
-    </div></div>`).join('')}`;
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px">
+      ${!OUTREACH_FLOWS.some(f=>f.trigger==='new_affiliate')?`<button class="btn btn-ghost btn-sm" onclick="flowAdd('welcome')">＋ Welcome flow</button>`:''}
+      ${!OUTREACH_FLOWS.some(f=>f.trigger==='sample_received')?`<button class="btn btn-ghost btn-sm" onclick="flowAdd('sample')">＋ Sample received flow</button>`:''}
+      <button class="btn btn-primary btn-sm" onclick="flowAdd('blank')">${ICONS.plus} New flow</button>
+    </div>
+    ${OUTREACH_FLOWS.map(f=>{
+      const q=flowMatches(f);
+      const tr=FLOW_TRIGGERS[f.trigger]||{label:f.trigger,hint:''};
+      return `
+      <div class="card" style="margin-bottom:13px"><div class="card-b">
+        <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+          <label class="switch" style="margin-top:3px" title="${f.status==='Armed'?'Armed — will start sending the moment the scope lands':'Draft'}">
+            <input type="checkbox" ${f.status==='Armed'?'checked':''} onchange="flowToggle('${f.id}')"><span class="sl"></span></label>
+          <div style="flex:1;min-width:250px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span style="font-weight:700">${esc(f.name)}</span>
+              <span class="badge ${f.status==='Armed'?'bg-violet':''}">${f.status}</span>
+            </div>
+            <div style="font-size:.75rem;color:var(--ink-2);margin-top:6px">
+              <b style="color:var(--ink-3);font-weight:600">WHEN</b> ${tr.label}${f.trigger==='gone_quiet'?` (${f.params.days||14} days)`:''}${f.trigger==='high_gpm'?` (GPM ≥ ${moneyDec(f.params.gpm||50)})`:''}
+            </div>
+            <div style="font-size:.75rem;color:var(--ink-2);margin-top:3px">
+              <b style="color:var(--ink-3);font-weight:600">THEN</b>
+              ${f.steps.map(s=>`${FLOW_STEP_KINDS[s.kind].label}${s.day?` on day ${s.day}`:''}`).join(' → ')}
+            </div>
+            <div style="font-size:.7rem;color:var(--ink-3);margin-top:6px">Caps: ${f.capDay}/day · ${f.capWeek}/week</div>
+          </div>
+          <div style="display:flex;gap:16px;align-items:center">
+            <div class="mini-stat"><div class="l">Queued now</div><div class="v" style="color:${q.length?'var(--accent-ink)':'var(--ink-3)'}">${q.length}</div></div>
+            <div class="mini-stat"><div class="l">Sent</div><div class="v" style="color:var(--ink-3)">0</div></div>
+          </div>
+          <div style="display:flex;gap:7px;align-items:flex-start">
+            <button class="btn btn-ghost btn-sm" onclick="flowQueue('${f.id}')">Queue</button>
+            <button class="btn btn-ghost btn-sm" onclick="flowEdit('${f.id}')">Edit</button>
+          </div>
+        </div>
+      </div></div>`;
+    }).join('')||`<div class="card"><div class="empty">No flows yet — start with the Welcome flow.</div></div>`}`;
+}
+
+function flowAdd(kind){
+  const f=flowDefaults(kind);
+  OUTREACH_FLOWS.push(f); tikiPush(); renderOutreach(); flowEdit(f.id);
 }
 function flowToggle(id){
-  const f=OUTREACH_FLOWS.find(x=>x.id===id);
-  f.status=f.status==='Running'?'Paused':'Running';
-  f.last=f.status==='Paused'?'Paused just now by Lewis':'Resumed — next run 12:00';
-  toast(`${f.name} ${f.status==='Running'?'resumed':'paused'}`); renderOutreach();
+  const f=OUTREACH_FLOWS.find(x=>x.id===id); if(!f) return;
+  f.status = f.status==='Armed' ? 'Draft' : 'Armed';
+  tikiPush(); renderOutreach();
+  toast(f.status==='Armed'
+    ? `${f.name} armed — it will start sending as soon as the affiliate scope is granted`
+    : `${f.name} back to draft`);
+}
+function flowDelete(id){
+  const i=OUTREACH_FLOWS.findIndex(x=>x.id===id); if(i<0) return;
+  const n=OUTREACH_FLOWS[i].name;
+  OUTREACH_FLOWS.splice(i,1); closeModal(); tikiPush(); renderOutreach(); toast(n+' deleted');
+}
+
+function flowQueue(id){
+  const f=OUTREACH_FLOWS.find(x=>x.id===id); if(!f) return;
+  const list=flowMatches(f);
+  const PM=creatorPeriodMap();
+  const stat=c=>PM.get(String(c.handle||'').replace(/^@/,'').toLowerCase())||{gmv:0,views:0,videos:0,gpm:0};
+  openModal(modalShell(`${esc(f.name)} — queue`,`
+    <p style="font-size:.82rem;color:var(--ink-2);line-height:1.55;margin:0 0 14px">
+      ${list.length} creator${list.length===1?'':'s'} match this trigger right now.
+      This is who would be contacted, in order, the moment sending is unblocked.
+    </p>
+    <div class="tbl-wrap" style="max-height:52vh;overflow:auto">
+      <table class="tbl"><thead><tr>
+        <th>Creator</th><th>Stage</th><th class="num">Videos</th><th class="num">GMV</th><th class="num">GPM</th><th>First step</th>
+      </tr></thead><tbody>
+      ${list.slice(0,200).map(c=>{const s=stat(c);return `<tr>
+        <td><div class="main-cell"><div class="t">${esc(c.name)}</div><div class="s">${esc(c.handle)}</div></div></td>
+        <td>${stageBadge(c.stage)}</td>
+        <td class="num">${s.videos||'—'}</td>
+        <td class="num">${s.gmv?money(s.gmv):'—'}</td>
+        <td class="num">${s.gpm?moneyDec(s.gpm):'—'}</td>
+        <td style="font-size:.76rem;color:var(--ink-2)">${FLOW_STEP_KINDS[f.steps[0].kind].label}</td>
+      </tr>`;}).join('')||`<tr><td colspan="6"><div class="empty">Nobody matches this trigger yet</div></td></tr>`}
+      </tbody></table>
+    </div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Close</button>
+     <button class="btn btn-primary" disabled title="Blocked until the Affiliate Seller scope is granted">Send ${list.length} — locked</button>`,'wide'));
+}
+
+function flowEdit(id){
+  const f=OUTREACH_FLOWS.find(x=>x.id===id); if(!f) return;
+  const tr=FLOW_TRIGGERS[f.trigger];
+  openModal(modalShell(`Edit flow`,`
+    <div class="field-wrap"><label class="field-l">Flow name</label>
+      <input class="field" id="flName" value="${esc(f.name)}"></div>
+
+    <div class="field-wrap" style="margin-top:14px"><label class="field-l">Trigger</label>
+      <select class="field" id="flTrigger" onchange="flowSetTrigger('${f.id}',this.value)">
+        ${Object.entries(FLOW_TRIGGERS).map(([k,v])=>`<option value="${k}" ${f.trigger===k?'selected':''}>${v.label}</option>`).join('')}
+      </select>
+      <div style="font-size:.73rem;color:var(--ink-3);margin-top:6px">${tr?tr.hint:''}</div></div>
+
+    ${f.trigger==='gone_quiet'?`<div class="field-wrap" style="margin-top:12px"><label class="field-l">Days without posting</label>
+      <input class="field" id="flDays" type="number" min="1" value="${f.params.days||14}"></div>`:''}
+    ${f.trigger==='high_gpm'?`<div class="field-wrap" style="margin-top:12px"><label class="field-l">GPM threshold (£ per 1,000 views)</label>
+      <input class="field" id="flGpm" type="number" min="0" step="1" value="${f.params.gpm||50}"></div>`:''}
+
+    <div style="display:flex;gap:12px;margin-top:14px">
+      <div class="field-wrap" style="flex:1"><label class="field-l">Cap per day</label>
+        <input class="field" id="flCapDay" type="number" min="1" value="${f.capDay}"></div>
+      <div class="field-wrap" style="flex:1"><label class="field-l">Cap per week</label>
+        <input class="field" id="flCapWeek" type="number" min="1" value="${f.capWeek}"></div>
+    </div>
+
+    <div style="margin-top:20px;font-size:.78rem;font-weight:700">Steps</div>
+    <div style="font-size:.72rem;color:var(--ink-3);margin:4px 0 10px">
+      Variables: ${FLOW_VARS.map(v=>`<code>${v}</code>`).join(' ')}
+    </div>
+    ${f.steps.map((s,i)=>`
+      <div class="card" style="margin-bottom:10px"><div class="card-b" style="padding:12px 14px">
+        <div style="display:flex;gap:9px;align-items:center;margin-bottom:8px">
+          <select class="field" style="max-width:190px" onchange="OUTREACH_FLOWS.find(x=>x.id==='${f.id}').steps[${i}].kind=this.value;tikiPush();flowEdit('${f.id}')">
+            ${Object.entries(FLOW_STEP_KINDS).map(([k,v])=>`<option value="${k}" ${s.kind===k?'selected':''}>${v.label}</option>`).join('')}
+          </select>
+          <span style="font-size:.75rem;color:var(--ink-3)">on day</span>
+          <input class="field" type="number" min="0" style="max-width:74px" value="${s.day||0}"
+            onchange="OUTREACH_FLOWS.find(x=>x.id==='${f.id}').steps[${i}].day=Number(this.value)||0;tikiPush()">
+          ${f.steps.length>1?`<button class="btn btn-ghost btn-xs" style="margin-left:auto;color:var(--crit-ink)"
+            onclick="OUTREACH_FLOWS.find(x=>x.id==='${f.id}').steps.splice(${i},1);tikiPush();flowEdit('${f.id}')">Remove</button>`:''}
+        </div>
+        <textarea class="field" rows="3" placeholder="Message…"
+          onchange="OUTREACH_FLOWS.find(x=>x.id==='${f.id}').steps[${i}].template=this.value;tikiPush()">${esc(s.template||'')}</textarea>
+        <div style="font-size:.68rem;color:var(--ink-3);margin-top:6px">Will call <code>${FLOW_STEP_KINDS[s.kind].api}</code></div>
+      </div></div>`).join('')}
+    <button class="btn btn-ghost btn-sm" onclick="OUTREACH_FLOWS.find(x=>x.id==='${f.id}').steps.push({kind:'followup',day:7,template:''});tikiPush();flowEdit('${f.id}')">＋ Add step</button>
+    `,
+    `<button class="btn btn-ghost" style="color:var(--crit-ink)" onclick="flowDelete('${f.id}')">Delete</button>
+     <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" onclick="flowSave('${f.id}')">Save flow</button>`,'wide'));
+}
+function flowSetTrigger(id,val){
+  const f=OUTREACH_FLOWS.find(x=>x.id===id); if(!f) return;
+  f.trigger=val; f.params=f.params||{}; tikiPush(); flowEdit(id);
+}
+function flowSave(id){
+  const f=OUTREACH_FLOWS.find(x=>x.id===id); if(!f) return;
+  f.name=($('flName')?.value||f.name).trim();
+  f.capDay=Number($('flCapDay')?.value)||f.capDay;
+  f.capWeek=Number($('flCapWeek')?.value)||f.capWeek;
+  if($('flDays')) f.params.days=Number($('flDays').value)||14;
+  if($('flGpm')) f.params.gpm=Number($('flGpm').value)||50;
+  closeModal(); tikiPush(); renderOutreach(); toast(f.name+' saved');
 }
 /* ---- Founder's personal outreach list ---- */
 function outPersonal(){
@@ -7186,8 +7427,11 @@ function personalAction(id, what){
 function outMessages(){
   const c=CHATS.find(x=>x.id===state.chatOpen)||CHATS[0];
   return `
-    <div class="card" style="background:var(--accent-soft);border-color:transparent;margin-bottom:14px"><div class="card-b" style="padding:11px 16px;font-size:.78rem;color:var(--accent-ink)">
-      <b>Fully API-native</b> — synced two-way with TikTok's creator IM via our partner app (the same access Cruva has). Conversations with connected creators are unlimited; first messages to new creators draw from the weekly outreach quota. Replies you send here land in the creator's TikTok inbox.</div></div>
+    <div class="card" style="background:var(--warn-soft);border-color:transparent;margin-bottom:14px"><div class="card-b" style="padding:11px 16px;font-size:.78rem;color:var(--warn-ink);line-height:1.55">
+      <b>Not connected yet.</b> TikTok's creator IM endpoints exist
+      (<code>/affiliate_seller/202508/conversations</code> and <code>/202412/conversations/{id}/messages</code>)
+      but sit behind the Affiliate Seller scope, which we have not been granted. Nothing here syncs with TikTok
+      and nothing you type reaches a creator. Threads will populate automatically once the scope lands.</div></div>
     <div class="card"><div style="display:flex;min-height:440px">
       <div style="width:230px;border-right:1px solid var(--line-2);overflow-y:auto">
         ${CHATS.map(t=>`
@@ -7224,7 +7468,7 @@ function chatSend(id){
   const c=CHATS.find(x=>x.id===id);
   c.msgs.push({who:'us', text:v, time:'Just now'}); c.time='now';
   renderOutreach();
-  toast('Sent — delivers to the creator\'s TikTok inbox via the IM API in the full build');
+  toast('Saved locally — this does NOT reach the creator until the Affiliate Seller scope is granted');
   setTimeout(()=>{ const m=$('chatMsgs'); if(m) m.scrollTop=m.scrollHeight; },50);
 }
 
