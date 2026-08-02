@@ -488,10 +488,14 @@ body.brief-full .main{margin-right:0}
 .brf-el.el-img{border-radius:8px}
 .el-rs{position:absolute;width:12px;height:12px;background:#fff;border:2px solid var(--accent);border-radius:3px;opacity:0;transition:opacity .12s;z-index:6}
 .brf-el.selected .el-rs,.brf-el:hover .el-rs{opacity:1}
-.el-rs-se{right:-7px;bottom:-7px;cursor:nwse-resize}
+.el-rs-nw{left:-7px;top:-7px;cursor:nwse-resize}
+.el-rs-n{left:50%;top:-7px;margin-left:-6px;cursor:ns-resize}
+.el-rs-ne{right:-7px;top:-7px;cursor:nesw-resize}
+.el-rs-w{left:-7px;top:50%;margin-top:-6px;cursor:ew-resize}
 .el-rs-e{right:-7px;top:50%;margin-top:-6px;cursor:ew-resize}
-.el-rs-s{left:50%;bottom:-7px;margin-left:-6px;cursor:ns-resize}
 .el-rs-sw{left:-7px;bottom:-7px;cursor:nesw-resize}
+.el-rs-s{left:50%;bottom:-7px;margin-left:-6px;cursor:ns-resize}
+.el-rs-se{right:-7px;bottom:-7px;cursor:nwse-resize}
 .el-size-tag{position:absolute;left:0;bottom:-24px;background:var(--ink);color:#fff;font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap;z-index:7}
 /* Page selection + the colour rail that appears with it. */
 .brf-frame.fsel{outline:2px solid var(--accent);outline-offset:2px}
@@ -507,6 +511,42 @@ body.brief-full .main{margin-right:0}
    edge, so a stretched photo crops instead of bleeding across the canvas.
    Handles live in a separate unclipped overlay so they stay grabbable even
    when the corner they belong to is outside the page. */
+/* Live cursors. The label counter-scales with zoom so a cursor stays the same
+   size on screen whether you're at 15% or 300% — a cursor that grows with the
+   canvas looks broken. */
+.brf-cursors{position:absolute;top:0;left:0;width:100%;height:100%;transform-origin:0 0;pointer-events:none;z-index:80}
+.rt-cur{position:absolute;transform-origin:0 0;transition:left .08s linear,top .08s linear;will-change:left,top}
+.rt-cur svg{width:20px;height:20px;display:block;filter:drop-shadow(0 1px 2px rgba(16,24,40,.35))}
+.rt-cur .rt-name{position:absolute;left:15px;top:16px;font-size:.66rem;font-weight:700;color:#fff;
+  padding:2px 7px;border-radius:9px;white-space:nowrap;box-shadow:var(--shadow)}
+.rt-peers{display:flex;align-items:center;gap:-6px}
+.rt-dot{width:7px;height:7px;border-radius:50%;background:var(--good);flex-shrink:0}
+
+/* Briefs list: folders, drag-to-file, and a delete affordance that only shows
+   on hover so it can't be hit by accident. */
+.brief-card{position:relative;cursor:pointer}
+.brief-card.dragging{opacity:.4}
+.brief-del{position:absolute;top:9px;right:9px;width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.92);
+  border:1px solid var(--line);color:var(--crit-ink);display:flex;align-items:center;justify-content:center;
+  opacity:0;transition:opacity .12s;z-index:3;box-shadow:var(--shadow)}
+.brief-del svg{width:13px;height:13px}
+.brief-card:hover .brief-del{opacity:1}
+.brief-del:hover{background:var(--crit-soft)}
+.folder-card{cursor:pointer;transition:border-color .12s,transform .12s}
+.folder-card .fc-body{display:flex;align-items:center;gap:12px;padding:16px 16px}
+.folder-card .fc-ico{font-size:1.6rem;flex-shrink:0}
+.folder-card .fc-name{font-weight:700;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.folder-card .fc-count{font-size:.72rem;color:var(--ink-3);margin-top:2px}
+.folder-card .fc-actions{margin-left:auto;display:flex;gap:2px;opacity:0;transition:opacity .12s}
+.folder-card:hover .fc-actions{opacity:1}
+.folder-card.drop-on,.drop-root.drop-on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);transform:translateY(-1px)}
+.drop-root{margin-bottom:16px;border-style:dashed}
+
+/* Present renders each page at its true size and scales it down, so what the
+   creator sees is the canvas, not a reflowed approximation of it. */
+.pv-wrap{position:relative;overflow:hidden;border-radius:12px;box-shadow:0 2px 14px rgba(16,24,40,.10);border:1px solid var(--line-2);margin:0 auto}
+.pv-page{position:absolute;top:0;left:0;transform-origin:0 0;overflow:hidden}
+.pv-cap{font-size:.7rem;font-weight:700;color:var(--ink-3);margin:7px 0 18px;text-align:center}
 .brf-clip{position:absolute;overflow:hidden;border-radius:14px;pointer-events:none}
 .brf-clip>*{pointer-events:auto}
 .brf-ovl{position:absolute;pointer-events:none;z-index:4}
@@ -533,6 +573,8 @@ body.brief-full .main{margin-right:0}
 .brf-video .v-handle{font-size:.7rem;font-weight:700}
 .brf-video .v-cap{font-size:.62rem;opacity:.85;margin-top:1px}
 .brf-video .v-views{position:absolute;top:8px;right:9px;background:rgba(0,0,0,.55);color:#fff;font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:10px}
+.brf-video .v-scrim{position:absolute;inset:0;background:linear-gradient(transparent 45%,rgba(0,0,0,.55))}
+.brf-embed{border:0;border-radius:16px;overflow:hidden;background:#000;display:block}
 .brf-pin{position:absolute;width:27px;height:27px;border-radius:14px 14px 14px 3px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:.68rem;font-weight:800;cursor:pointer;box-shadow:var(--shadow-lg);z-index:50;border:2px solid #fff;transform:translate(-4px,-23px)}
 .brf-pin.resolved{opacity:.45}
 .brf-thread{position:absolute;width:264px;background:#fff;border-radius:13px;box-shadow:var(--shadow-lg);border:1px solid var(--line);z-index:60;font-size:.8rem}
@@ -1247,7 +1289,7 @@ function weeklyBuckets(){
 const state = {
   page:'overview', brand: Object.keys(BRANDS).length>1 ? 'all' : Object.keys(BRANDS)[0], dateRange:'This Month',
   taskView:'kanban', taskStatusFilter:'All', taskSearch:'',
-  creatorFilter:'all', creatorStage:'All', creatorSearch:'',
+  creatorFilter:'all', creatorStage:'All', creatorSearch:'', briefFolder:null,
   notifFilter:'all', reportTab:'weekly',
   notifs: NOTIFICATIONS.map(n=>({...n})),
   tasks: TASKS.map(t=>({...t, comments:[...t.comments]}))
@@ -4344,6 +4386,7 @@ function profitBankLegacy(){
 /* =====================================================================
    PAGE: BRIEFS — Figma-style content brief canvas for affiliates
    ===================================================================== */
+const BRIEF_FOLDERS = [];
 const BRIEFS = [];
 state.briefId=null;
 state.brf={ tool:'select', zoom:.62, panX:30, panY:20, sel:null, selFrame:null, dropAt:null, present:false, device:'desktop', showComments:true, openThread:null, pendingPin:null };
@@ -4351,39 +4394,135 @@ function briefById(id){ return BRIEFS.find(b=>b.id===id); }
 function renderBriefs(){
   if(state.briefId){ renderBriefEditor(); return; }
   document.body.classList.remove('brief-full','sb-hidden');
-  const list=BRIEFS.filter(inBrand);
-  $('page-briefs').innerHTML=`
-    <div class="page-head">
-      <div><h1>Briefs</h1><div class="desc">Content briefs for affiliates — build on a free canvas, share a clean mobile view</div></div>
-      <div class="actions"><button class="btn btn-primary btn-sm" onclick="newBrief()">${ICONS.plus} New brief</button></div>
-    </div>
-    <div class="grid g-3">
-      ${list.map(b=>`
-        <div class="card brief-card" onclick="openBriefEditor('${b.id}')">
+  const all=BRIEFS.filter(inBrand);
+  const folder=state.briefFolder||null;
+  const inFolder=b=>(b.folder||null)===folder;
+  const list=all.filter(inFolder);
+  const counts={};
+  all.forEach(b=>{ const f=b.folder||null; if(f) counts[f]=(counts[f]||0)+1; });
+  const folders=BRIEF_FOLDERS.slice().sort((a,c)=>a.name.localeCompare(c.name));
+
+  const card=b=>`
+        <div class="card brief-card" draggable="true" data-brief="${b.id}"
+             ondragstart="brfDragStart(event,'${b.id}')" ondragend="brfDragEnd(event)"
+             onclick="openBriefEditor('${b.id}')">
           <div class="brief-thumb">
             <div style="position:absolute;left:14px;top:14px;width:80px;height:56px;background:#fff;border:1px solid #dde1e7;border-radius:6px"></div>
             <div style="position:absolute;left:104px;top:14px;width:98px;height:80px;background:#fff;border:1px solid #dde1e7;border-radius:6px"></div>
             <div style="position:absolute;left:212px;top:14px;width:42px;height:74px;background:#101418;border-radius:6px"></div>
             <div style="position:absolute;left:120px;top:26px;width:66px;height:5px;background:var(--neutral-soft);border-radius:3px"></div>
             <div style="position:absolute;left:120px;top:38px;width:50px;height:5px;background:var(--neutral-soft);border-radius:3px"></div>
-            ${b.comments.filter(c=>!c.resolved).length?`<span style="position:absolute;right:12px;bottom:10px" class="badge bg-warn">💬 ${b.comments.filter(c=>!c.resolved).length} open</span>`:''}
+            ${(b.comments||[]).filter(c=>!c.resolved).length?`<span style="position:absolute;right:12px;bottom:10px" class="badge bg-warn">💬 ${(b.comments||[]).filter(c=>!c.resolved).length} open</span>`:''}
+            <button class="brief-del" title="Delete brief" onclick="event.stopPropagation();deleteBrief('${b.id}')">${ICONS.x}</button>
           </div>
           <div class="card-b" style="padding:13px 15px">
             <div style="font-weight:700;font-size:.9rem">${esc(b.name)}</div>
             <div style="display:flex;align-items:center;gap:7px;margin-top:8px;flex-wrap:wrap">
               ${brandBadge(b.brand)}
               <span class="badge ${b.status==='Shared'?'bg-good':'bg-neutral'}">${b.status}</span>
-              <span style="font-size:.7rem;color:var(--ink-3);margin-left:auto">${b.updated}</span>
+              <span style="font-size:.7rem;color:var(--ink-3);margin-left:auto">${esc(b.updated||'')}</span>
             </div>
-            ${b.sharedWith.length?`<div style="font-size:.7rem;color:var(--ink-3);margin-top:7px">Shared with ${b.sharedWith.join(', ')}</div>`:''}
+            ${(b.sharedWith||[]).length?`<div style="font-size:.7rem;color:var(--ink-3);margin-top:7px">Shared with ${esc(b.sharedWith.join(', '))}</div>`:''}
           </div>
-        </div>`).join('')}
+        </div>`;
+
+  const folderTile=f=>`
+        <div class="card folder-card" data-folder="${f.id}"
+             ondragover="brfFolderOver(event,'${f.id}')" ondragleave="brfFolderLeave(event)"
+             ondrop="brfDropInto(event,'${f.id}')" onclick="openBriefFolder('${f.id}')">
+          <div class="fc-body">
+            <span class="fc-ico">📁</span>
+            <div style="min-width:0">
+              <div class="fc-name">${esc(f.name)}</div>
+              <div class="fc-count">${counts[f.id]||0} brief${(counts[f.id]||0)===1?'':'s'}</div>
+            </div>
+            <div class="fc-actions">
+              <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();renameBriefFolder('${f.id}')">Rename</button>
+              <button class="btn btn-ghost btn-xs" style="color:var(--crit-ink)" onclick="event.stopPropagation();deleteBriefFolder('${f.id}')">Delete</button>
+            </div>
+          </div>
+        </div>`;
+
+  const cur=folder?BRIEF_FOLDERS.find(f=>f.id===folder):null;
+  $('page-briefs').innerHTML=`
+    <div class="page-head">
+      <div>
+        ${cur?`<div style="font-size:.74rem;color:var(--ink-3);margin-bottom:3px">
+          <button class="link-btn" onclick="openBriefFolder(null)">← All briefs</button></div>`:''}
+        <h1>${cur?esc(cur.name):'Briefs'}</h1>
+        <div class="desc">${cur?'Drag a brief onto “All briefs” to move it back out':'Content briefs for affiliates — build on a free canvas, share a clean mobile view'}</div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-ghost btn-sm" onclick="newBriefFolder()">📁 New folder</button>
+        <button class="btn btn-primary btn-sm" onclick="newBrief()">${ICONS.plus} New brief</button>
+      </div>
     </div>
+
+    ${cur?`<div class="card drop-root" ondragover="brfFolderOver(event,null)" ondragleave="brfFolderLeave(event)" ondrop="brfDropInto(event,null)">
+      <div class="card-b" style="padding:12px 16px;font-size:.8rem;color:var(--ink-2)">
+        ⬅ Drop a brief here to move it out of this folder</div></div>`:''}
+
+    ${!cur&&folders.length?`<div class="grid g-3" style="margin-bottom:16px">${folders.map(folderTile).join('')}</div>`:''}
+
+    <div class="grid g-3">${list.map(card).join('')}</div>
+
     ${list.length?'':`<div class="card"><div class="empty" style="padding:64px 24px"><div class="e-ico">🎨</div>
-      <div style="font-weight:700;color:var(--ink);margin-bottom:6px">No briefs yet</div>
-      A brief is a free canvas — drop in the product, the hooks you want filmed, reference videos and the rules,
+      <div style="font-weight:700;color:var(--ink);margin-bottom:6px">${cur?'This folder is empty':'No briefs yet'}</div>
+      ${cur?'Drag a brief onto the folder from the main briefs page to file it here.':`A brief is a free canvas — drop in the product, the hooks you want filmed, reference videos and the rules,
       then share a clean mobile view with a creator.<br><br>
-      <button class="btn btn-primary btn-sm" onclick="newBrief()">Create your first brief</button></div></div>`}`;
+      <button class="btn btn-primary btn-sm" onclick="newBrief()">Create your first brief</button>`}</div></div>`}`;
+}
+
+/* ---- folders ---------------------------------------------------------
+   Folders are a flat list and a brief carries its folder id, rather than
+   folders owning arrays of briefs. That way a brief can never end up in two
+   places, and deleting a folder can't take briefs down with it. */
+function newBriefFolder(){
+  const name=prompt('Folder name','New folder');
+  if(name===null) return;
+  BRIEF_FOLDERS.push({ id:'fd'+Date.now()%1000000, name:name.trim()||'New folder' });
+  tikiPush(); renderBriefs(); toast('Folder created');
+}
+function renameBriefFolder(id){
+  const f=BRIEF_FOLDERS.find(x=>x.id===id); if(!f) return;
+  const name=prompt('Folder name', f.name);
+  if(name===null) return;
+  f.name=name.trim()||f.name; tikiPush(); renderBriefs();
+}
+function deleteBriefFolder(id){
+  const f=BRIEF_FOLDERS.find(x=>x.id===id); if(!f) return;
+  const n=BRIEFS.filter(b=>b.folder===id).length;
+  if(!confirm(n?`Delete “${f.name}”? The ${n} brief${n===1?'':'s'} inside will move back to All briefs — nothing is lost.`
+                :`Delete the folder “${f.name}”?`)) return;
+  BRIEFS.forEach(b=>{ if(b.folder===id) b.folder=null; });   // never delete work with the container
+  BRIEF_FOLDERS.splice(BRIEF_FOLDERS.indexOf(f),1);
+  if(state.briefFolder===id) state.briefFolder=null;
+  tikiPush(); renderBriefs(); toast('Folder deleted — briefs kept');
+}
+function openBriefFolder(id){ state.briefFolder=id||null; renderBriefs(); }
+function deleteBrief(id){
+  const b=briefById(id); if(!b) return;
+  if(!confirm(`Delete “${b.name}”? This can't be undone from here.`)) return;
+  BRIEFS.splice(BRIEFS.indexOf(b),1);
+  tikiPush(); renderBriefs(); toast('Brief deleted');
+}
+/* Drag and drop between folders. */
+function brfDragStart(ev,id){
+  ev.dataTransfer.setData('text/plain',id);
+  ev.dataTransfer.effectAllowed='move';
+  ev.currentTarget.classList.add('dragging');
+}
+function brfDragEnd(ev){ ev.currentTarget.classList.remove('dragging'); }
+function brfFolderOver(ev){ ev.preventDefault(); ev.dataTransfer.dropEffect='move'; ev.currentTarget.classList.add('drop-on'); }
+function brfFolderLeave(ev){ ev.currentTarget.classList.remove('drop-on'); }
+function brfDropInto(ev,folderId){
+  ev.preventDefault(); ev.currentTarget.classList.remove('drop-on');
+  const id=ev.dataTransfer.getData('text/plain');
+  const b=briefById(id); if(!b) return;
+  b.folder=folderId||null;
+  tikiPush(); renderBriefs();
+  const f=folderId?BRIEF_FOLDERS.find(x=>x.id===folderId):null;
+  toast(f?`Moved to ${f.name}`:'Moved out of the folder');
 }
 function newBrief(){
   const b={ id:'b'+(BRIEFS.length+10), name:'Untitled brief', brand:state.brand==='all'?'lytes':state.brand, status:'Draft', sharedWith:[], updated:'Just now',
@@ -4398,7 +4537,7 @@ function openBriefEditor(id){
   Object.assign(state.brf,{ tool:'select', sel:null, selFrame:null, present:false, openThread:null, zoom:.62, panX:30, panY:20 });
   if(state.page!=='briefs') navTo('briefs'); else renderBriefs();
 }
-function closeBriefEditor(){ state.briefId=null; renderBriefs(); }
+function closeBriefEditor(){ rtDisconnect(); state.briefId=null; renderBriefs(); }
 /* ---- editor render ---- */
 function renderBriefEditor(){
   const b=briefById(state.briefId); if(!b){ state.briefId=null; renderBriefs(); return; }
@@ -4419,6 +4558,7 @@ function renderBriefEditor(){
           <div class="av-stack">${Object.keys(USERS).map(u=>userAv(u,'sm')).join('')}</div>
           <button class="btn btn-ghost btn-sm ${s.showComments?'':''}" onclick="state.brf.showComments=!state.brf.showComments;renderBriefEditor()" title="Toggle comment pins">
             💬 ${openComments}<span style="font-size:.68rem;color:var(--ink-3)">${s.showComments?'':' hidden'}</span></button>
+          <span class="rt-peers" id="brfPeers" style="display:flex;align-items:center;gap:6px"></span>
           <div class="brf-zoom">
             <button onclick="brfZoom(-1)">−</button><span class="zv">${Math.round(s.zoom*100)}%</span><button onclick="brfZoom(1)">+</button>
             <button style="width:auto;padding:0 8px;font-size:.68rem" onclick="brfZoomFit()">Fit</button>
@@ -4435,21 +4575,187 @@ function renderBriefEditor(){
           ${tools.map(([t,ic,tip])=>`<button class="brf-tool ${s.tool===t?'active':''}" title="${tip}" onclick="brfSetTool('${t}')">${ICONS[ic]}</button>`).join('')}
           <div style="margin-top:auto;font-size:.58rem;color:var(--ink-3);text-align:center;line-height:1.4">scroll<br>zoom</div>
         </div>
-        <div class="brf-viewport ${s.tool!=='select'?'adding':''}" id="brfViewport">
+        <div class="brf-viewport ${s.tool!=='select'?'adding':''}" id="brfViewport" onmousemove="brfTrackCursor(event)">
           <div class="brf-world" id="brfWorld" style="transform:translate(${s.panX}px,${s.panY}px) scale(${s.zoom});width:${brfWorldSize(b).w}px;height:${brfWorldSize(b).h}px">
             ${brfWorldHTML(b)}
           </div>
+          <div class="brf-cursors" id="brfCursors" style="transform:translate(${s.panX}px,${s.panY}px) scale(${s.zoom})"></div>
         </div>
         ${brfSidePanel(b)}
       </div>
     </div>
     <input type="file" id="brfImgInput" accept="image/*" multiple style="display:none" onchange="brfImageChosen(event)">`;
   brfBind(b);
+  /* Reconnect only when the brief actually changes — a re-render happens on
+     every drag frame and tearing the socket down each time would be absurd. */
+  if(RT.topic!=='realtime:tiki-brief-'+b.id) rtConnect(b.id);
+  rtPaint(); rtRenderPeers();
 }
 function brfWorldSize(b){
   const xs=b.elements.map(e=>e.x+(e.w||320)), ys=b.elements.map(e=>e.y+(e.h||240));
   return { w:Math.max(2400, ...xs)+500, h:Math.max(1400, ...ys)+500 };
 }
+/* ===================================================================
+   LIVE CURSORS — Supabase Realtime, spoken by hand
+   ===================================================================
+   Realtime is a Phoenix channel over a WebSocket, and Phoenix's wire format is
+   small enough to speak directly: join a topic, heartbeat every 25s, and send
+   or receive `broadcast` frames. That avoids pulling in supabase-js purely for
+   this, which would break the app's no-dependency, single-file rule.
+
+   Presence is deliberately NOT the Phoenix presence protocol. Cursors are
+   ephemeral by nature, so a peer is "here" if we've heard from them in the last
+   10 seconds and gone if we haven't. That survives a dropped tab, a closed
+   laptop or a lost connection without any leave message arriving. */
+const RT = { ws:null, topic:null, ref:0, joined:false, hb:null, sweep:null,
+             peers:{}, retry:0, lastSent:0, closing:false };
+const RT_COLOURS = ['#2a78d6','#1baf7a','#d1495b','#8b5cf6','#eda100','#0ea5e9','#ec4899'];
+const rtColour = id => RT_COLOURS[[...String(id)].reduce((n,c)=>n+c.charCodeAt(0),0)%RT_COLOURS.length];
+const rtRef = () => String(++RT.ref);
+function rtSend(o){ try{ if(RT.ws&&RT.ws.readyState===1) RT.ws.send(JSON.stringify(o)); }catch(e){} }
+
+function rtConnect(briefId){
+  rtDisconnect();
+  if(!tikiSession||!tikiSession.at) return;      // cursors are a signed-in feature
+  RT.closing=false;
+  const topic='realtime:tiki-brief-'+briefId;
+  const url=`${TIKI_CFG.url.replace(/^http/,'ws')}/realtime/v1/websocket?apikey=${TIKI_CFG.key}&vsn=1.0.0`;
+  let ws;
+  try{ ws=new WebSocket(url); }catch(e){ return; }
+  RT.ws=ws; RT.topic=topic; RT.joined=false;
+
+  ws.onopen=()=>{
+    RT.retry=0;
+    rtSend({ topic, event:'phx_join', ref:rtRef(), payload:{
+      config:{ broadcast:{ self:false, ack:false }, presence:{ key:ME }, private:false },
+      access_token: tikiSession.at } });
+    RT.hb=setInterval(()=>rtSend({topic:'phoenix',event:'heartbeat',ref:rtRef(),payload:{}}), 25000);
+  };
+  ws.onmessage=ev=>{
+    let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+    if(m.event==='phx_reply'&&m.topic===topic){
+      if(m.payload&&m.payload.status==='ok'){ RT.joined=true; rtRenderPeers(); }
+      return;
+    }
+    if(m.event!=='broadcast'||!m.payload) return;
+    const inner=m.payload.payload||{};
+    if(!inner.id||inner.id===ME) return;
+    if(m.payload.event==='cursor'){
+      const isNew=!RT.peers[inner.id];
+      RT.peers[inner.id]={ id:inner.id, name:inner.name||whoName(inner.id),
+        x:inner.x, y:inner.y, at:Date.now() };
+      rtPaint();
+      /* Only redraw the "who's here" line when the roster actually changes —
+         doing it on every cursor frame would thrash the DOM 20 times a second. */
+      if(isNew) rtRenderPeers();
+    } else if(m.payload.event==='bye'){
+      delete RT.peers[inner.id]; rtPaint(); rtRenderPeers();
+    }
+  };
+  ws.onclose=()=>{
+    clearInterval(RT.hb);
+    /* Distinguish "nobody else is here" from "we never got connected" — without
+       this the feature fails silently and looks identical to working. */
+    RT.everJoined = RT.everJoined || RT.joined;
+    RT.joined=false;
+    RT.peers={}; rtPaint(); rtRenderPeers();
+    /* Reconnect with backoff, but only while a brief is actually open. */
+    if(!RT.closing && state.briefId){
+      const wait=Math.min(15000, 800*Math.pow(2,RT.retry++));
+      setTimeout(()=>{ if(!RT.closing&&state.briefId) rtConnect(state.briefId); }, wait);
+    }
+  };
+  ws.onerror=()=>{};   // onclose handles the retry; errors here are noise
+
+  /* Drop peers we haven't heard from — see the note above on why this beats
+     relying on a leave message. */
+  RT.sweep=setInterval(()=>{
+    const now=Date.now(); let changed=false;
+    Object.keys(RT.peers).forEach(k=>{ if(now-RT.peers[k].at>10000){ delete RT.peers[k]; changed=true; } });
+    if(changed){ rtPaint(); rtRenderPeers(); }
+  }, 3000);
+}
+function rtDisconnect(){
+  RT.closing=true;
+  clearInterval(RT.hb); clearInterval(RT.sweep);
+  if(RT.ws){
+    if(RT.ws.readyState===1&&RT.topic)
+      rtSend({ topic:RT.topic, event:'broadcast', ref:rtRef(),
+        payload:{ type:'broadcast', event:'bye', payload:{ id:ME } } });
+    try{ RT.ws.close(); }catch(e){}
+  }
+  RT.ws=null; RT.topic=null; RT.joined=false; RT.peers={};
+}
+/* Cursor positions are sent in WORLD coordinates, so everyone sees the pointer
+   over the same element regardless of their own pan or zoom. */
+function rtSendCursor(wx,wy){
+  if(!RT.joined) return;
+  const now=Date.now();
+  if(now-RT.lastSent<45) return;    // ~22/sec is smooth and stays well inside rate limits
+  RT.lastSent=now;
+  rtSend({ topic:RT.topic, event:'broadcast', ref:rtRef(), payload:{
+    type:'broadcast', event:'cursor',
+    payload:{ id:ME, name:(USERS[ME]&&USERS[ME].short)||'Someone', x:Math.round(wx), y:Math.round(wy) } } });
+}
+function rtPaint(){
+  const box=$('brfCursors'); if(!box) return;
+  const inv=1/(state.brf.zoom||1);
+  box.innerHTML=Object.values(RT.peers).map(p=>{
+    const c=rtColour(p.id);
+    return `<div class="rt-cur" style="left:${p.x}px;top:${p.y}px;transform:scale(${inv})">
+      <svg viewBox="0 0 24 24" fill="${c}"><path d="M5 2l14 8.5-6.2 1.3L10 20z"/></svg>
+      <span class="rt-name" style="background:${c}">${esc(p.name)}</span>
+    </div>`;
+  }).join('');
+}
+function rtRenderPeers(){
+  const el=$('brfPeers'); if(!el) return;
+  const list=Object.values(RT.peers);
+  el.innerHTML=list.length
+    ? `<span class="rt-dot"></span><span style="font-size:.7rem;color:var(--ink-2);font-weight:600">${
+        esc(list.map(p=>p.name).join(', '))} here</span>`
+    : RT.joined
+      ? '<span style="font-size:.7rem;color:var(--ink-3)">Only you</span>'
+      : (RT.retry>2
+          ? '<span style="font-size:.7rem;color:var(--warn-ink)" title="Couldn\'t reach Supabase Realtime — everything else still works">Live cursors offline</span>'
+          : '<span style="font-size:.7rem;color:var(--ink-3)">Connecting…</span>');
+}
+
+/* ---- TikTok video embeds --------------------------------------------
+   One renderer for both surfaces, so the editor and Present can't drift:
+   `live` swaps the poster for the real player, everything else is identical. */
+const brfUrl = u => { const t=String(u||'').trim(); return /^https?:\/\//i.test(t)?t:'https://'+t.replace(/^\/+/,''); };
+/* Full links carry the numeric id; short vm./vt. links must be resolved
+   server-side because following the redirect from the browser is blocked. */
+function brfVideoId(url){
+  const m=/\/video\/(\d{6,})/.exec(String(url||''))||/^(\d{15,})$/.exec(String(url||'').trim());
+  return m?m[1]:null;
+}
+function brfVideoHTML(e, opts){
+  const live=opts&&opts.live;
+  const w=e.w||200, h=e.h||Math.round((e.w||200)*16/9);
+  const id=e.videoId||brfVideoId(e.url);
+  if(live&&id)
+    return `<iframe class="brf-embed" src="https://www.tiktok.com/embed/v2/${id}" style="width:${w}px;height:${h}px"
+      allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; fullscreen" frameborder="0" scrolling="no"></iframe>`;
+  const poster=e.thumb
+    ? `background-image:url('${e.thumb}');background-size:cover;background-position:center`
+    : 'background:linear-gradient(160deg,#1c2128,#101418)';
+  return `<div class="brf-video" style="width:${w}px;height:${h}px">
+      <div class="v-body" style="height:100%;aspect-ratio:auto;${poster}">
+        ${e.thumb?'<div class="v-scrim"></div>':''}
+        <div class="v-play">${ICONS.play}</div>
+        ${e.views&&e.views!=='—'?`<span class="v-views">▶ ${esc(e.views)}</span>`:''}
+        <div class="v-meta"><div class="v-handle">${esc(e.handle||'@paste-a-tiktok-link')}</div>
+          <div class="v-cap">${esc(e.caption||(id?'ready to play in Present':'double-click to add the link'))}</div></div>
+      </div></div>`;
+}
+
+/* All eight grips, so a photo can be pulled from any side or corner. Dragging
+   a north or west grip moves the origin as well as the size — otherwise the
+   opposite edge would walk across the page instead of staying put. */
+const BRF_HANDLES=['nw','n','ne','w','e','sw','s','se'];
+
 /* Which page does this element belong to? Its centre decides, so dragging a
    photo mostly off a page hands it to whatever page now holds its middle —
    the same feel as Canva. Later frames win when pages overlap. */
@@ -4481,33 +4787,31 @@ function brfWorldHTML(b){
     const sel=s.sel===e.id?'selected':'';
     if(e.type==='text')
       h+=`<div class="brf-el brf-text t-${e.size} ${sel}" data-el="${e.id}" style="left:${e.x}px;top:${e.y}px;width:${e.w}px" ondblclick="brfEditText(event,'${e.id}')" onblur="brfSaveText(event,'${e.id}')">${esc(e.text)}<span class="del-h" onmousedown="event.stopPropagation()" onclick="brfDelete('${e.id}')">✕</span></div>`;
-    else if(e.type==='image'){
+    else if(e.type==='image'||e.type==='video'){
+      /* Photos and videos are both "boxed" elements: clipped by their page,
+         resizable from any grip, and rendered by the same code Present uses —
+         which is the only way the two views can be guaranteed to match. */
+      if(e.type==='video'){ e.w=e.w||200; e.h=e.h||Math.round((e.w||200)*16/9); }
       const host=brfHostFrame(b,e);
       /* Inside a page: positioned relative to the clip layer, so overflow crops.
          Loose on the canvas: plain world coordinates, nothing to clip against. */
       const ix=host?e.x-host.x:e.x, iy=host?e.y-host.y:e.y;
-      const body=`<div class="brf-el el-img" data-el="${e.id}" style="left:${ix}px;top:${iy}px;width:${e.w}px;height:${e.h}px">
-        <img class="brf-img" src="${e.src}" alt="${esc(e.alt||'')}" draggable="false"></div>`;
+      const inner = e.type==='image'
+        ? `<img class="brf-img" src="${e.src}" alt="${esc(e.alt||'')}" draggable="false">`
+        : brfVideoHTML(e,{live:false});
+      const body=`<div class="brf-el el-img" data-el="${e.id}" ${e.type==='video'?`ondblclick="brfEditVideo('${e.id}')" title="Double-click to paste a TikTok link"`:''} style="left:${ix}px;top:${iy}px;width:${e.w}px;height:${e.h}px">
+        ${inner}</div>`;
       if(host) clips[host.id]=(clips[host.id]||'')+body; else h+=body;
       /* Handles and the delete button ride above the clip so they never vanish. */
       overlay+=`<div class="brf-ovl ${sel?'sel-box':''}" data-ovl="${e.id}" style="left:${e.x}px;top:${e.y}px;width:${e.w}px;height:${e.h}px">
-        <span class="el-rs el-rs-e"  data-ers="${e.id}:e"  title="Drag to stretch width"></span>
-        <span class="el-rs el-rs-s"  data-ers="${e.id}:s"  title="Drag to stretch height"></span>
-        <span class="el-rs el-rs-se" data-ers="${e.id}:se" title="Drag to resize · hold Shift to keep proportions"></span>
+        ${BRF_HANDLES.map(g=>`<span class="el-rs el-rs-${g}" data-ers="${e.id}:${g}" title="${
+          g.length===2?'Drag to resize · Shift keeps proportions':'Drag to stretch'}"></span>`).join('')}
         ${sel?`<span class="del-h" style="display:flex" onmousedown="event.stopPropagation()" onclick="brfDelete('${e.id}')">✕</span>`:''}
       </div>`;
     }
     else if(e.type==='link')
       h+=`<div class="brf-el ${sel}" data-el="${e.id}" style="left:${e.x}px;top:${e.y}px"><div class="brf-link" ondblclick="brfEditLink('${e.id}')">
         <span class="lk-ico">${ICONS.link}</span><span><div>${esc(e.label)}</div><div class="lk-url">${esc(e.url)}</div></span></div>
-        <span class="del-h" onmousedown="event.stopPropagation()" onclick="brfDelete('${e.id}')">✕</span></div>`;
-    else if(e.type==='video')
-      h+=`<div class="brf-el ${sel}" data-el="${e.id}" style="left:${e.x}px;top:${e.y}px"><div class="brf-video" ondblclick="brfEditVideo('${e.id}')" title="Double-click to swap the TikTok link">
-        <div class="v-body" style="background:linear-gradient(160deg,#1c2128,#101418)">
-          <div class="v-play" onclick="event.stopPropagation();toast('In the full build this plays inline via the TikTok embed player')">${ICONS.play}</div>
-          <span class="v-views">▶ ${e.views}</span>
-          <div class="v-meta"><div class="v-handle">${esc(e.handle)}</div><div class="v-cap">${esc(e.caption)}</div></div>
-        </div></div>
         <span class="del-h" onmousedown="event.stopPropagation()" onclick="brfDelete('${e.id}')">✕</span></div>`;
   });
   if(s.showComments) b.comments.forEach((c,i)=>{
@@ -4539,6 +4843,19 @@ function brfWorldHTML(b){
   return h.replace('<!--CLIPS-->', clipHTML)+overlay;
 }
 /* ---- editor interactions ---- */
+/* Pan and zoom move the world and the cursor layer together — they have to
+   share a transform or remote pointers drift away from what they're pointing at. */
+function brfApplyTransform(){
+  const s=state.brf, t=`translate(${s.panX}px,${s.panY}px) scale(${s.zoom})`;
+  const w=$('brfWorld'); if(w) w.style.transform=t;
+  const c=$('brfCursors'); if(c) c.style.transform=t;
+  rtPaint();   // labels counter-scale, so they need redrawing on zoom
+}
+function brfTrackCursor(ev){
+  if(!RT.joined) return;
+  const w=brfScreenToWorld(ev);
+  rtSendCursor(w.x,w.y);
+}
 function brfSetTool(t){ state.brf.tool=t; state.brf.sel=null; state.brf.openThread=null; state.brf.selFrame=null; renderBriefEditor(); }
 /* Relative luminance — decides whether a page colour needs white text on it. */
 function brfIsDark(hex){
@@ -4569,7 +4886,7 @@ function brfBind(b){
       const el=b.elements.find(x=>x.id===eid);
       if(el){
         mode='elresize'; moved=false;
-        start={mx:e.clientX,my:e.clientY,el,edge,w:el.w,h:el.h,x:el.x,
+        start={mx:e.clientX,my:e.clientY,el,edge,w:el.w,h:el.h,x:el.x,y:el.y,
           ratio:(el.natural&&el.natural.w)?el.natural.h/el.natural.w:(el.h/el.w)};
         s.sel=eid;
       }
@@ -4621,7 +4938,7 @@ function brfBind(b){
   function onMove(e){
     const s=state.brf;
     if(mode==='pan'&&start){ s.panX=start.px+(e.clientX-start.mx); s.panY=start.py+(e.clientY-start.my);
-      const w=$('brfWorld'); if(w) w.style.transform=`translate(${s.panX}px,${s.panY}px) scale(${s.zoom})`; }
+      brfApplyTransform(); }
     else if(mode==='drag'&&start){
       const dx=(e.clientX-start.mx)/s.zoom, dy=(e.clientY-start.my)/s.zoom;
       if(Math.abs(dx)+Math.abs(dy)<2 && !moved) return;   // ignore jitter — keeps double-click intact
@@ -4632,22 +4949,35 @@ function brfBind(b){
     else if(mode==='elresize'&&start){
       const dx=(e.clientX-start.mx)/s.zoom, dy=(e.clientY-start.my)/s.zoom;
       if(Math.abs(dx)+Math.abs(dy)>=2) moved=true;
-      const el=start.el;
+      const el=start.el, edge=start.edge;
+      const MIN=40;
       /* Free-form by default so a photo can be stretched to any shape;
          Shift snaps back to the picture's real proportions. */
-      if(start.edge==='e'||start.edge==='se') el.w=Math.max(40, Math.round(start.w+dx));
-      if(start.edge==='s'||start.edge==='se') el.h=Math.max(40, Math.round(start.h+dy));
+      const east=edge.includes('e'), west=edge.includes('w');
+      const north=edge.includes('n'), south=edge.includes('s');
+      let w=start.w, hgt=start.h, nx=start.x, ny=start.y;
+      if(east) w=Math.max(MIN, Math.round(start.w+dx));
+      if(west){ w=Math.max(MIN, Math.round(start.w-dx)); nx=start.x+(start.w-w); }
+      if(south) hgt=Math.max(MIN, Math.round(start.h+dy));
+      if(north){ hgt=Math.max(MIN, Math.round(start.h-dy)); ny=start.y+(start.h-hgt); }
       if(e.shiftKey&&start.ratio){
-        if(start.edge==='s') el.w=Math.max(40, Math.round(el.h/start.ratio));
-        else el.h=Math.max(40, Math.round(el.w*start.ratio));
+        /* Whichever axis the grip actually controls drives the other. */
+        if(!east&&!west) w=Math.max(MIN, Math.round(hgt/start.ratio));
+        else hgt=Math.max(MIN, Math.round(w*start.ratio));
+        if(west) nx=start.x+(start.w-w);
+        if(north) ny=start.y+(start.h-hgt);
       }
-      const w=$('brfWorld');
-      const n=w?.querySelector(`[data-el="${el.id}"]`);
-      if(n){ n.style.width=el.w+'px'; n.style.height=el.h+'px'; }
+      el.w=w; el.h=hgt; el.x=nx; el.y=ny;
+      const wl=$('brfWorld');
+      const host=brfHostFrame(b,el);
+      const n=wl?.querySelector(`[data-el="${el.id}"]`);
+      if(n){ n.style.width=el.w+'px'; n.style.height=el.h+'px';
+        n.style.left=(host?el.x-host.x:el.x)+'px'; n.style.top=(host?el.y-host.y:el.y)+'px'; }
       /* The handle overlay is a separate, unclipped layer — resize it in step
          or the grab points drift away from the photo's actual edge. */
-      const ov=w?.querySelector(`[data-ovl="${el.id}"]`);
+      const ov=wl?.querySelector(`[data-ovl="${el.id}"]`);
       if(ov){ ov.style.width=el.w+'px'; ov.style.height=el.h+'px';
+        ov.style.left=el.x+'px'; ov.style.top=el.y+'px';
         let tag=ov.querySelector('.el-size-tag');
         if(!tag){ tag=document.createElement('div'); tag.className='el-size-tag'; ov.appendChild(tag); }
         tag.textContent=`${el.w} × ${el.h}${e.shiftKey?' · locked':''}`;
@@ -4700,7 +5030,7 @@ function brfBind(b){
       const k = e.deltaMode===1 ? 16 : 1;
       s.panX-=e.deltaX*k; s.panY-=e.deltaY*k;
     }
-    const w=$('brfWorld'); if(w) w.style.transform=`translate(${s.panX}px,${s.panY}px) scale(${s.zoom})`;
+    brfApplyTransform();
   }, {passive:false});
 }
 /* ---- photos ----------------------------------------------------------
@@ -4837,28 +5167,63 @@ function brfEditFrameTitle(id){
 }
 function brfEditVideo(id){
   const b=briefById(state.briefId); const el=b.elements.find(x=>x.id===id); if(!el) return;
-  openModal(modalShell('Swap TikTok Video',`
+  openModal(modalShell('TikTok video',`
     <div class="field" style="margin-bottom:12px"><label>TikTok video URL</label>
       <input id="bvUrl" value="${esc(el.url||'')}" placeholder="https://www.tiktok.com/@handle/video/72…">
-      <div class="hint">Paste the full link — in the full build the video loads and plays right on the canvas via TikTok's embed player</div></div>
+      <div class="hint">Short vm.tiktok.com links work too — they get resolved for you. The thumbnail loads on the canvas and the video plays for real in Present.</div></div>
+    <div id="bvStatus" style="font-size:.78rem;color:var(--ink-3);margin-bottom:10px"></div>
     <div class="form-grid">
-      <div class="field"><label>Creator handle</label><input id="bvHandle" value="${esc(el.handle)}" placeholder="@handle"></div>
-      <div class="field"><label>Views label</label><input id="bvViews" value="${esc(el.views)}" placeholder="e.g. 212k"></div>
-      <div class="field full"><label>Caption / why it's a reference</label><input id="bvCap" value="${esc(el.caption)}" placeholder="e.g. copy this pacing"></div>
+      <div class="field"><label>Creator handle</label><input id="bvHandle" value="${esc(el.handle||'')}" placeholder="@handle"></div>
+      <div class="field"><label>Views label</label><input id="bvViews" value="${esc(el.views||'')}" placeholder="e.g. 212k"></div>
+      <div class="field full"><label>Caption / why it's a reference</label><input id="bvCap" value="${esc(el.caption||'')}" placeholder="e.g. copy this pacing"></div>
     </div>`,
     `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-     <button class="btn btn-primary" onclick="brfSaveVideo('${id}')">Swap video</button>`));
+     <button class="btn btn-primary" id="bvSave" onclick="brfSaveVideo('${id}')">Load video</button>`));
   setTimeout(()=>{ const i=$('bvUrl'); if(i){ i.focus(); i.select(); } },40);
 }
-function brfSaveVideo(id){
+async function brfSaveVideo(id){
   const b=briefById(state.briefId); const el=b.elements.find(x=>x.id===id); if(!el) return;
   const url=$('bvUrl').value.trim();
-  el.url=url;
-  const m=url.match(/tiktok\.com\/(@[\w.\-]+)/i);
-  el.handle=$('bvHandle').value.trim()||(m?m[1]:el.handle);
+  const st=$('bvStatus'), btn=$('bvSave');
+  el.handle=$('bvHandle').value.trim()||el.handle;
   el.caption=$('bvCap').value.trim()||el.caption;
   el.views=$('bvViews').value.trim()||el.views;
-  closeModal(); renderBriefEditor(); toast('Video swapped');
+
+  if(!url){ el.url=''; el.videoId=null; el.thumb=null; closeModal(); renderBriefEditor(); return; }
+  el.url=url;
+
+  /* Resolve through the edge function: it follows short links and pulls the
+     thumbnail, neither of which the browser can do on its own. */
+  if(st) st.textContent='Looking that video up…';
+  if(btn){ btn.disabled=true; btn.textContent='Loading…'; }
+  try{
+    const r=await tikiFetch('/functions/v1/tiktok-oembed',{ method:'POST', body:JSON.stringify({url}) });
+    const j=await r.json().catch(()=>({}));
+    if(r.ok&&j.videoId){
+      el.videoId=j.videoId;
+      el.thumb=j.thumb||el.thumb||null;
+      el.url=j.url||url;
+      if(!$('bvHandle').value.trim()&&j.handle) el.handle=j.handle;
+      if(!$('bvCap').value.trim()&&j.caption) el.caption=j.caption;
+      closeModal(); renderBriefEditor(); tikiPush();
+      toast(el.thumb?'Video loaded — preview on the canvas, plays in Present':'Video linked — it will play in Present');
+      return;
+    }
+    /* A local id parse is a decent fallback: the embed still plays even when
+       oEmbed is unreachable, we just lose the thumbnail. */
+    const local=brfVideoId(url);
+    if(local){
+      el.videoId=local; closeModal(); renderBriefEditor(); tikiPush();
+      toast('Linked — thumbnail unavailable, but it will play in Present');
+      return;
+    }
+    if(st) st.innerHTML=`<span style="color:var(--crit-ink)">${esc(j.error||'Could not read that link.')}</span>`;
+  }catch(e){
+    const local=brfVideoId(url);
+    if(local){ el.videoId=local; closeModal(); renderBriefEditor(); toast('Linked (offline) — will play in Present'); return; }
+    if(st) st.innerHTML='<span style="color:var(--crit-ink)">Couldn\u2019t reach the lookup service. Paste the full /video/ link.</span>';
+  }
+  if(btn){ btn.disabled=false; btn.textContent='Load video'; }
 }
 function brfEditLink(id){
   const b=briefById(state.briefId); const el=b.elements.find(x=>x.id===id);
@@ -4884,33 +5249,46 @@ function brfResolve(cid){
 function renderBriefPresent(b){
   const s=state.brf;
   const frames=b.elements.filter(e=>e.type==='frame').slice().sort((a,c)=> (a.y-c.y)||(a.x-c.x));
-  const inFrame=(el,fr)=> el.x>=fr.x-20 && el.x<=fr.x+fr.w+20 && el.y>=fr.y-20 && el.y<=fr.y+fr.h+20;
-  const used=new Set();
-  const secHTML=fr=>{
-    const els=b.elements.filter(e=>e.type!=='frame'&&inFrame(e,fr)&&!used.has(e.id)).sort((a,c)=>(a.y-c.y)||(a.x-c.x));
-    els.forEach(e=>used.add(e.id));
-    /* Carry the page colour into Present, otherwise a brief that was designed
-       around a dark page reads completely differently to the creator. */
-    const bg=fr.bg&&fr.bg!=='#ffffff'?fr.bg:null;
-    const dark=bg?brfIsDark(bg):false;
-    return `<div class="present-sec"${bg?` style="background:${bg};${dark?'color:#fff;':''}border-radius:12px;padding:16px 18px"`:''}><div class="ps-t"${dark?' style="color:#fff"':''}>${esc(fr.title)}</div>
-      ${els.map(e=>{
-        if(e.type==='image') return `<img src="${e.src}" alt="${esc(e.alt||'')}" style="display:block;width:100%;max-width:${e.w}px;height:auto;border-radius:10px;margin:0 0 11px">`;
-        if(e.type==='text') return `<div style="margin-bottom:11px;${e.size==='h1'?'font-size:1.25rem;font-weight:800;letter-spacing:-.02em':e.size==='small'?'font-size:.76rem;color:var(--ink-2)':'font-size:.88rem'};line-height:1.55;white-space:pre-wrap">${esc(e.text)}</div>`;
-        if(e.type==='link') return `<a href="#" onclick="event.preventDefault();toast('Would open: ${esc(e.url)}')" style="display:flex;gap:9px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px 13px;margin-bottom:9px;font-size:.83rem;font-weight:600"><span class="lk-ico" style="width:26px;height:26px;border-radius:7px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center">${ICONS.link}</span>${esc(e.label)}<span style="margin-left:auto;color:var(--ink-3)">→</span></a>`;
-        if(e.type==='video') return `<div style="display:inline-block;margin:0 10px 10px 0;vertical-align:top"><div class="brf-video" style="width:${s.device==='phone'?'148px':'168px'}"><div class="v-body" style="background:linear-gradient(160deg,#1c2128,#101418)"><div class="v-play" onclick="toast('Plays inline via TikTok embed in the full build')">${ICONS.play}</div><span class="v-views">▶ ${e.views}</span><div class="v-meta"><div class="v-handle">${esc(e.handle)}</div><div class="v-cap">${esc(e.caption)}</div></div></div></div></div>`;
-        return '';
-      }).join('')}
-    </div>`;
+  /* Present is now a true rendering of the canvas rather than a reflowed
+     document. Each page is drawn at its real pixel size with everything
+     absolutely positioned exactly where it sits in the editor, then the whole
+     page is scaled down to fit. Scaling — not reflowing — is what makes phone
+     and desktop identical to each other and to the editor: same layout, fewer
+     pixels. Anything hanging off a page crops here just as it does on canvas. */
+  const PV_W = s.device==='phone' ? 320 : 660;
+  const pageHTML=fr=>{
+    const k=PV_W/fr.w;
+    const bg=fr.bg||'#ffffff';
+    const dark=brfIsDark(bg);
+    const mine=b.elements.filter(e=>e.type!=='frame'&&brfHostFrame(b,e)&&brfHostFrame(b,e).id===fr.id);
+    /* Same paint order as the canvas: photos under text and links. */
+    const ordered=mine.filter(e=>e.type==='image').concat(mine.filter(e=>e.type!=='image'));
+    const body=ordered.map(e=>{
+      const x=e.x-fr.x, y=e.y-fr.y;
+      if(e.type==='image')
+        return `<img class="brf-img" src="${e.src}" alt="${esc(e.alt||'')}" style="position:absolute;left:${x}px;top:${y}px;width:${e.w}px;height:${e.h}px">`;
+      if(e.type==='text')
+        return `<div class="brf-text t-${e.size}" style="position:absolute;left:${x}px;top:${y}px;width:${e.w}px;${dark?'color:#fff':''}">${esc(e.text)}</div>`;
+      if(e.type==='link')
+        return `<div style="position:absolute;left:${x}px;top:${y}px"><a class="brf-link" href="${esc(brfUrl(e.url))}" target="_blank" rel="noopener" style="text-decoration:none">
+          <span class="lk-ico">${ICONS.link}</span><span><div>${esc(e.label)}</div><div class="lk-url">${esc(e.url)}</div></span></a></div>`;
+      if(e.type==='video')
+        return `<div style="position:absolute;left:${x}px;top:${y}px">${brfVideoHTML(e,{live:true})}</div>`;
+      return '';
+    }).join('');
+    return `<div class="pv-wrap" style="width:${(fr.w*k).toFixed(2)}px;height:${(fr.h*k).toFixed(2)}px">
+        <div class="pv-page" style="width:${fr.w}px;height:${fr.h}px;background:${bg};transform:scale(${k})">${body}</div>
+      </div>
+      <div class="pv-cap"${dark?'':''}>${esc(fr.title)}</div>`;
   };
   const inner=`
-    <div style="padding:${s.device==='phone'?'16px 14px 30px':'26px 26px 40px'};max-width:720px;margin:0 auto">
+    <div style="padding:${s.device==='phone'?'14px 10px 26px':'24px 22px 36px'};max-width:${PV_W+44}px;margin:0 auto">
       <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
         <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#2a78d6,#4a3aa7);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:.75rem">P</div>
         <span style="font-size:.72rem;font-weight:700;color:var(--ink-3)">${brandInfo(b.brand).name} · Content Brief</span>
       </div>
       <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.02em;margin-bottom:16px">${esc(b.name)}</h2>
-      ${frames.map(secHTML).join('')}
+      ${frames.map(pageHTML).join('')||'<div class="empty">This brief has no pages yet</div>'}
       <div style="text-align:center;font-size:.7rem;color:var(--ink-3);padding-top:6px">Questions? Message us · This brief is read-only</div>
     </div>`;
   $('page-briefs').innerHTML=`
@@ -6733,11 +7111,12 @@ function tikiSignOut(){ tikiStoreSession(null); location.reload(); }
 function collectTikiState(){
   /* v4 adds the team and brand lists so invites and new brands reach every device.
      v5 adds brief page colours and embedded photos (both nested inside briefs). */
-  return { v:5, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  return { v:6, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
     overheadManual:OVERHEAD_MANUAL, overheadRules:OVERHEAD_RULES, adManual:AD_MANUAL,
+    briefFolders:BRIEF_FOLDERS,
     vaultBlob:TIKI_VAULT.blob };
 }
 function replaceArr(target, src){ if(Array.isArray(src)){ target.length=0; src.forEach(x=>target.push(x)); } }
@@ -6760,6 +7139,7 @@ function applyTikiState(d){
   if(Array.isArray(d.overheadManual)) OVERHEAD_MANUAL=d.overheadManual;
   if(d.overheadRules&&typeof d.overheadRules==='object') OVERHEAD_RULES=d.overheadRules;
   if(d.adManual&&typeof d.adManual==='object') AD_MANUAL=d.adManual;
+  replaceArr(BRIEF_FOLDERS,d.briefFolders);
   if(d.brands && Object.keys(d.brands).length){
     Object.keys(BRANDS).forEach(k=>delete BRANDS[k]); Object.assign(BRANDS,d.brands);
     if(!BRANDS[state.brand] && state.brand!=='all') state.brand=defaultBrand();
