@@ -174,6 +174,53 @@ a{color:var(--accent-ink);text-decoration:none}
 .card-b{padding:16px 18px}
 .card-b.flush{padding:0}
 .grid{display:grid;gap:16px}
+/* ---- Forms + campaign wizard ---- */
+.fi{width:100%;font-family:inherit;font-size:.84rem;padding:9px 12px;border:1px solid var(--line);
+  border-radius:10px;background:var(--surface);color:var(--ink);outline:none}
+.fi:focus{border-color:var(--accent)}
+textarea.fi{resize:vertical;line-height:1.5}
+select.fi{cursor:pointer}
+.fl{display:block;font-size:.79rem;font-weight:600;color:var(--ink);margin:0 0 6px}
+.fh{font-size:.73rem;color:var(--ink-3);margin-top:5px;line-height:1.45}
+.fg{margin-bottom:17px}
+.frow{display:flex;gap:12px;flex-wrap:wrap}
+.frow>*{flex:1;min-width:150px}
+.pick{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px}
+.op{border:1.5px solid var(--line);border-radius:14px;padding:14px 15px;cursor:pointer;
+  background:var(--surface);transition:border-color .15s,background .15s;position:relative}
+.op:hover{border-color:#cfd4dc}
+.op.on{border-color:var(--accent);background:var(--accent-soft)}
+.op .ico{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;
+  justify-content:center;font-size:1.05rem;margin-bottom:10px}
+.op .t{font-weight:700;font-size:.87rem}
+.op.on .t{color:var(--accent-ink)}
+.op .s{font-size:.76rem;color:var(--ink-2);margin-top:3px;line-height:1.4}
+.op .rec{position:absolute;top:-10px;left:14px;background:var(--violet);color:#fff;
+  font-size:.63rem;font-weight:700;padding:3px 9px;border-radius:999px;letter-spacing:.02em}
+.wz{margin-bottom:22px}
+.wz .bar{height:4px;background:var(--neutral-soft);border-radius:2px;overflow:hidden}
+.wz .bar i{display:block;height:100%;background:var(--accent);transition:width .25s}
+.wz .st{font-size:.77rem;color:var(--ink-3);margin-top:10px}
+.rcard{border:1.5px solid var(--line);border-radius:12px;padding:13px 15px;cursor:pointer;
+  margin-bottom:9px;display:flex;gap:11px;align-items:flex-start;background:var(--surface)}
+.rcard.on{border-color:var(--accent);background:var(--accent-soft)}
+.rcard .dot{width:17px;height:17px;border-radius:50%;border:1.5px solid var(--line);flex:none;margin-top:1px}
+.rcard.on .dot{border-color:var(--accent);background:var(--accent);box-shadow:inset 0 0 0 3px #fff}
+.chipbtn{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 11px;
+  font-size:.74rem;font-weight:600;color:var(--ink-2);cursor:pointer;font-family:inherit}
+.chipbtn:hover{background:var(--surface-2)}
+.prodrow{display:flex;gap:12px;align-items:center;border:1px solid var(--line-2);border-radius:12px;
+  padding:11px 13px;margin-top:10px;background:var(--surface-2)}
+.prodrow .pi{width:44px;height:44px;border-radius:9px;background:var(--surface);display:flex;
+  align-items:center;justify-content:center;font-size:1.25rem;flex:none;border:1px solid var(--line-2)}
+.phone{width:272px;flex:none;border:9px solid #17171a;border-radius:36px;background:#fff;
+  overflow:hidden;box-shadow:var(--shadow-lg);align-self:flex-start}
+.phone .bar{background:#17171a;color:#fff;font-size:.68rem;padding:5px 14px 9px;text-align:center}
+.phone .body{padding:14px 12px;min-height:330px;background:#f5f5f7}
+.phone .msg{background:#fff;border-radius:13px;padding:11px 12px;font-size:.76rem;margin-bottom:9px;
+  box-shadow:0 1px 2px rgba(0,0,0,.07);line-height:1.45}
+.wzfoot{display:flex;gap:9px;justify-content:flex-end;align-items:center;margin-top:24px;
+  padding-top:18px;border-top:1px solid var(--line-2)}
 /* ---- Videos ---- */
 .vperiod{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:var(--surface);
   border:1px solid var(--line-2);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow)}
@@ -1480,6 +1527,7 @@ const state = {
      earning in July. */
   videoFrom:'', videoTo:'', videoBasis:'earned', videoSort:'gmv',
   videoCreator:'all', videoAccount:'affiliate', videoSearch:'', videoPreset:'30',
+  outreachTab:'campaigns', campEdit:null, campStep:1,
   notifFilter:'all', reportTab:'weekly',
   notifs: NOTIFICATIONS.map(n=>({...n})),
   tasks: TASKS.map(t=>({...t, comments:[...t.comments]}))
@@ -6987,7 +7035,8 @@ async function vidSync(){
 }
 
 function renderOutreach(){
-  const tabs=[['samples','Samples'],['recs','Recommender'],['flows','Auto-Invites'],['personal','My List'],['messages','Messages']];
+  const tabs=[['campaigns','Campaigns'],['samples','Samples'],['recs','Recommender'],['flows','Triggers'],['personal','My List'],['messages','Messages']];
+  if(!state.outreachTab) state.outreachTab='campaigns';
   const pend=SAMPLE_REQS.filter(s=>s.status==='pending').length;
   const unread=CHATS.reduce((n,c)=>n+c.unread,0);
   const badge={samples:pend, personal:PERSONAL_OUTREACH.filter(p=>p.status==='todo').length, messages:unread};
@@ -7000,7 +7049,8 @@ function renderOutreach(){
     </div>
     <div id="outreachBody"></div>`;
   const b=$('outreachBody');
-  if(state.outreachTab==='samples') b.innerHTML=outSamples();
+  if(state.outreachTab==='campaigns') b.innerHTML=outCampaigns();
+  else if(state.outreachTab==='samples') b.innerHTML=outSamples();
   else if(state.outreachTab==='recs') b.innerHTML=outRecs();
   else if(state.outreachTab==='flows') b.innerHTML=outFlows();
   else if(state.outreachTab==='personal') b.innerHTML=outPersonal();
@@ -7122,6 +7172,461 @@ function recAction(i, what){
   renderOutreach(); renderSidebar();
 }
 /* ---- Auto-invite flows ---- */
+/* ============================================================================
+   CAMPAIGNS — four-step outreach wizard
+   Modelled on Cruva's Automations flow, in Tiki's own styling. Everything here
+   is real config that saves and syncs. The one thing that cannot run is the
+   send: target_collaborations, conversations and marketplace_creators/search
+   all sit under affiliate_seller, which is not granted yet. Step 2 therefore
+   searches OUR creator data rather than TikTok's 1.3M-creator marketplace —
+   swapping the source is a one-function change once the scope lands.
+   ========================================================================== */
+
+const CAMP_AUDIENCE = {
+  outreach:{ t:'Outreach', s:'Find and onboard new creators', ico:'📣', bg:'var(--accent-soft)', fg:'var(--accent-ink)' },
+  lists:   { t:'Saved Lists', s:'Select from your saved affiliate lists', ico:'📋', bg:'var(--neutral-soft)', fg:'var(--neutral-ink)' },
+  crm:     { t:'CRM Creators', s:'Creators you already collaborate with', ico:'👥', bg:'var(--warn-soft)', fg:'var(--warn-ink)' }
+};
+const CAMP_SEQUENCE = {
+  tc_dm:{ t:'Target Collab + DM', s:'Collab invite with DM messages', ico:'✉️💬', rec:true,
+          bg:'var(--violet-soft)', fg:'var(--violet-ink)' },
+  tc:   { t:'Target Collab', s:'Send target collaboration invites', ico:'✉️',
+          bg:'var(--accent-soft)', fg:'var(--accent-ink)' },
+  dm:   { t:'DM', s:'Text, product cards, images', ico:'💬',
+          bg:'var(--aqua-soft)', fg:'var(--aqua-ink)' }
+};
+const CAMP_QUERY_FIELDS = [
+  ['categories','Product Categories','Select items…'],
+  ['followers','Follower Count','Choose range…'],
+  ['gmv30','30d GMV','Choose range…'],
+  ['units30','30d Units Sold','Choose range…'],
+  ['liveGmv30','30d LIVE GMV','Choose range…'],
+  ['avgViews','Average Views Per Video','Choose range…'],
+  ['engagement','Engagement Rate (%)','Choose range…'],
+  ['postRate','Post Rate (%)','Choose range…'],
+  ['brandCollabs','Brand Collaborations','Choose range…']
+];
+const CAMP_RANGES = ['','0–100','100–1K','1K–10K','10K–100K','100K+'];
+const CAMP_MONEY_RANGES = ['','£0–50','£50–250','£250–1K','£1K–5K','£5K+'];
+
+function campDefaults(){
+  return {
+    id:uid('cm-'), title:'', status:'Draft', step:1,
+    audience:'outreach', sequence:'tc_dm',
+    schedule:{ enabled:true, from:'08:00', to:'22:00', tz:'Europe/London', limitOn:false, perDay:200 },
+    query:{}, selected:[], excluded:[],
+    invite:{ title:'', message:'', expiryValue:6, expiryUnit:'Weeks',
+      products:[], freeSamples:true, autoApprove:false, contentType:'none',
+      contactEmail:'', conflict:'all' },
+    dm:{ additional:[], followups:[] },
+    createdAt:new Date().toISOString()
+  };
+}
+const campById = id => CAMPAIGNS.find(c=>c.id===id);
+function campNew(){
+  const c=campDefaults(); CAMPAIGNS.unshift(c); tikiPush();
+  state.campEdit=c.id; state.campStep=1; renderOutreach();
+}
+function campDelete(id){
+  const i=CAMPAIGNS.findIndex(c=>c.id===id); if(i<0) return;
+  CAMPAIGNS.splice(i,1); state.campEdit=null; tikiPush(); renderOutreach(); toast('Campaign deleted');
+}
+function campGo(step){
+  const c=campById(state.campEdit); if(!c) return;
+  c.step=Math.max(1,Math.min(4,step)); state.campStep=c.step; tikiPush(); renderOutreach();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function campSet(path,val){
+  const c=campById(state.campEdit); if(!c) return;
+  const parts=path.split('.'); let o=c;
+  for(let i=0;i<parts.length-1;i++){ o[parts[i]]=o[parts[i]]||{}; o=o[parts[i]]; }
+  o[parts[parts.length-1]]=val; tikiPush();
+}
+function campPickThen(path,val){ campSet(path,val); renderOutreach(); }
+
+/* ---- list view ---- */
+function outCampaigns(){
+  if(state.campEdit && campById(state.campEdit)) return campWizard();
+  return `
+    ${flowGateNote()}
+    <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+      <button class="btn btn-primary btn-sm" onclick="campNew()">${ICONS.plus} New campaign</button>
+    </div>
+    ${CAMPAIGNS.map(c=>{
+      const aud=CAMP_AUDIENCE[c.audience], seq=CAMP_SEQUENCE[c.sequence];
+      return `<div class="card" style="margin-bottom:12px"><div class="card-b" style="display:flex;gap:15px;align-items:center;flex-wrap:wrap">
+        <div style="flex:1;min-width:230px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="font-weight:700">${esc(c.title||'Untitled campaign')}</span>
+            <span class="badge ${c.status==='Armed'?'bg-violet':''}">${c.status}</span>
+          </div>
+          <div style="font-size:.75rem;color:var(--ink-2);margin-top:5px">
+            ${aud.t} · ${seq.t} · ${c.selected.length} affiliate${c.selected.length===1?'':'s'} selected
+            ${c.invite.products.length?` · ${c.invite.products.length} product${c.invite.products.length===1?'':'s'}`:''}
+          </div>
+          <div style="font-size:.7rem;color:var(--ink-3);margin-top:5px">Step ${c.step} of 4 complete</div>
+        </div>
+        <div style="display:flex;gap:7px">
+          <button class="btn btn-ghost btn-sm" onclick="campDelete('${c.id}')" style="color:var(--crit-ink)">Delete</button>
+          <button class="btn btn-ghost btn-sm" onclick="state.campEdit='${c.id}';state.campStep=${c.step};renderOutreach()">Open</button>
+        </div>
+      </div></div>`;
+    }).join('')||`<div class="card"><div class="empty">No campaigns yet — build your first creator outreach campaign.</div></div>`}`;
+}
+
+/* ---- wizard shell ---- */
+function campWizard(){
+  const c=campById(state.campEdit);
+  const step=state.campStep||c.step||1;
+  const titles=['Campaign Setup','Affiliate Query','Invite Details','DM Messages'];
+  const body=[campStep1,campStep2,campStep3,campStep4][step-1](c);
+  const lastStep = c.sequence==='dm'||c.sequence==='tc_dm' ? 4 : 3;
+  return `
+    <div class="wz">
+      <div class="bar"><i style="width:${Math.round(step/4*100)}%"></i></div>
+      <div class="st">Step ${step} of 4 · ${titles[step-1]}</div>
+    </div>
+    ${body}
+    <div class="wzfoot">
+      <button class="btn btn-ghost btn-sm" style="margin-right:auto" onclick="state.campEdit=null;renderOutreach()">← All campaigns</button>
+      ${step>1?`<button class="btn btn-ghost" onclick="campGo(${step-1})">Back</button>`:''}
+      <button class="btn btn-ghost" onclick="tikiPush();toast('Campaign saved')">Save</button>
+      ${step<4
+        ? `<button class="btn btn-primary" onclick="campGo(${step+1})">Next</button>`
+        : `<button class="btn btn-primary" disabled title="Sending is blocked until the Affiliate Seller scope is granted">Launch — locked</button>`}
+    </div>`;
+}
+
+/* ---- step 1 ---- */
+function campStep1(c){
+  const opt=(map,key,cur,path)=>Object.entries(map).map(([k,v])=>`
+    <div class="op ${cur===k?'on':''}" onclick="campPickThen('${path}','${k}')">
+      ${v.rec?`<span class="rec">✦ Recommended</span>`:''}
+      <div class="ico" style="background:${v.bg};color:${v.fg}">${v.ico}</div>
+      <div class="t">${v.t}</div><div class="s">${v.s}</div>
+    </div>`).join('');
+  return `
+    <h2 style="font-size:1.3rem;margin:0 0 16px">Campaign Setup</h2>
+    <div class="fg" style="max-width:640px">
+      <label class="fl">Campaign Title</label>
+      <input class="fi" value="${esc(c.title)}" placeholder="Give your campaign a title, e.g. YerbaLytes summer push"
+        onchange="campSet('title',this.value)">
+    </div>
+    <h3 style="font-size:1.02rem;margin:24px 0 12px">Audience and Message Type</h3>
+    <div class="fl" style="color:var(--ink-3);font-weight:500">Outreach Audience</div>
+    <div class="pick" style="margin-bottom:22px">${opt(CAMP_AUDIENCE,'a',c.audience,'audience')}</div>
+    <div class="fl" style="color:var(--ink-3);font-weight:500">Message Sequence</div>
+    <div class="pick">${opt(CAMP_SEQUENCE,'s',c.sequence,'sequence')}</div>
+    <div class="fh" style="margin-top:10px">
+      A <b>Target Collab</b> is TikTok's formal invite carrying your product and commission.
+      A <b>DM</b> is a normal message. Sending both lands the offer and the human note together.
+    </div>
+    <h3 style="font-size:1.02rem;margin:26px 0 12px">Messaging Schedule</h3>
+    <label style="display:flex;gap:9px;align-items:center;font-size:.84rem;margin-bottom:13px;cursor:pointer">
+      <input type="checkbox" ${c.schedule.enabled?'checked':''} onchange="campPickThen('schedule.enabled',this.checked)">
+      Set time range</label>
+    ${c.schedule.enabled?`<div class="frow" style="max-width:660px">
+      <div><label class="fl">From</label><input class="fi" type="time" value="${c.schedule.from}" onchange="campSet('schedule.from',this.value)"></div>
+      <div><label class="fl">To</label><input class="fi" type="time" value="${c.schedule.to}" onchange="campSet('schedule.to',this.value)"></div>
+      <div><label class="fl">Timezone</label><select class="fi" onchange="campSet('schedule.tz',this.value)">
+        ${['Europe/London','Europe/Dublin','America/New_York','America/Los_Angeles','UTC'].map(t=>`<option ${c.schedule.tz===t?'selected':''}>${t}</option>`).join('')}
+      </select></div></div>`:''}
+    <label style="display:flex;gap:9px;align-items:center;font-size:.84rem;margin-top:14px;cursor:pointer">
+      <input type="checkbox" ${c.schedule.limitOn?'checked':''} onchange="campPickThen('schedule.limitOn',this.checked)">
+      Daily message limits</label>
+    ${c.schedule.limitOn?`<div style="max-width:220px;margin-top:10px">
+      <input class="fi" type="number" min="1" value="${c.schedule.perDay}" onchange="campSet('schedule.perDay',Number(this.value)||200)">
+      <div class="fh">Messages per day across this campaign.</div></div>`:''}`;
+}
+
+/* ---- step 2 ---- */
+function campStep2(c){
+  const PM=creatorPeriodMap();
+  const stat=x=>PM.get(String(x.handle||'').replace(/^@/,'').toLowerCase())||{gmv:0,views:0,videos:0,gpm:0};
+  const pool=CREATORS.filter(inBrand).filter(x=>!c.excluded.includes(x.id));
+  const q=c.query||{};
+  const sel=new Set(c.selected);
+  const rangeSel=(k,label,ph,money)=>`<div><label class="fl">${label}</label>
+    <select class="fi" onchange="campSet('query.${k}',this.value)">
+      ${(money?CAMP_MONEY_RANGES:CAMP_RANGES).map(r=>`<option value="${r}" ${q[k]===r?'selected':''}>${r||ph}</option>`).join('')}
+    </select></div>`;
+  const list=pool.slice(0,60);
+  return `
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <h2 style="font-size:1.3rem;margin:0">Select Affiliates</h2>
+      <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="toast('Exclusion list — pick creators to skip')">⊘ Exclude affiliates</button>
+    </div>
+    <div class="card" style="background:var(--warn-soft);border-color:transparent;margin:14px 0 18px"><div class="card-b" style="padding:11px 15px;font-size:.78rem;color:var(--warn-ink);line-height:1.5">
+      Cruva searches TikTok's full creator marketplace here. That endpoint
+      (<code>/affiliate_seller/202508/marketplace_creators/search</code>) needs the affiliate scope, so for now this
+      searches <b>your own ${pool.length} creators</b> from the video data. The filters and selection are real and will
+      point at the marketplace the moment the scope lands.
+    </div></div>
+    <div class="seg" style="width:max-content;margin-bottom:16px">
+      <button class="active">Performance</button>
+      <button onclick="toast('Demographics filters arrive with the marketplace endpoint')">Demographics</button>
+      <button onclick="toast('Appearance filters arrive with the marketplace endpoint')">Appearance</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-bottom:20px">
+      ${rangeSel('categories','Product Categories','Select items…')}
+      ${rangeSel('followers','Follower Count','Choose range…')}
+      ${rangeSel('gmv30','30d GMV','Choose range…',1)}
+      ${rangeSel('units30','30d Units Sold','Choose range…')}
+      ${rangeSel('liveGmv30','30d LIVE GMV','Choose range…',1)}
+      ${rangeSel('avgViews','Average Views Per Video','Choose range…')}
+      ${rangeSel('engagement','Engagement Rate (%)','Choose range…')}
+      ${rangeSel('postRate','Post Rate (%)','Choose range…')}
+      ${rangeSel('brandCollabs','Brand Collaborations','Choose range…')}
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <span style="font-weight:700;font-size:.92rem">Total</span>
+      <span class="badge bg-violet">${pool.length} results</span>
+      <span style="margin-left:auto;font-size:.78rem;color:var(--ink-3)">${sel.size} selected</span>
+      <button class="btn btn-ghost btn-sm" onclick="campSelectAll(${sel.size<pool.length})">${sel.size<pool.length?'Select all':'Clear'}</button>
+    </div>
+    <div class="card"><div class="card-b flush tbl-wrap" style="max-height:440px;overflow:auto">
+      <table class="tbl"><thead><tr>
+        <th style="width:34px"></th><th>Creator</th><th class="num">Followers</th>
+        <th class="num">GMV</th><th class="num">Videos</th><th class="num">Avg views</th><th class="num">GPM</th>
+      </tr></thead><tbody>
+      ${list.map(x=>{const s=stat(x);return `<tr class="clickable" onclick="campToggleSel('${x.id}')">
+        <td><input type="checkbox" ${sel.has(x.id)?'checked':''} onclick="event.stopPropagation();campToggleSel('${x.id}')"></td>
+        <td><div class="cell-user"><span class="av ${x.av}">${esc(x.name.split(' ').map(w=>w[0]).join(''))}</span>
+          <div class="main-cell"><div class="t">${esc(x.name)}</div><div class="s">${esc(x.handle)}</div></div></div></td>
+        <td class="num">${x.followers?num(x.followers):'—'}</td>
+        <td class="num">${s.gmv?money(s.gmv):'—'}</td>
+        <td class="num">${s.videos||'—'}</td>
+        <td class="num">${s.videos?num(Math.round(s.views/s.videos)):'—'}</td>
+        <td class="num">${s.gpm?moneyDec(s.gpm):'—'}</td>
+      </tr>`;}).join('')||`<tr><td colspan="7"><div class="empty">No creators yet — sync videos first</div></td></tr>`}
+      </tbody></table>
+    </div></div>
+    ${pool.length>60?`<div class="fh" style="text-align:center;margin-top:10px">Showing the first 60 of ${pool.length}.</div>`:''}`;
+}
+function campToggleSel(id){
+  const c=campById(state.campEdit); if(!c) return;
+  const i=c.selected.indexOf(id);
+  if(i<0) c.selected.push(id); else c.selected.splice(i,1);
+  tikiPush(); renderOutreach();
+}
+function campSelectAll(on){
+  const c=campById(state.campEdit); if(!c) return;
+  c.selected = on ? CREATORS.filter(inBrand).map(x=>x.id) : [];
+  tikiPush(); renderOutreach();
+}
+
+/* ---- step 3 ---- */
+function campStep3(c){
+  const iv=c.invite;
+  const conflicts=[
+    ['all','Resolve all creators','Gracefully moves all conflicting creators into the new invite. Creators who already accepted don’t need to re-accept.'],
+    ['unaccepted','Resolve only creators who haven’t accepted','Moves only creators who haven’t accepted their previous invite. Those who accepted keep theirs untouched.'],
+    ['none','Don’t resolve conflicts','Creators with a conflicting invite are skipped.']
+  ];
+  return `
+    <h2 style="font-size:1.3rem;margin:0 0 4px">Invite Details</h2>
+    <div class="fh" style="margin-bottom:20px;max-width:620px">
+      The title and message are visible to the creator inside the TikTok invite. They will not appear in the DM
+      unless you add messages in step 4.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr;gap:18px;max-width:780px">
+      <div class="card"><div class="card-b">
+        <div class="fg"><label class="fl">Invite Title</label>
+          <input class="fi" value="${esc(iv.title)}" placeholder="Short title that appears on the TikTok invite"
+            onchange="campSet('invite.title',this.value)"></div>
+        <div class="fg">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <label class="fl" style="margin:0">Invite Message</label>
+            <button class="chipbtn" style="margin-left:auto" onclick="campInsert('invite.message','{creator}')">＋ Affiliate name</button>
+          </div>
+          <textarea class="fi" id="cmInviteMsg" rows="5" maxlength="500" placeholder="Enter your outreach message here…"
+            oninput="campSet('invite.message',this.value);document.getElementById('cmInviteCount').textContent=this.value.length"
+            >${esc(iv.message)}</textarea>
+          <div class="fh"><span id="cmInviteCount">${(iv.message||'').length}</span>/500 characters ·
+            no other company names, email addresses or profanity — TikTok rejects those.</div>
+        </div>
+        <div class="fg" style="max-width:330px">
+          <label class="fl">Invite Expiration</label>
+          <div class="frow">
+            <input class="fi" type="number" min="1" value="${iv.expiryValue}" onchange="campSet('invite.expiryValue',Number(this.value)||6)">
+            <select class="fi" onchange="campSet('invite.expiryUnit',this.value)">
+              ${['Days','Weeks','Months'].map(u=>`<option ${iv.expiryUnit===u?'selected':''}>${u}</option>`).join('')}
+            </select>
+          </div>
+          <div class="fh">Counted from when the invite is created.</div>
+        </div>
+      </div></div>
+
+      <div class="card"><div class="card-b">
+        <div style="font-weight:700;font-size:.95rem;margin-bottom:4px">Add Products</div>
+        <div class="fh" style="margin-bottom:12px">Products you want creators to promote. You can add more than one.</div>
+        <select class="fi" onchange="campAddProduct(this.value);this.value=''">
+          <option value="">Select a product</option>
+          ${PRODUCTS.filter(p=>!iv.products.some(x=>x.id===p.id)).map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}
+        </select>
+        ${iv.products.map((p,i)=>`
+          <div class="prodrow">
+            <div class="pi">${p.emoji||'📦'}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</div>
+              <div style="font-size:.68rem;color:var(--ink-3);margin-top:2px">ID: ${esc(p.id)}</div>
+              <div style="display:flex;gap:14px;align-items:center;margin-top:8px;flex-wrap:wrap">
+                <label style="display:flex;gap:6px;align-items:center;font-size:.76rem">Commission
+                  <input class="fi" style="width:70px;padding:5px 8px" type="number" min="0" max="80" value="${p.commission}"
+                    onchange="campProdSet(${i},'commission',Number(this.value)||0)"> %</label>
+                <label style="display:flex;gap:6px;align-items:center;font-size:.76rem">
+                  <input type="checkbox" ${p.shopAds?'checked':''} onchange="campProdSet(${i},'shopAds',this.checked)">
+                  Shop Ads commission
+                  <input class="fi" style="width:66px;padding:5px 8px" type="number" min="0" max="80" value="${p.shopAdsPct}"
+                    onchange="campProdSet(${i},'shopAdsPct',Number(this.value)||0)"> %</label>
+              </div>
+            </div>
+            <button class="btn btn-ghost btn-xs" onclick="campRemoveProduct(${i})">✕</button>
+          </div>`).join('')}
+        ${!iv.products.length?`<div class="fh" style="margin-top:10px">No products added yet.</div>`:''}
+      </div></div>
+
+      <div class="card"><div class="card-b">
+        <div style="font-weight:700;font-size:.95rem;margin-bottom:12px">Free Sample &amp; Content Type</div>
+        <label style="display:flex;gap:9px;align-items:center;font-size:.84rem;margin-bottom:9px;cursor:pointer">
+          <input type="checkbox" ${iv.freeSamples?'checked':''} onchange="campPickThen('invite.freeSamples',this.checked)"> Offer free samples</label>
+        <label style="display:flex;gap:9px;align-items:center;font-size:.84rem;margin-bottom:14px;cursor:pointer">
+          <input type="checkbox" ${iv.autoApprove?'checked':''} onchange="campSet('invite.autoApprove',this.checked)"> Automatically approve sample requests</label>
+        <div class="fl">Preferred content type</div>
+        <div class="seg" style="width:max-content">
+          ${[['none','No preference'],['live','Shoppable LIVE'],['video','Shoppable Video']].map(([k,l])=>
+            `<button class="${iv.contentType===k?'active':''}" onclick="campPickThen('invite.contentType','${k}')">${l}</button>`).join('')}
+        </div>
+        <div class="fg" style="margin-top:18px;max-width:380px">
+          <label class="fl">Contact email</label>
+          <input class="fi" type="email" value="${esc(iv.contactEmail)}" placeholder="Where creators reach you"
+            onchange="campSet('invite.contactEmail',this.value)">
+        </div>
+      </div></div>
+
+      <div class="card"><div class="card-b">
+        <div style="font-weight:700;font-size:.95rem;margin-bottom:4px">Auto Resolve Conflicts</div>
+        <div class="fh" style="margin-bottom:13px">
+          TikTok won't let a creator hold two invites for the same product. Resolving a conflict bumps the new
+          invite to the top of the creator's inbox.
+        </div>
+        ${conflicts.map(([k,t,s])=>`
+          <div class="rcard ${iv.conflict===k?'on':''}" onclick="campPickThen('invite.conflict','${k}')">
+            <span class="dot"></span>
+            <div><div style="font-weight:650;font-size:.85rem">${t}</div>
+              <div style="font-size:.77rem;color:var(--ink-2);margin-top:3px;line-height:1.45">${s}</div></div>
+          </div>`).join('')}
+      </div></div>
+    </div>`;
+}
+function campAddProduct(id){
+  if(!id) return;
+  const c=campById(state.campEdit), p=PRODUCTS.find(x=>x.id===id); if(!c||!p) return;
+  c.invite.products.push({ id:p.id, name:p.name, emoji:p.emoji, commission:20, shopAds:false, shopAdsPct:10 });
+  tikiPush(); renderOutreach();
+}
+function campProdSet(i,k,v){
+  const c=campById(state.campEdit); if(!c||!c.invite.products[i]) return;
+  c.invite.products[i][k]=v; tikiPush();
+}
+function campRemoveProduct(i){
+  const c=campById(state.campEdit); if(!c) return;
+  c.invite.products.splice(i,1); tikiPush(); renderOutreach();
+}
+function campInsert(path,token){
+  const c=campById(state.campEdit); if(!c) return;
+  const parts=path.split('.'); let o=c;
+  for(let i=0;i<parts.length-1;i++) o=o[parts[i]];
+  o[parts[parts.length-1]] = (o[parts[parts.length-1]]||'')+token;
+  tikiPush(); renderOutreach();
+}
+
+/* ---- step 4 ---- */
+function campStep4(c){
+  const first=c.invite.products[0];
+  return `
+    <h2 style="font-size:1.3rem;margin:0 0 4px">DM Messages</h2>
+    <div class="fh" style="margin-bottom:20px;max-width:640px">
+      The invite card is attached automatically as the first message. Anything you add here is sent straight after it.
+    </div>
+    <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1;min-width:340px">
+        <div class="card" style="margin-bottom:14px"><div class="card-b">
+          <div style="font-weight:700;font-size:.9rem">Initial message</div>
+          <div class="fh" style="margin-bottom:10px">Set automatically from your invite.</div>
+          <div style="border:1px solid var(--line-2);border-radius:11px;padding:11px 13px;background:var(--surface-2);font-size:.82rem">
+            📄 Invite card${first?` — ${esc(first.name)} at ${first.commission}%`:''}
+          </div>
+        </div></div>
+
+        <div class="card" style="margin-bottom:14px"><div class="card-b">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+            <div style="font-weight:700;font-size:.9rem">Additional messages</div>
+            <button class="chipbtn" style="margin-left:auto" onclick="campAddMsg()">＋ Plain message</button>
+          </div>
+          <div class="fh" style="margin-bottom:12px">Optional, sent right after the invite card.</div>
+          ${c.dm.additional.map((m,i)=>`
+            <div style="border:1px solid var(--line-2);border-radius:12px;padding:12px;margin-bottom:10px">
+              <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px">
+                <button class="chipbtn" onclick="campMsgInsert(${i},'{creator}')">＋ Affiliate name</button>
+                <button class="chipbtn" onclick="campMsgInsert(${i},'{product}')">＋ Product</button>
+                <button class="chipbtn" onclick="campMsgInsert(${i},'{commission}')">＋ Commission</button>
+                <button class="btn btn-ghost btn-xs" style="margin-left:auto" onclick="campRemoveMsg(${i})">✕</button>
+              </div>
+              <textarea class="fi" rows="4" maxlength="2000" placeholder="Message…"
+                onchange="campMsgSet(${i},this.value)">${esc(m.body||'')}</textarea>
+              <div class="fh">${(m.body||'').length}/2000 characters</div>
+            </div>`).join('')||`<div class="fh">No additional messages.</div>`}
+        </div></div>
+
+        <div class="card"><div class="card-b">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+            <div style="font-weight:700;font-size:.9rem">Follow-up messages</div>
+            <button class="chipbtn" style="margin-left:auto" onclick="campAddFollowup()">＋ Add follow-up</button>
+          </div>
+          <div class="fh" style="margin-bottom:12px">Sent only if the creator hasn't replied.</div>
+          ${c.dm.followups.map((f,i)=>`
+            <div style="border:1px solid var(--line-2);border-radius:12px;padding:12px;margin-bottom:10px">
+              <div style="display:flex;gap:9px;align-items:center;margin-bottom:8px">
+                <span style="font-size:.78rem;color:var(--ink-3)">After</span>
+                <input class="fi" style="width:72px;padding:5px 8px" type="number" min="1" value="${f.days||3}"
+                  onchange="campFollowSet(${i},'days',Number(this.value)||3)">
+                <span style="font-size:.78rem;color:var(--ink-3)">days with no reply</span>
+                <button class="btn btn-ghost btn-xs" style="margin-left:auto" onclick="campRemoveFollowup(${i})">✕</button>
+              </div>
+              <textarea class="fi" rows="3" maxlength="2000" placeholder="Follow-up message…"
+                onchange="campFollowSet(${i},'body',this.value)">${esc(f.body||'')}</textarea>
+            </div>`).join('')||`<div class="fh">No follow-ups.</div>`}
+        </div></div>
+      </div>
+
+      <div class="phone">
+        <div class="bar">9:41 &nbsp;·&nbsp; ${esc(brandInfo(state.brand).name)}</div>
+        <div class="body">
+          <div class="msg">
+            <div style="font-weight:700;margin-bottom:6px">${esc(c.invite.title||'Invite')}</div>
+            ${first?`<div style="display:flex;gap:9px;align-items:center;background:var(--surface-2);border-radius:9px;padding:8px">
+              <span style="font-size:1.4rem">${first.emoji||'📦'}</span>
+              <div style="min-width:0"><div style="font-size:.73rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(first.name)}</div>
+              <div style="font-size:.7rem;color:var(--ink-3)">${first.commission}% commission</div></div></div>`
+            :`<div style="font-size:.74rem;color:var(--ink-3)">Add a product in step 3</div>`}
+            ${c.invite.message?`<div style="margin-top:9px;font-size:.75rem;color:var(--ink-2)">${esc(c.invite.message).slice(0,180)}</div>`:''}
+          </div>
+          ${c.dm.additional.filter(m=>m.body).map(m=>`<div class="msg">${esc(m.body).slice(0,220)}</div>`).join('')}
+          ${c.dm.followups.filter(f=>f.body).map(f=>`<div class="msg" style="opacity:.6">
+            <div style="font-size:.65rem;color:var(--ink-3);margin-bottom:4px">+${f.days||3} days</div>${esc(f.body).slice(0,180)}</div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+function campAddMsg(){ const c=campById(state.campEdit); c.dm.additional.push({type:'text',body:''}); tikiPush(); renderOutreach(); }
+function campRemoveMsg(i){ const c=campById(state.campEdit); c.dm.additional.splice(i,1); tikiPush(); renderOutreach(); }
+function campMsgSet(i,v){ const c=campById(state.campEdit); c.dm.additional[i].body=v; tikiPush(); }
+function campMsgInsert(i,t){ const c=campById(state.campEdit); c.dm.additional[i].body=(c.dm.additional[i].body||'')+t; tikiPush(); renderOutreach(); }
+function campAddFollowup(){ const c=campById(state.campEdit); c.dm.followups.push({days:3,body:''}); tikiPush(); renderOutreach(); }
+function campRemoveFollowup(i){ const c=campById(state.campEdit); c.dm.followups.splice(i,1); tikiPush(); renderOutreach(); }
+function campFollowSet(i,k,v){ const c=campById(state.campEdit); c.dm.followups[i][k]=v; tikiPush(); if(k==='days') renderOutreach(); }
+
 /* ============================================================================
    OUTREACH FLOWS
    Everything here is real except the sending. Triggers evaluate against live
@@ -8790,7 +9295,8 @@ function collectTikiState(){
   /* v4 adds the team and brand lists so invites and new brands reach every device.
      v5 adds brief page colours and embedded photos (both nested inside briefs). */
   /* v7 adds the brief shelf — videos parked from the Videos page for reuse in briefs. */
-  return { v:7, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  /* v8 adds outreach campaigns (the four-step wizard config). */
+  return { v:8, campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
@@ -8802,7 +9308,7 @@ function replaceArr(target, src){ if(Array.isArray(src)){ target.length=0; src.f
 function applyTikiState(d){
   if(!d) return;
   if(Array.isArray(d.tasks)) state.tasks=d.tasks;
-  replaceArr(BRIEF_SHELF,d.briefShelf);
+  replaceArr(BRIEF_SHELF,d.briefShelf); replaceArr(CAMPAIGNS,d.campaigns);
   replaceArr(CREATORS,d.creators); replaceArr(RETAINERS,d.retainers); replaceArr(COURSES,d.courses);
   replaceArr(BRIEFS,d.briefs); replaceArr(OUTREACH_FLOWS,d.flows); replaceArr(SAMPLE_REQS,d.samples);
   replaceArr(CHATS,d.chats); replaceArr(PROFIT_VENDORS,d.profitVendors);
