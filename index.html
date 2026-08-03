@@ -38,6 +38,40 @@
   --shadow-lg:0 18px 50px -12px rgba(0,0,0,.22);
   --font:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Helvetica Neue','Segoe UI',sans-serif;
 }
+/* ============================================================================
+   DARK MODE
+   Apple's elevation ladder rather than pure black: #000 page, #1c1c1e surface,
+   #2c2c2e raised. Pure black on an LCD reads as a hole; the grey steps keep
+   depth readable. Every colour is a variable already, so this is a swap, and
+   the soft/ink pairs are re-tuned so badges stay legible on dark instead of
+   glowing.
+   ========================================================================== */
+body.dark{
+  --bg:#000000; --surface:#1c1c1e; --surface-2:#2c2c2e;
+  --ink:#f5f5f7; --ink-2:#aeaeb2; --ink-3:#8e8e93;
+  --line:rgba(255,255,255,.14); --line-2:rgba(255,255,255,.09);
+  --accent:#0a84ff; --accent-ink:#5ac2ff; --accent-soft:rgba(10,132,255,.18);
+  --sidebar-bg:rgba(28,28,30,.86); --sidebar-ink:#e5e5ea; --sidebar-muted:#8e8e93;
+  --sidebar-active:rgba(255,255,255,.10);
+  --good:#30d158; --good-soft:rgba(48,209,88,.16); --good-ink:#4ee07a;
+  --warn:#ffd60a; --warn-soft:rgba(255,214,10,.16); --warn-ink:#ffd95e;
+  --serious:#ff9f0a; --serious-soft:rgba(255,159,10,.16); --serious-ink:#ffb340;
+  --crit:#ff453a; --crit-soft:rgba(255,69,58,.16); --crit-ink:#ff6961;
+  --neutral-soft:rgba(255,255,255,.09); --neutral-ink:#c7c7cc;
+  --violet:#bf5af2; --violet-soft:rgba(191,90,242,.16); --violet-ink:#d08bf5;
+  --aqua:#30d5c8; --aqua-soft:rgba(48,213,200,.15); --aqua-ink:#5fe0d5;
+  --magenta:#ff6482; --magenta-soft:rgba(255,100,130,.15); --magenta-ink:#ff8fa4;
+  --shadow:0 1px 2px rgba(0,0,0,.5);
+  --shadow-lg:0 18px 50px -12px rgba(0,0,0,.8);
+  color-scheme:dark;
+}
+/* Surfaces hard-coded to white before dark mode existed. */
+body.dark .modal,
+body.dark .seg button.active,
+body.dark .pic-tabs button.on,
+body.dark .btn-ghost{background:var(--surface-2)}
+body.dark .phone,body.dark .vmleft,body.dark .vthumb{background:#000}
+body.dark img.brf-img{filter:brightness(.92)}
 *{margin:0;padding:0;box-sizing:border-box}
 html{font-size:15px}
 body{font-family:var(--font);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;overflow-x:hidden}
@@ -180,6 +214,38 @@ a{color:var(--accent-ink);text-decoration:none}
 .nav-item.soon span:first-of-type{filter:blur(.35px)}
 .soon-tag{margin-left:auto;font-size:.6rem;font-weight:800;letter-spacing:.04em;
   background:rgba(0,0,0,.08);color:var(--ink-3);border-radius:20px;padding:2px 7px}
+/* ---- Hero KPI: one number leads, the rest support ---- */
+.kpi-hero-grid{display:grid;grid-template-columns:1.55fr 1fr 1fr;gap:14px;align-items:stretch}
+.kpi-hero{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--radius);
+  padding:22px 24px;box-shadow:var(--shadow);display:flex;flex-direction:column;justify-content:center;
+  position:relative;overflow:hidden}
+.kpi-hero::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(120% 90% at 100% 0%,var(--accent-soft),transparent 62%)}
+.kpi-hero.neg::after{background:radial-gradient(120% 90% at 100% 0%,var(--crit-soft),transparent 62%)}
+.kpi-hero .hl{font-size:.79rem;color:var(--ink-3);font-weight:600;position:relative}
+.kpi-hero .hv{font-size:3rem;font-weight:700;letter-spacing:-.045em;line-height:1.03;
+  margin:5px 0 3px;position:relative}
+.kpi-hero .hd{font-size:.86rem;font-weight:650;position:relative}
+.kpi-hero .hf{font-size:.8rem;color:var(--ink-3);margin-top:9px;line-height:1.5;position:relative}
+.kpi-stack{display:flex;flex-direction:column;gap:14px}
+.kpi-stack .kpi{flex:1;padding:14px 16px}
+.kpi-stack .kpi .k-val{font-size:1.5rem}
+@media(max-width:980px){.kpi-hero-grid{grid-template-columns:1fr}}
+/* ---- Inset grouped list (Settings.app pattern) ---- */
+.inset-cap{font-size:.71rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);
+  font-weight:700;padding:0 4px 8px}
+.inset{border:1px solid var(--line-2);border-radius:14px;overflow:hidden;background:var(--surface)}
+.inset .irow{display:flex;align-items:center;gap:13px;padding:13px 16px;cursor:pointer;
+  border-bottom:1px solid var(--line-2);transition:background .16s}
+.inset .irow:last-child{border-bottom:none}
+.inset .irow:hover{background:var(--surface-2)}
+.inset .iic{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;flex:none;color:#fff}
+.inset .iic svg{width:15px;height:15px}
+.inset .it{font-size:.88rem;font-weight:550}
+.inset .is{font-size:.76rem;color:var(--ink-3);margin-top:1px}
+.inset .iv{margin-left:auto;font-size:.82rem;color:var(--ink-3);white-space:nowrap}
+.inset .ich{color:var(--ink-3);opacity:.45;font-size:1rem}
 /* ---- Assistant memory ---- */
 .mem-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:13px}
 .mem-area{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--radius);
@@ -1698,7 +1764,7 @@ const state = {
   videoFrom:'', videoTo:'', videoBasis:'earned', videoSort:'gmv',
   videoCreator:'all', videoAccount:'affiliate', videoSearch:'', videoPreset:'30',
   outreachTab:'recs', campEdit:null, campStep:1,
-  aiChatId:null, asxNav:false, asxHist:false, asxSearch:'', rmSearch:'',
+  aiChatId:null, asxNav:false, asxHist:false, asxSearch:'', rmSearch:'', theme:'auto',
   notifFilter:'all', reportTab:'weekly',
   notifs: NOTIFICATIONS.map(n=>({...n})),
   tasks: TASKS.map(t=>({...t, comments:[...t.comments]}))
@@ -1858,6 +1924,21 @@ function modalShell(title,body,footer,wide=''){
     ${footer?`<div class="modal-f">${footer}</div>`:''}
   </div>`;
 }
+/* ---- Appearance -------------------------------------------------------- */
+function applyTheme(t){
+  state.theme=t;
+  const dark = t==='dark' || (t==='auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.body.classList.toggle('dark', dark);
+  try{ localStorage.setItem('tikiTheme', t); }catch(e){}
+}
+function setTheme(t){ applyTheme(t); if(state.page==='settings') renderSettingsInner(); toast(t==='auto'?'Following your system':(t==='dark'?'Dark':'Light')); }
+function cycleTheme(){ applyTheme(document.body.classList.contains('dark')?'light':'dark'); if(state.page==='settings') renderSettingsInner(); }
+(function initTheme(){
+  let t='auto'; try{ t=localStorage.getItem('tikiTheme')||'auto'; }catch(e){}
+  applyTheme(t);
+  try{ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{ if(state.theme==='auto') applyTheme('auto'); }); }catch(e){}
+})();
+
 function toggleSidebar(force){
   const sb=$('sidebar'), ov=$('sbOverlay');
   const open = force!==undefined?force:!sb.classList.contains('open');
@@ -2162,36 +2243,47 @@ function renderOverview(){
       </div>
     </div>
 
-    <div class="kpi-grid">
-      ${kpi('GMV — '+state.dateRange, money(Math.round(rm.gmv)), 'chart','background:var(--accent-soft);color:var(--accent-ink)',
-        `${delta(rm.dGmv)}<span>${rangeNote}</span>`)}
-      ${kpi('Gross Profit',
-        `<span style="color:${rm.net<0?'var(--crit-ink)':'var(--good-ink)'}">${money(Math.round(rm.net))}</span>`,
-        'card', rm.net<0?'background:var(--crit-soft);color:var(--crit-ink)':'background:var(--good-soft);color:var(--good-ink)',
-        `${delta(rm.dNet)}<span>${grossProfitNote(rm)}</span>`)}
-      ${kpi('Active Creators', k.creators, 'users','background:var(--aqua-soft);color:var(--aqua-ink)',
-        `${delta(k.crDelta)}<span>this month</span>`)}
-      ${kpi('Monthly Retainer Spend', money(retSpend), 'card','background:var(--magenta-soft);color:var(--magenta-ink)',
-        `<span>${retSpend&&rm.net>0?`${m2(rm.net/retSpend)} profit per £1`:'no return yet'}</span>`)}
+    <!-- Gross profit leads. It is the number the whole app exists to move, and
+         eight tiles at equal weight meant nothing led. Everything else supports. -->
+    <div class="kpi-hero-grid" style="margin-bottom:14px">
+      <div class="kpi-hero ${rm.net<0?'neg':''}">
+        <div class="hl">Gross profit · ${esc(state.dateRange)}</div>
+        <div class="hv" style="color:${rm.net<0?'var(--crit-ink)':'var(--ink)'}">${money(Math.round(rm.net))}</div>
+        <div class="hd">${delta(rm.dNet)}</div>
+        <div class="hf">${grossProfitNote(rm)} on ${money(Math.round(rm.gmv))} GMV${
+          rm.drag!=null?` · ${rm.drag.toFixed(1)}% of it went to TikTok fees`:''}</div>
+      </div>
+      <div class="kpi-stack">
+        ${kpi('GMV', money(Math.round(rm.gmv)), 'chart','background:var(--accent-soft);color:var(--accent-ink)',
+          `${delta(rm.dGmv)}<span>${rangeNote}</span>`)}
+        ${kpi('Stock Cover', sc.days!=null?sc.days+' days':(sc.onHand!=null?sc.onHand.toLocaleString()+' units':'—'), 'box',
+          sc.days!=null&&sc.days<21?'background:var(--crit-soft);color:var(--crit-ink)':'background:var(--neutral-soft);color:var(--neutral-ink)',
+          sc.onHand!=null
+            ? `<span>${sc.onHand.toLocaleString()} units${sc.perDay>0?` · ${sc.perDay.toFixed(1)}/day`:' · no sales'}</span>`
+            : `<span>sync TikTok for stock</span>`)}
+      </div>
+      <div class="kpi-stack">
+        ${kpi('Active Creators', k.creators, 'users','background:var(--neutral-soft);color:var(--neutral-ink)',
+          `${delta(k.crDelta)}<span>this month</span>`)}
+        ${kpi('Break-even', be>0?money(Math.round(be))+'/day':'—', 'target',
+          be>0&&perDay>=be?'background:var(--good-soft);color:var(--good-ink)':be>0?'background:var(--crit-soft);color:var(--crit-ink)':'background:var(--neutral-soft);color:var(--neutral-ink)',
+          be>0
+            ? `<span class="delta ${perDay>=be?'up':'down'}">${perDay>=be?'↑ above':'↓ below'} by ${money(Math.round(Math.abs(perDay-be)))}</span>`
+            : `<span>sync Xero to set this</span>`)}
+      </div>
+    </div>
 
+    <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
+      ${kpi('Monthly Retainer Spend', money(retSpend), 'card','background:var(--neutral-soft);color:var(--neutral-ink)',
+        `<span>${retSpend&&rm.net>0?`${m2(rm.net/retSpend)} profit per £1`:'no return yet'}</span>`)}
+      ${kpi('Stock Value', sc.retail!=null?money(Math.round(sc.retail)):'—', 'card','background:var(--neutral-soft);color:var(--neutral-ink)',
+        sc.retail!=null
+          ? `<span>${money(Math.round(sc.cost||0))} at cost · ${m2(sc.asp)}/unit</span>`
+          : `<span>${sc.onHand!=null?'no price to value it':'sync TikTok for stock'}</span>`)}
       ${kpi('Fee Drag', rm.drag!=null?rm.drag.toFixed(1)+'%':'—', 'card','background:var(--warn-soft);color:var(--warn-ink)',
         rm.drag!=null
           ? `${rm.dDrag==null?'<span class="delta flat">→ —</span>':rm.dDrag===0?'<span class="delta flat">→ 0 pts</span>':rm.dDrag>0?`<span class="delta down">↑ ${rm.dDrag} pts</span>`:`<span class="delta up">↓ ${Math.abs(rm.dDrag)} pts</span>`}<span>${money(Math.round(rm.fees))} fees</span>`
           : `<span>no settled orders</span>`)}
-      ${kpi('Stock Cover', sc.days!=null?sc.days+' days':(sc.onHand!=null?sc.onHand.toLocaleString()+' units':'—'), 'box',
-        sc.days!=null&&sc.days<21?'background:var(--crit-soft);color:var(--crit-ink)':sc.days!=null&&sc.days<42?'background:var(--warn-soft);color:var(--warn-ink)':'background:var(--good-soft);color:var(--good-ink)',
-        sc.onHand!=null
-          ? `<span>${sc.onHand.toLocaleString()} units${sc.perDay>0?` · ${sc.perDay.toFixed(1)}/day`:' · no sales'}</span>`
-          : `<span>sync TikTok for stock</span>`)}
-      ${kpi('Stock Value', sc.retail!=null?money(Math.round(sc.retail)):'—', 'card','background:var(--violet-soft);color:var(--violet-ink)',
-        sc.retail!=null
-          ? `<span>${money(Math.round(sc.cost||0))} at cost · ${m2(sc.asp)}/unit</span>`
-          : `<span>${sc.onHand!=null?'no price to value it':'sync TikTok for stock'}</span>`)}
-      ${kpi('Break-even', be>0?money(Math.round(be))+'/day':'—', 'target',
-        be>0&&perDay>=be?'background:var(--good-soft);color:var(--good-ink)':be>0?'background:var(--crit-soft);color:var(--crit-ink)':'background:var(--neutral-soft);color:var(--neutral-ink)',
-        be>0
-          ? `<span class="delta ${perDay>=be?'up':'down'}">${perDay>=be?'↑ above':'↓ below'} by ${money(Math.round(Math.abs(perDay-be)))}</span>`
-          : `<span>sync Xero to set this</span>`)}
     </div>
 
     <div class="grid g-23" style="margin-top:16px">
@@ -3835,32 +3927,49 @@ function renderSettingsInner(){
       </div>
       <div class="card">
         <div class="card-h"><div><div class="t">Back office</div><div class="sub">Tools that sit behind the day-to-day pages</div></div></div>
-        <div class="card-b flush">
-          <div class="rank-item clickable" style="cursor:pointer" onclick="navTo('profit')">
-            <span style="width:26px;display:inline-flex;color:var(--ink-2)">${ICONS.pound}</span>
-            <div class="ri-meta"><div class="n">Profit</div><div class="s">P&amp;L, cost of goods, bank, orders and the margin calculator</div></div>
-            <button class="btn btn-soft btn-xs" onclick="event.stopPropagation();navTo('profit')">Open profit →</button>
+        <div class="card-b">
+          <div class="inset-cap">Appearance</div>
+          <div class="inset" style="margin-bottom:20px">
+            <div class="irow" style="cursor:default">
+              <span class="iic" style="background:#5856d6">${ICONS.eye}</span>
+              <div><div class="it">Theme</div><div class="is">Dark uses Apple's elevation greys, not pure black</div></div>
+              <span class="iv" style="margin-left:auto">
+                <span class="seg" style="display:inline-flex">
+                  ${[['auto','Auto'],['light','Light'],['dark','Dark']].map(([v,l])=>
+                    `<button class="${state.theme===v?'active':''}" onclick="setTheme('${v}')">${l}</button>`).join('')}
+                </span>
+              </span>
+            </div>
           </div>
-          <div class="rank-item clickable" style="cursor:pointer" onclick="navTo('courses')">
-            <span style="width:26px;display:inline-flex;color:var(--ink-2)">${ICONS.grad}</span>
-            <div class="ri-meta"><div class="n">Courses</div><div class="s">Training library for the team${COURSES.filter(c=>!c.watched).length?` · ${COURSES.filter(c=>!c.watched).length} unwatched`:''}</div></div>
-            <button class="btn btn-soft btn-xs" onclick="event.stopPropagation();navTo('courses')">Open courses →</button>
+          <div class="inset-cap">Tools</div>
+          <div class="inset">
+            <div class="irow" onclick="navTo('memory')">
+              <span class="iic" style="background:#5856d6">${ICONS.grad}</span>
+              <div><div class="it">Assistant memory</div><div class="is">What it has been taught, and where it is still guessing</div></div>
+              <span class="iv">${AI.learnings.length?`${AI.learnings.length} stored`:'nothing yet'}</span><span class="ich">›</span>
+            </div>
+            <div class="irow" onclick="navTo('roadmap')">
+              <span class="iic" style="background:#ff9500">${ICONS.flag}</span>
+              <div><div class="it">Roadmap</div><div class="is">Ideas for the app itself — capture now, decide later</div></div>
+              <span class="iv">${ROADMAP.length?`${ROADMAP.length} idea${ROADMAP.length===1?'':'s'}`:'empty'}</span><span class="ich">›</span>
+            </div>
+            <div class="irow" onclick="navTo('profit')">
+              <span class="iic" style="background:#34c759">${ICONS.pound}</span>
+              <div><div class="it">Profit</div><div class="is">P&amp;L, cost of goods, bank, orders and the calculator</div></div>
+              <span class="ich">›</span>
+            </div>
+            <div class="irow" onclick="navTo('courses')">
+              <span class="iic" style="background:#0071e3">${ICONS.grad}</span>
+              <div><div class="it">Courses</div><div class="is">Training library for the team</div></div>
+              <span class="iv">${COURSES.filter(c=>!c.watched).length?`${COURSES.filter(c=>!c.watched).length} unwatched`:''}</span><span class="ich">›</span>
+            </div>
+            <div class="irow" onclick="navTo('map')">
+              <span class="iic" style="background:#8e8e93">${ICONS.graph}</span>
+              <div><div class="it">Profit cause map</div><div class="is">What drives profit, and which checks fail</div></div>
+              <span class="ich">›</span>
+            </div>
           </div>
-          <div class="rank-item clickable" style="cursor:pointer" onclick="navTo('memory')">
-            <span style="width:26px;display:inline-flex;color:var(--ink-2)">${ICONS.grad}</span>
-            <div class="ri-meta"><div class="n">Assistant memory</div><div class="s">What the assistant has been taught, and where it's still guessing${AI.learnings.length?` · ${AI.learnings.length} stored`:' · nothing stored yet'}</div></div>
-            <button class="btn btn-soft btn-xs" onclick="event.stopPropagation();navTo('memory')">Open memory →</button>
-          </div>
-          <div class="rank-item clickable" style="cursor:pointer" onclick="navTo('roadmap')">
-            <span style="width:26px;display:inline-flex;color:var(--ink-2)">${ICONS.flag}</span>
-            <div class="ri-meta"><div class="n">Roadmap</div><div class="s">Ideas for the app itself — capture now, decide later${ROADMAP.length?` · ${ROADMAP.length} idea${ROADMAP.length===1?'':'s'}`:''}</div></div>
-            <button class="btn btn-soft btn-xs" onclick="event.stopPropagation();navTo('roadmap')">Open roadmap →</button>
-          </div>
-          <div class="rank-item clickable" style="cursor:pointer" onclick="navTo('map')">
-            <span style="width:26px;display:inline-flex;color:var(--ink-2)">${ICONS.graph}</span>
-            <div class="ri-meta"><div class="n">Profit Cause Map</div><div class="s">The causal model behind the numbers — what drives profit, and which checks fail</div></div>
-            <button class="btn btn-soft btn-xs" onclick="event.stopPropagation();navTo('map')">Open map →</button>
-          </div>
+        </div>
         </div>
       </div>
       <div class="card">
