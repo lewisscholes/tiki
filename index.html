@@ -175,11 +175,15 @@ a{color:var(--accent-ink);text-decoration:none}
 .card-b.flush{padding:0}
 .grid{display:grid;gap:16px}
 /* ---- Assistant workspace page ---- */
-/* Focus mode: slide the main nav away and reclaim the width. Used when working
-   a brief or a long analysis inside the assistant. */
-body.asx-nav .sidebar{transform:translateX(-100%)}
-body.asx-nav .main{margin-left:0}
-body.asx-nav .content{padding-left:16px;padding-right:16px}
+/* Focus mode reuses the app's existing sb-hidden mechanism (the one the brief
+   editor uses) rather than inventing a second one. A floating restore button
+   guarantees you can never end up on a page with no way back to the menu. */
+body.sb-hidden .content{padding-left:18px;padding-right:18px}
+.sb-restore{position:fixed;left:12px;top:12px;z-index:70;width:34px;height:34px;border-radius:9px;
+  border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow);cursor:pointer;
+  display:none;align-items:center;justify-content:center;color:var(--ink-2);font-size:.95rem;font-family:inherit}
+body.sb-hidden .sb-restore{display:flex}
+.sb-restore:hover{background:var(--surface-2)}
 .asx{display:flex;height:calc(100vh - 96px);margin:-6px -4px 0;border:1px solid var(--line-2);
   border-radius:var(--radius);overflow:hidden;background:var(--surface)}
 .asx-hist{width:250px;flex:none;border-right:1px solid var(--line-2);display:flex;
@@ -1166,6 +1170,7 @@ body.sb-hidden .main{margin-left:0}
 <body>
 <div class="app">
   <div class="sidebar-overlay" id="sbOverlay" onclick="toggleSidebar(false)"></div>
+  <button class="sb-restore" onclick="document.body.classList.remove('sb-hidden');state.asxNav=false;if(state.page==='assistant')renderAssistant()" title="Show the menu">▤</button>
   <aside class="sidebar" id="sidebar">
     <div class="sb-logo">
       <div class="mark">
@@ -1826,7 +1831,15 @@ function goNeedsLewis(){
 }
 function navTo(page, opts={}){
   if(state.page==='settings' && page!=='settings' && state.vaultOpen){ state.vaultOpen=false; revealedPw.clear(); }
-  if(page!=='briefs') document.body.classList.remove('brief-full','sb-hidden');
+  /* Leaving briefs OR the assistant restores the sidebar. Without the
+     'assistant' exemption, collapsing the nav in the assistant and then
+     navigating anywhere left you on a page with no menu — which read as the
+     app dumping you back on the dashboard. */
+  if(page!=='briefs' && page!=='assistant'){
+    document.body.classList.remove('brief-full','sb-hidden');
+    state.asxNav=false;
+  }
+  if(page==='briefs') document.body.classList.remove('sb-hidden');
   state.page=page;
   if(opts.taskView) state.taskView=opts.taskView;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -8633,7 +8646,7 @@ function aiChat(){
 function aiChatOpen(id){
   const c=AI_CHATS.find(x=>x.id===id); if(!c) return;
   state.aiChatId=id; AI.msgs=c.msgs; AI.started=c.msgs.length>0;
-  aiRenderAll();
+  aiRender(); if(state.page==='assistant') renderAssistant();
 }
 function aiChatDelete(id){
   const i=AI_CHATS.findIndex(x=>x.id===id); if(i<0) return;
@@ -8697,14 +8710,17 @@ function aiWorkHTML(w, cls){
   </div>`;
 }
 
-function aiRenderAll(){ aiRender(); if(state.page==='assistant') renderAssistant(); }
+function aiRenderAll(){ aiRender(); asxSoft(); }
 
 /* ---- full-page assistant workspace ------------------------------------- */
+function asxSetNav(on){
+  state.asxNav=!!on;
+  document.body.classList.toggle('sb-hidden', state.asxNav);
+}
 function asxToggle(what){
-  if(what==='nav'){ state.asxNav=!state.asxNav; document.body.classList.toggle('asx-nav',state.asxNav); }
-  else if(what==='hist'){ state.asxHist=!state.asxHist; }
-  else { const on=state.asxNav&&state.asxHist; state.asxNav=!on; state.asxHist=!on;
-         document.body.classList.toggle('asx-nav',state.asxNav); }
+  if(what==='nav')       asxSetNav(!state.asxNav);
+  else if(what==='hist') state.asxHist=!state.asxHist;
+  else { const on=state.asxNav&&state.asxHist; asxSetNav(!on); state.asxHist=!on; }
   renderAssistant();
 }
 function asxSend(){
@@ -8719,54 +8735,69 @@ function asxKey(ev){
 }
 function asxAsk(q){ aiPush('me', esc(q)); if(AI.cloud!==false) aiCloudRespond(q); else aiTyping(()=>aiRespond(q)); }
 
-function renderAssistant(){
-  const chat=aiChat();
-  const q=(state.asxSearch||'').toLowerCase();
-  const list=AI_CHATS.filter(c=>!q||c.title.toLowerCase().includes(q));
-  const day=86400000, now=Date.now();
-  const grp=c=>c.pinned?'Pinned':(now-c.updated<day?'Today':(now-c.updated<2*day?'Yesterday':(now-c.updated<8*day?'Previous 7 days':'Older')));
-  const order=['Pinned','Today','Yesterday','Previous 7 days','Older'];
-  const groups={}; list.forEach(c=>{ (groups[grp(c)] ||= []).push(c); });
-
+function asxThreadHTML(){
   const suggestions=[
     ['Why did gross profit move?','Decompose it into GMV, fees, COGS and ad spend'],
     ['Which retainer is underperforming?','£ gross profit per £1 of retainer'],
-    ['Who has gone quiet?','Creators who stopped posting'],
+    ['Which videos convert best?','Top GPM in the current period'],
     ['What needs my attention today?','Overdue tasks, stock cover, break-even']
   ];
-
-  const thread = AI.msgs.length ? `<div class="asx-mid">${AI.msgs.map(m=>{
+  if(!AI.msgs.length) return `<div class="asx-empty">
+      <h3>What are we working on?</h3>
+      <p>I can read every dataset in the account — videos, creators, briefs, retainers, settlements, costs, the profit map — and create tasks or remember decisions.</p>
+      <div class="asx-sugg">${suggestions.map(([t,s])=>
+        `<div class="asx-sg" onclick="asxAsk('${t.replace(/'/g,"\\'")}')"><div class="t">${t}</div><div class="s">${s}</div></div>`).join('')}</div>
+    </div>`;
+  return `<div class="asx-mid">${AI.msgs.map(m=>{
       if(m.who==='work') return `<div class="asx-turn asx-ai">${aiWorkHTML(m,'asx-work')}</div>`;
       if(m.who==='card') return `<div class="asx-turn">${m.html}</div>`;
       if(m.who==='me')   return `<div class="asx-turn asx-me"><div class="bub">${m.html}</div></div>`;
       return `<div class="asx-turn asx-ai"><div class="who"><span class="av">T</span><span class="nm">Tiki</span></div>
         <div class="body">${m.html}</div></div>`;
-    }).join('')}</div>`
-  : `<div class="asx-empty">
-      <h3>What are we working on?</h3>
-      <p>I read the live account — GMV, fees, COGS, creators, videos and retainers — and I can create tasks and remember decisions.</p>
-      <div class="asx-sugg">${suggestions.map(([t,s])=>
-        `<div class="asx-sg" onclick="asxAsk('${t.replace(/'/g,"\\'")}')"><div class="t">${t}</div><div class="s">${s}</div></div>`).join('')}</div>
-    </div>`;
+    }).join('')}</div>`;
+}
+function asxListHTML(){
+  const chat=aiChat();
+  const q=(state.asxSearch||'').toLowerCase();
+  const list=AI_CHATS.filter(c=>!q||(c.title||'').toLowerCase().includes(q));
+  const day=86400000, now=Date.now();
+  const grp=c=>c.pinned?'Pinned':(now-c.updated<day?'Today':(now-c.updated<2*day?'Yesterday':(now-c.updated<8*day?'Previous 7 days':'Older')));
+  const order=['Pinned','Today','Yesterday','Previous 7 days','Older'];
+  const groups={}; list.forEach(c=>{ (groups[grp(c)] ||= []).push(c); });
+  return order.filter(g=>groups[g]).map(g=>`<div class="asx-grp">${g}</div>`+
+    groups[g].sort((a,b)=>b.updated-a.updated).map(c=>`
+      <div class="asx-item ${c.id===chat.id?'on':''}" onclick="aiChatOpen('${c.id}')" title="${esc(c.title)}">
+        ${c.pinned?'★ ':''}${esc(c.title)}
+        <button class="dots" onclick="aiChatMenu(event,'${c.id}')">⋯</button>
+      </div>`).join('')).join('') || `<div class="asx-grp">No chats match</div>`;
+}
+/* Update only what changed. Rebuilding the whole page on every message threw
+   away the composer and the search box mid-typing — the composer must survive
+   a reply arriving. */
+function asxSoft(){
+  if(state.page!=='assistant') return;
+  const th=$('asxThread');
+  if(!th){ renderAssistant(); return; }
+  th.innerHTML=asxThreadHTML();
+  th.scrollTop=th.scrollHeight;
+  const ls=$('asxList'); if(ls) ls.innerHTML=asxListHTML();
+  const ti=$('asxTitle'); if(ti) ti.textContent=aiChat().title;
+  const ft=$('asxFoot'); if(ft) ft.textContent=`${AI_CHATS.length} chat${AI_CHATS.length===1?'':'s'} · synced to the team`;
+}
 
+function renderAssistant(){
+  const chat=aiChat();
+  document.body.classList.toggle('sb-hidden', !!state.asxNav);
   $('page-assistant').innerHTML=`
   <div class="asx">
     <div class="asx-hist ${state.asxHist?'min':''}">
       <div class="asx-hh">
         <button class="asx-new" onclick="aiChatNew()">＋ New chat</button>
-        <input class="asx-search" placeholder="Search chats…" value="${esc(state.asxSearch||'')}"
-          oninput="state.asxSearch=this.value;clearTimeout(window._asxq);window._asxq=setTimeout(renderAssistant,200)">
+        <input class="asx-search" id="asxSearch" placeholder="Search chats…" value="${esc(state.asxSearch||'')}"
+          oninput="state.asxSearch=this.value;clearTimeout(window._asxq);window._asxq=setTimeout(asxSoft,180)">
       </div>
-      <div class="asx-list">
-        ${order.filter(g=>groups[g]).map(g=>`<div class="asx-grp">${g}</div>`+
-          groups[g].sort((a,b)=>b.updated-a.updated).map(c=>`
-            <div class="asx-item ${c.id===chat.id?'on':''}" onclick="aiChatOpen('${c.id}')" title="${esc(c.title)}">
-              ${c.pinned?'★ ':''}${esc(c.title)}
-              <button class="dots" onclick="aiChatMenu(event,'${c.id}')">⋯</button>
-            </div>`).join('')).join('')
-          || `<div class="asx-grp">No chats match</div>`}
-      </div>
-      <div class="asx-foot">${AI_CHATS.length} chat${AI_CHATS.length===1?'':'s'} · synced to the team</div>
+      <div class="asx-list" id="asxList">${asxListHTML()}</div>
+      <div class="asx-foot" id="asxFoot">${AI_CHATS.length} chat${AI_CHATS.length===1?'':'s'} · synced to the team</div>
     </div>
 
     <div class="asx-main">
@@ -8774,14 +8805,14 @@ function renderAssistant(){
         <button class="asx-ib ${state.asxNav?'act':''}" onclick="asxToggle('nav')" title="Hide the main menu">◧</button>
         <button class="asx-ib ${state.asxHist?'act':''}" onclick="asxToggle('hist')" title="Hide the chat list">☰</button>
         <div style="min-width:0">
-          <h2>${esc(chat.title)}</h2>
+          <h2 id="asxTitle">${esc(chat.title)}</h2>
           <div class="sub">Full account context · ${esc(state.dateRange)} · ${AI.learnings.length} learning${AI.learnings.length===1?'':'s'}</div>
         </div>
-        <button class="asx-ib ${state.asxNav&&state.asxHist?'act':''}" style="margin-left:auto" onclick="asxToggle('focus')" title="Focus mode">⛶</button>
+        <button class="asx-ib ${state.asxNav&&state.asxHist?'act':''}" style="margin-left:auto" onclick="asxToggle('focus')" title="Focus mode — hide both">⛶</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleAI(true)">Side panel</button>
       </div>
 
-      <div class="asx-thread" id="asxThread">${thread}</div>
+      <div class="asx-thread" id="asxThread">${asxThreadHTML()}</div>
 
       <div class="asx-comp">
         <div class="asx-box">
@@ -8789,17 +8820,17 @@ function renderAssistant(){
             onkeydown="asxKey(event)"></textarea>
           <div class="asx-crow">
             <button class="asx-ib" title="Attach an image" onclick="toast('Image upload needs the assistant function extended for vision — say the word and I will add it')">📎</button>
-            <button class="asx-ib" title="Attach a video" onclick="navTo('videos')">🎬</button>
-            <button class="asx-send" onclick="asxSend()">↑</button>
+            <button class="asx-ib" title="Open the Videos tab" onclick="navTo('videos')">🎬</button>
+            <button class="asx-send" onclick="asxSend()" title="Send (Enter)">↑</button>
           </div>
         </div>
-        <div class="asx-hint">Tiki can create tasks, add creators and remember decisions. It can't message creators or browse the web.</div>
+        <div class="asx-hint">Tiki reads every dataset in the account and can create tasks, add creators and remember decisions. It can't message creators or browse the web.</div>
       </div>
     </div>
   </div>`;
 
   const th=$('asxThread'); if(th) th.scrollTop=th.scrollHeight;
-  if(!AI.msgs.length) setTimeout(()=>$('asxTa')?.focus(),40);
+  setTimeout(()=>$('asxTa')?.focus(),40);
 }
 function toggleAI(force){
   AI.open = force!==undefined?force:!AI.open;
@@ -8991,7 +9022,21 @@ function aiSnapshot(){
     profit: hasProfitData()? { contribution:PNL.contribution, period:PNL.period, operating:pnlActive().op } : null,
     pendingSamples: SAMPLE_REQS.filter(x=>x.status==='pending').length,
     unreadMessages: CHATS.reduce((n,c)=>n+c.unread,0),
-    memory: AI.learnings
+    memory: AI.learnings,
+    /* The snapshot is a MAP, not the territory. It says what exists and how
+       much of it; query_account fetches the actual rows. This is why a 38,000
+       row video table is reachable without ever being pasted into a prompt. */
+    videoPeriod: (typeof vidCoverage==='function' && VIDEO_DAILY.length) ? (()=>{
+      const cov=vidCoverage(); const rows=aiVideoRows();
+      const gmv=rows.reduce((n,r)=>n+r.gmv,0), views=rows.reduce((n,r)=>n+r.views,0);
+      return { window:{from:state.videoFrom,to:state.videoTo}, storedHistory:cov,
+        videos:rows.length, creatorsPosting:new Set(rows.map(r=>r.username)).size,
+        gmv:+gmv.toFixed(2), views, gpm:views?+(gmv/views*1000).toFixed(2):0,
+        note:'Per-video detail is in the videos dataset — query it rather than guessing' };
+    })() : null,
+    datasets: Object.entries(AI_DATASETS()).map(([k,v])=>({
+      dataset:k, rows:(()=>{ try{ return (v.rows()||[]).length; }catch(e){ return 0; } })(), about:v.desc
+    }))
   };
 }
 function aiHistory(){
@@ -9022,7 +9067,7 @@ async function aiCloudRespond(q, toolResults, prior, work){
     if(pendingTools.length && j.stop_reason==='tool_use'){
       /* Show the tools BEFORE running them, so the process block reads like a
          narration of the work rather than a summary printed afterwards. */
-      pendingTools.forEach(t=>aiWorkStep(work,'🛠️',
+      pendingTools.forEach(t=>aiWorkStep(work, t.name==='query_account'?'🔎':'🛠️',
         `<span class="asx-tool">${esc(t.name)}</span> ${esc(aiToolLabel(t.name,t.input))}`));
       const results=pendingTools.map(t=>({ tool_use_id:t.id, content:aiRunTool(t.name,t.input) }));
       if(text.length) aiWorkStep(work,'💭', esc(text.join(' ').slice(0,150)));
@@ -9041,6 +9086,12 @@ async function aiCloudRespond(q, toolResults, prior, work){
 /* Human label for a tool call, shown in the process block. */
 function aiToolLabel(name, inp){
   inp=inp||{};
+  if(name==='query_account'){
+    const w=(inp.where||[]).map(x=>`${x.field} ${x.op||'='} ${x.value}`).join(', ');
+    const s=inp.sort?` by ${inp.sort.field}`:'';
+    const a=inp.aggregate&&inp.aggregate.group_by?` grouped by ${inp.aggregate.group_by}`:'';
+    return `${inp.dataset}${w?' where '+w:''}${a}${s}`;
+  }
   if(name==='create_task')   return inp.title||'new task';
   if(name==='add_creator')   return (inp.name||'')+' '+(inp.handle||'');
   if(name==='complete_task') return 'task '+(inp.id||'');
@@ -9055,8 +9106,148 @@ function aiMd(t){
     .replace(/^[-•] (.*)$/gm,'· $1')
     .replace(/\n/g,'\n');
 }
+/* ============================================================================
+   QUERY LAYER — everything the assistant can look at
+   The browser already holds the whole account in memory, so the assistant can
+   query it directly with no extra round trip. One generic tool beats twenty
+   specific ones: the model picks a dataset, filters, sorts and aggregates.
+   Datasets are deliberately PROJECTED — trimmed to the fields that carry
+   meaning — so a 38,000-row table can be reasoned about without blowing the
+   context window.
+   ========================================================================== */
+function aiVideoRows(){
+  if(typeof vidAgg!=='function' || !VIDEO_DAILY.length) return [];
+  const save={from:state.videoFrom,to:state.videoTo,basis:state.videoBasis,acct:state.videoAccount,cr:state.videoCreator,q:state.videoSearch};
+  state.videoBasis='earned'; state.videoAccount='all'; state.videoCreator='all'; state.videoSearch='';
+  const rows=vidAgg().map(v=>({
+    video_id:v.id, username:v.username, caption:(v.title||'').slice(0,180),
+    gmv:+v.gmv.toFixed(2), views:v.views, items_sold:v.items, sku_orders:v.orders,
+    ctr_pct:+(v.ctr*100).toFixed(2), gpm:+v.gpm.toFixed(2),
+    duration_s:v.duration, posted:(v.posted||'').slice(0,10), account_type:v.account,
+    product:(v.products&&v.products[0]&&(v.products[0].name||v.products[0].title))||null,
+    url:v.username?`https://www.tiktok.com/@${v.username}/video/${v.id}`:null
+  }));
+  Object.assign(state,{videoBasis:save.basis,videoAccount:save.acct,videoCreator:save.cr,videoSearch:save.q});
+  return rows;
+}
+function aiCreatorRows(){
+  const PM=(typeof creatorPeriodMap==='function')?creatorPeriodMap():new Map();
+  return CREATORS.map(c=>{
+    const s=PM.get(String(c.handle||'').replace(/^@/,'').toLowerCase())||{gmv:0,views:0,videos:0,items:0,gpm:0};
+    const r=RETAINERS.find(x=>x.creatorId===c.id);
+    return { id:c.id, name:c.name, handle:c.handle, stage:c.stage, brand:c.brand,
+      followers:c.followers, period_gmv:+s.gmv.toFixed(2), period_videos:s.videos,
+      period_views:s.views, period_items:s.items, gpm:+s.gpm.toFixed(2),
+      on_retainer:!!r, retainer_amount:r?r.amount:0, commission:c.commission,
+      last_contact:c.lastContact, notes:(c.notes||'').slice(0,200) };
+  });
+}
+function aiBriefRows(){
+  return BRIEFS.map(b=>{
+    const els=(b.pages||[]).flatMap(p=>p.els||b.els||[]);
+    const text=(b.els||els).filter(e=>e&&e.kind==='text').map(e=>String(e.html||e.text||'').replace(/<[^>]+>/g,' ')).join(' ');
+    return { id:b.id, name:b.name||b.title||'Untitled', folder:b.folder||null,
+      pages:(b.pages||[]).length||1, elements:(b.els||[]).length,
+      updated:b.updated||b.created||null, shared:!!b.shareToken,
+      text:text.replace(/\s+/g,' ').trim().slice(0,1200) };
+  });
+}
+function AI_DATASETS(){
+  const P=(a,f)=>({ rows:()=>(a()||[]).map(f) });
+  return {
+    videos:        { desc:'One row per video for the current period — gmv, views, ctr, gpm, caption, product, url', rows:aiVideoRows },
+    video_days:    { desc:'Raw per-video-per-day rows (largest table)', rows:()=>VIDEO_DAILY },
+    creators:      { desc:'Creators with period GMV/videos/views/GPM, stage, retainer, notes', rows:aiCreatorRows },
+    briefs:        { desc:'Content briefs including their text', rows:aiBriefRows },
+    retainers:     { desc:'Who we pay monthly, promised vs delivered, GMV', rows:()=>RETAINERS },
+    tasks:         { desc:'Tasks with assignee, priority, due date, status', rows:()=>state.tasks },
+    products:      { desc:'Products with price, stock, SKU count', rows:()=>PRODUCTS },
+    orders:        { desc:'TikTok orders', rows:()=>TIKTOK_ORDERS },
+    settlements:   { desc:'TikTok settlement lines — the real money', rows:()=>TIKTOK_SETTLEMENTS },
+    cogs_batches:  { desc:'Cost of goods batches (ex VAT)', rows:()=>COGS_BATCHES },
+    bank:          { desc:'Bank transactions from Xero', rows:()=>PROFIT_BANK },
+    profit_orders: { desc:'Orders as used by the P&L', rows:()=>PROFIT_ORDERS },
+    overheads:     { desc:'Manual monthly overheads', rows:()=>OVERHEAD_MANUAL },
+    vendors:       { desc:'Profit vendors and their categorisation', rows:()=>PROFIT_VENDORS },
+    ad_spend:      { desc:'Ad spend by day', rows:()=>AD_SPEND },
+    campaigns:     { desc:'Outreach campaigns — audience, sequence, invite, DM steps', rows:()=>CAMPAIGNS },
+    flows:         { desc:'Trigger flows — when they fire and what they send', rows:()=>OUTREACH_FLOWS },
+    samples:       { desc:'Sample requests', rows:()=>SAMPLE_REQS },
+    messages:      { desc:'Creator message threads', rows:()=>CHATS },
+    outreach_list: { desc:"Lewis's personal outreach list", rows:()=>PERSONAL_OUTREACH },
+    brief_shelf:   { desc:'Videos parked for use in briefs', rows:()=>BRIEF_SHELF },
+    courses:       { desc:'Training courses', rows:()=>COURSES },
+    map_nodes:     { desc:'Profit cause map nodes', rows:()=>MAP_GRAPH.nodes },
+    map_links:     { desc:'Profit cause map links', rows:()=>MAP_GRAPH.links },
+    team:          { desc:'Team members and roles', rows:()=>Object.values(USERS) },
+    brands:        { desc:'Brands in the workspace', rows:()=>Object.values(BRANDS) },
+    learnings:     { desc:'What the assistant has been taught', rows:()=>AI.learnings.map((m,i)=>({i,memory:m})) },
+    api_log:       { desc:'Every API call Tiki made — source, action, ok, message', rows:()=>API_LOG },
+    notifications: { desc:'Notifications', rows:()=>state.notifs }
+  };
+}
+function aiQuery(inp){
+  const sets=AI_DATASETS();
+  const key=String(inp.dataset||'').toLowerCase();
+  if(!sets[key]) return JSON.stringify({ ok:false, error:'unknown dataset',
+    available:Object.keys(sets).map(k=>({dataset:k, description:sets[k].desc})) });
+
+  let rows=(sets[key].rows()||[]).slice();
+  const total=rows.length;
+
+  const val=(r,f)=>String(f).split('.').reduce((o,k)=>(o==null?o:o[k]), r);
+  (inp.where||[]).forEach(w=>{
+    const f=w.field, op=(w.op||'eq').toLowerCase(), v=w.value;
+    rows=rows.filter(r=>{
+      const a=val(r,f);
+      if(op==='contains') return String(a??'').toLowerCase().includes(String(v).toLowerCase());
+      if(op==='in')  return Array.isArray(v)&&v.map(String).includes(String(a));
+      if(op==='gt')  return Number(a)>Number(v);
+      if(op==='gte') return Number(a)>=Number(v);
+      if(op==='lt')  return Number(a)<Number(v);
+      if(op==='lte') return Number(a)<=Number(v);
+      if(op==='ne')  return String(a)!==String(v);
+      if(op==='exists') return a!=null&&a!=='';
+      return String(a)===String(v);
+    });
+  });
+  const matched=rows.length;
+
+  if(inp.aggregate && inp.aggregate.group_by){
+    const g=inp.aggregate.group_by, sums=inp.aggregate.sum||[];
+    const m=new Map();
+    rows.forEach(r=>{
+      const k=String(val(r,g)??'—');
+      let o=m.get(k); if(!o){ o={ [g]:k, count:0 }; sums.forEach(s=>o[s]=0); m.set(k,o); }
+      o.count++; sums.forEach(s=>o[s]=+((o[s]+(Number(val(r,s))||0)).toFixed(2)));
+    });
+    rows=[...m.values()];
+  }
+
+  if(inp.sort && inp.sort.field){
+    const f=inp.sort.field, dir=(inp.sort.dir||'desc')==='asc'?1:-1;
+    rows.sort((a,b)=>{
+      const x=val(a,f), y=val(b,f);
+      const nx=Number(x), ny=Number(y);
+      if(Number.isFinite(nx)&&Number.isFinite(ny)) return (nx-ny)*dir;
+      return String(x??'').localeCompare(String(y??''))*dir;
+    });
+  }
+
+  const limit=Math.min(Math.max(Number(inp.limit)||25,1),200);
+  rows=rows.slice(0,limit);
+  if(Array.isArray(inp.fields)&&inp.fields.length)
+    rows=rows.map(r=>{ const o={}; inp.fields.forEach(f=>o[f]=val(r,f)); return o; });
+
+  let out=JSON.stringify({ ok:true, dataset:key, total, matched, returned:rows.length, rows });
+  if(out.length>60000){ rows=rows.slice(0,Math.max(1,Math.floor(rows.length/3)));
+    out=JSON.stringify({ ok:true, dataset:key, total, matched, returned:rows.length, truncated:true, rows }); }
+  return out;
+}
+
 function aiRunTool(name, inp){
   try{
+    if(name==='query_account') return aiQuery(inp||{});
     if(name==='create_task'){
       const id='t'+Date.now();
       state.tasks.unshift({ id, name:(inp.title||'Untitled task').slice(0,120), desc:(inp.description||'').slice(0,400),
