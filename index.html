@@ -9104,20 +9104,26 @@ function aiSnapshot(){
     /* The snapshot is a MAP, not the territory. It says what exists and how
        much of it; query_account fetches the actual rows. This is why a 38,000
        row video table is reachable without ever being pasted into a prompt. */
-    videoPeriod: (typeof vidCoverage==='function' && VIDEO_DAILY.length) ? (()=>{
+    /* Every derived block is individually guarded. One bad row in one dataset
+       must never take down the whole request — that failure used to drop the
+       assistant into its offline pattern matcher for the rest of the session. */
+    videoPeriod: (()=>{ try{
+      if(typeof vidCoverage!=='function' || !VIDEO_DAILY.length) return null;
       const cov=vidCoverage(); const rows=aiVideoRows();
       const gmv=rows.reduce((n,r)=>n+r.gmv,0), views=rows.reduce((n,r)=>n+r.views,0);
       return { window:{from:state.videoFrom,to:state.videoTo}, storedHistory:cov,
         videos:rows.length, creatorsPosting:new Set(rows.map(r=>r.username)).size,
         gmv:+gmv.toFixed(2), views, gpm:views?+(gmv/views*1000).toFixed(2):0,
         note:'Per-video detail is in the videos dataset — query it rather than guessing' };
-    })() : null,
+    }catch(e){ return null; } })(),
     /* Field names ship WITH the catalogue. Without them the model guesses,
        guesses wrong, and burns four round trips finding out. */
-    datasets: Object.entries(AI_DATASETS()).map(([k,v])=>{
-      let rows=[]; try{ rows=v.rows()||[]; }catch(e){}
-      return { dataset:k, rows:rows.length, about:v.desc, fields:aiFieldsOf(rows) };
-    })
+    datasets: (()=>{ try{
+      return Object.entries(AI_DATASETS()).map(([k,v])=>{
+        let rows=[]; try{ rows=v.rows()||[]; }catch(e){}
+        return { dataset:k, rows:rows.length, about:v.desc, fields:aiFieldsOf(rows) };
+      });
+    }catch(e){ return []; } })()
   };
 }
 function aiHistory(){
@@ -9136,7 +9142,11 @@ async function aiCloudRespond(q, toolResults, prior, work){
     if(toolResults){ body.continue={ prior, toolResults }; }
     const r=await tikiFetch('/functions/v1/assistant',{ method:'POST', body:JSON.stringify(body) });
     if(r.status===404 || r.status===501){ AI.cloud=false; $('aiTy')?.remove(); aiRespond(q); if(r.status===501) aiPush('ai','<i>(Cloud brain is deployed but has no API key yet — running in basic mode. Add the ANTHROPIC_API_KEY secret in Supabase to switch me on.)</i>'); return; }
-    if(!r.ok) throw new Error('assistant call failed');
+    if(!r.ok){
+      const t=await r.text().catch(()=>'');
+      let m=''; try{ m=JSON.parse(t).error||''; }catch(e){ m=t.slice(0,200); }
+      throw new Error(`HTTP ${r.status}${m?' — '+m:''}`);
+    }
     const j=await r.json();
     $('aiTy')?.remove();
     let pendingTools=[];
@@ -9158,10 +9168,15 @@ async function aiCloudRespond(q, toolResults, prior, work){
     aiWorkEnd(work,true);
     text.forEach(t=>aiPush('ai', aiMd(t)));
   }catch(e){
+    /* A transient failure must NOT permanently downgrade the session. The old
+       code set AI.cloud=false on any error, so one timeout left the assistant
+       claiming it had no live model for the rest of the day — while quietly
+       answering from a pattern matcher. Only a missing function or missing key
+       (handled above) disables the cloud brain now. */
     $('aiTy')?.remove();
+    aiWorkStep(work,'⚠️', esc(String(e.message||e)));
     aiWorkEnd(work,false);
-    AI.cloud=false;
-    aiRespond(q);
+    aiPush('ai', `That request failed — <b>${esc(String(e.message||e))}</b>. Try again; if it keeps happening the detail is in the steps above.`);
   }
 }
 /* Human label for a tool call, shown in the process block. */
@@ -9197,8 +9212,14 @@ function aiMd(t){
    meaning — so a 38,000-row table can be reasoned about without blowing the
    context window.
    ========================================================================== */
+/* Building the snapshot used to walk all 38,000 daily rows about four times
+   per message. Memoised on the window plus row count, so a single message
+   costs one pass and repeat queries cost nothing. */
+let AI_VROWS_CACHE=null;
 function aiVideoRows(){
   if(typeof vidAgg!=='function' || !VIDEO_DAILY.length) return [];
+  const ck=`${state.videoFrom}|${state.videoTo}|${VIDEO_DAILY.length}`;
+  if(AI_VROWS_CACHE && AI_VROWS_CACHE.k===ck) return AI_VROWS_CACHE.v;
   const save={from:state.videoFrom,to:state.videoTo,basis:state.videoBasis,acct:state.videoAccount,cr:state.videoCreator,q:state.videoSearch};
   state.videoBasis='earned'; state.videoAccount='all'; state.videoCreator='all'; state.videoSearch='';
   const rows=vidAgg().map(v=>({
@@ -9210,6 +9231,7 @@ function aiVideoRows(){
     url:v.username?`https://www.tiktok.com/@${v.username}/video/${v.id}`:null
   }));
   Object.assign(state,{videoBasis:save.basis,videoAccount:save.acct,videoCreator:save.cr,videoSearch:save.q});
+  AI_VROWS_CACHE={k:ck, v:rows};
   return rows;
 }
 function aiCreatorRows(){
