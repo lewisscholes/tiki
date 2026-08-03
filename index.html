@@ -174,6 +174,95 @@ a{color:var(--accent-ink);text-decoration:none}
 .card-b{padding:16px 18px}
 .card-b.flush{padding:0}
 .grid{display:grid;gap:16px}
+/* ---- Assistant workspace page ---- */
+/* Focus mode: slide the main nav away and reclaim the width. Used when working
+   a brief or a long analysis inside the assistant. */
+body.asx-nav .sidebar{transform:translateX(-100%)}
+body.asx-nav .main{margin-left:0}
+body.asx-nav .content{padding-left:16px;padding-right:16px}
+.asx{display:flex;height:calc(100vh - 96px);margin:-6px -4px 0;border:1px solid var(--line-2);
+  border-radius:var(--radius);overflow:hidden;background:var(--surface)}
+.asx-hist{width:250px;flex:none;border-right:1px solid var(--line-2);display:flex;
+  flex-direction:column;background:var(--surface-2);transition:width .2s ease}
+.asx-hist.min{width:0;overflow:hidden;border-right:none}
+.asx-hh{padding:13px 12px 10px;border-bottom:1px solid var(--line-2)}
+.asx-new{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;
+  padding:9px 12px;font-size:.83rem;font-weight:650;cursor:pointer;display:flex;align-items:center;
+  gap:8px;color:var(--ink);justify-content:center;font-family:inherit}
+.asx-new:hover{background:var(--surface-2)}
+.asx-search{width:100%;margin-top:9px;border:1px solid var(--line);border-radius:9px;padding:7px 11px;
+  font-size:.8rem;font-family:inherit;outline:none;background:var(--surface)}
+.asx-search:focus{border-color:var(--accent)}
+.asx-list{flex:1;overflow-y:auto;padding:9px}
+.asx-grp{font-size:.64rem;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);
+  font-weight:700;padding:10px 8px 5px}
+.asx-item{position:relative;padding:8px 28px 8px 10px;border-radius:9px;font-size:.8rem;
+  color:var(--ink-2);cursor:pointer;line-height:1.35;margin-bottom:1px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.asx-item:hover{background:rgba(0,0,0,.04)}
+.asx-item.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:650}
+.asx-item .dots{position:absolute;right:5px;top:5px;opacity:0;width:20px;height:20px;border:none;
+  background:none;cursor:pointer;color:var(--ink-3);border-radius:5px;font-size:.85rem;font-family:inherit}
+.asx-item:hover .dots{opacity:1}
+.asx-item .dots:hover{background:rgba(0,0,0,.08)}
+.asx-foot{padding:9px 13px;border-top:1px solid var(--line-2);font-size:.7rem;color:var(--ink-3)}
+.asx-main{flex:1;display:flex;flex-direction:column;min-width:0}
+.asx-top{padding:10px 18px;border-bottom:1px solid var(--line-2);display:flex;align-items:center;gap:9px}
+.asx-top h2{font-size:.96rem;margin:0;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.asx-top .sub{font-size:.72rem;color:var(--ink-3)}
+.asx-ib{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--surface);
+  cursor:pointer;color:var(--ink-2);font-size:.88rem;display:flex;align-items:center;
+  justify-content:center;flex:none;font-family:inherit}
+.asx-ib:hover{background:var(--surface-2)}
+.asx-ib.act{background:var(--accent-soft);border-color:transparent;color:var(--accent-ink)}
+.asx-thread{flex:1;overflow-y:auto;padding:24px 22px 6px;background:var(--bg)}
+.asx-mid{max-width:780px;margin:0 auto}
+.asx-turn{margin-bottom:22px}
+.asx-me{display:flex;justify-content:flex-end}
+.asx-me .bub{background:var(--ink);color:#fff;border-radius:16px 16px 4px 16px;padding:11px 15px;
+  font-size:.88rem;line-height:1.5;max-width:80%}
+.asx-ai .who{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.asx-ai .av{width:23px;height:23px;border-radius:7px;background:#111;color:#fff;display:flex;
+  align-items:center;justify-content:center;font-size:.66rem;font-weight:800}
+.asx-ai .nm{font-size:.78rem;font-weight:700}
+.asx-ai .body{font-size:.89rem;line-height:1.62;white-space:pre-wrap}
+.asx-work{border:1px solid var(--line-2);border-radius:12px;background:var(--surface);
+  margin-bottom:12px;overflow:hidden}
+.asx-work .wh{display:flex;align-items:center;gap:9px;padding:9px 13px;cursor:pointer;
+  font-size:.78rem;font-weight:650;color:var(--ink-2);background:var(--surface-2)}
+.asx-work .wh .spin{width:13px;height:13px;border:2px solid var(--line);border-top-color:var(--accent);
+  border-radius:50%;animation:asxsp .7s linear infinite;flex:none}
+@keyframes asxsp{to{transform:rotate(360deg)}}
+.asx-work .wh .tick{color:var(--good-ink);font-weight:800}
+.asx-work .wh .cx{margin-left:auto;font-size:.71rem;color:var(--ink-3);font-weight:500}
+.asx-work.shut .wb{display:none}
+.asx-work .wb{padding:5px 13px 10px}
+.asx-step{display:flex;gap:10px;padding:6px 0;font-size:.79rem;line-height:1.45;align-items:flex-start}
+.asx-step .ic{width:17px;flex:none;text-align:center;font-size:.76rem;margin-top:1px}
+.asx-step .tx{color:var(--ink-2)}
+.asx-step .meta{font-size:.71rem;color:var(--ink-3);margin-top:2px}
+.asx-tool{background:var(--violet-soft);color:var(--violet-ink);border-radius:6px;padding:1px 7px;
+  font-size:.71rem;font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.asx-comp{padding:11px 22px 16px;background:var(--bg)}
+.asx-box{max-width:780px;margin:0 auto;border:1px solid var(--line);border-radius:16px;
+  background:var(--surface);box-shadow:var(--shadow);padding:11px 13px}
+.asx-box:focus-within{border-color:var(--accent)}
+.asx-ta{width:100%;border:none;outline:none;resize:none;font-family:inherit;font-size:.89rem;
+  line-height:1.5;background:none;min-height:24px;max-height:170px;color:var(--ink)}
+.asx-crow{display:flex;align-items:center;gap:8px;margin-top:8px}
+.asx-send{margin-left:auto;width:31px;height:31px;border-radius:9px;border:none;background:var(--accent);
+  color:#fff;cursor:pointer;font-size:.88rem;font-family:inherit}
+.asx-send:disabled{opacity:.4;cursor:default}
+.asx-hint{max-width:780px;margin:8px auto 0;font-size:.7rem;color:var(--ink-3);text-align:center}
+.asx-empty{max-width:640px;margin:0 auto;padding-top:6vh;text-align:center}
+.asx-empty h3{font-size:1.45rem;letter-spacing:-.02em;margin:0 0 7px}
+.asx-empty p{color:var(--ink-3);font-size:.88rem;margin:0 0 22px}
+.asx-sugg{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;text-align:left}
+.asx-sg{border:1px solid var(--line);border-radius:13px;padding:12px 14px;cursor:pointer;background:var(--surface)}
+.asx-sg:hover{border-color:#cfd4dc;background:var(--surface-2)}
+.asx-sg .t{font-size:.83rem;font-weight:650;margin-bottom:3px}
+.asx-sg .s{font-size:.75rem;color:var(--ink-3);line-height:1.4}
+@media(max-width:900px){.asx-hist{display:none}}
 /* ---- Forms + campaign wizard ---- */
 .fi{width:100%;font-family:inherit;font-size:.84rem;padding:9px 12px;border:1px solid var(--line);
   border-radius:10px;background:var(--surface);color:var(--ink);outline:none}
@@ -1134,6 +1223,7 @@ body.sb-hidden .main{margin-left:0}
 
     <div class="content">
       <div class="page" id="page-overview"></div>
+      <div class="page" id="page-assistant"></div>
       <div class="page" id="page-tasks"></div>
       <div class="page" id="page-creators"></div>
       <div class="page" id="page-videos"></div>
@@ -1528,6 +1618,7 @@ const state = {
   videoFrom:'', videoTo:'', videoBasis:'earned', videoSort:'gmv',
   videoCreator:'all', videoAccount:'affiliate', videoSearch:'', videoPreset:'30',
   outreachTab:'recs', campEdit:null, campStep:1,
+  aiChatId:null, asxNav:false, asxHist:false, asxSearch:'',
   notifFilter:'all', reportTab:'weekly',
   notifs: NOTIFICATIONS.map(n=>({...n})),
   tasks: TASKS.map(t=>({...t, comments:[...t.comments]}))
@@ -1542,6 +1633,7 @@ const ICONS = {
   users: I('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'),
   card: I('<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>'),
   video: I('<rect x="2" y="4" width="14" height="16" rx="3"/><path d="m16 10 5-3v10l-5-3z"/>'),
+  spark: I('<path d="M12 3v3M12 18v3M4.2 7.2l2.1 2.1M17.7 17.7l2.1 2.1M3 12h3M18 12h3M4.2 16.8l2.1-2.1M17.7 6.3l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/>'),
   box: I('<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>'),
   target: I('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'),
   chart: I('<path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/>'),
@@ -1695,6 +1787,7 @@ function toggleSidebar(force){
 /* ============ NAV / ROUTER ============ */
 const PAGES = [
   { id:'overview',  label:'Overview',  icon:'home' },
+  { id:'assistant', label:'Assistant', icon:'spark' },
   { id:'tasks',     label:'Tasks',     icon:'tasks',  count:()=>state.tasks.filter(t=>inBrand(t)&&t.status!=='Completed').length },
   { id:'creators',  label:'Creators',  icon:'users' },
   { id:'videos',    label:'Videos',    icon:'video' },
@@ -1717,7 +1810,7 @@ function renderSidebar(){
   const n=navPages();
   const grp=(title,ids)=>{ const ps=n.filter(p=>ids.includes(p.id)); return ps.length?`<div class="sb-section">${title}</div>`+ps.map(navBtn).join(''):''; };
   $('sbNav').innerHTML =
-    grp('Workspace',['overview','tasks']) +
+    grp('Workspace',['overview','assistant','tasks']) +
     grp('Operations',['creators','videos','outreach','retainers','briefs']);
   $('sbSettingsBtn')?.classList.toggle('active', state.page==='settings');
   function navBtn(p){
@@ -1745,7 +1838,7 @@ function navTo(page, opts={}){
   window.scrollTo({top:0});
 }
 function renderPage(page){
-  ({ overview:renderOverview, tasks:renderTasks, creators:renderCreators, videos:renderVideos, outreach:renderOutreach,
+  ({ overview:renderOverview, assistant:renderAssistant, tasks:renderTasks, creators:renderCreators, videos:renderVideos, outreach:renderOutreach,
      retainers:renderRetainers, briefs:renderBriefs, courses:renderCourses,
      profit:renderProfit, map:renderMap, settings:renderSettings })[page]();
 }
@@ -8512,6 +8605,202 @@ const TikiMap = (function(){
    tasks/creators), learnings table for taught context.
    ===================================================================== */
 const AI = { open:false, started:false, unread:0, msgs:[], learnings:[], previews:{}, pv:0 };
+
+/* ============================================================================
+   ASSISTANT CHAT STORE
+   Chats live in tiki_state so they sync to the whole team. AI.msgs is a live
+   reference to the ACTIVE chat's message array, which is why the side panel and
+   the full-page workspace stay in step without any copying — they are literally
+   rendering the same array.
+   ========================================================================== */
+const AI_CHATS = [];
+
+function aiChatNew(silent){
+  const c={ id:'ch-'+Math.random().toString(36).slice(2,9), title:'New chat',
+    pinned:false, created:Date.now(), updated:Date.now(), msgs:[] };
+  AI_CHATS.unshift(c); state.aiChatId=c.id; AI.msgs=c.msgs; AI.started=false;
+  if(!silent){ aiIntro(); tikiPush(); aiRenderAll(); }
+  return c;
+}
+function aiChat(){
+  let c=AI_CHATS.find(x=>x.id===state.aiChatId);
+  if(!c) c=AI_CHATS[0];
+  if(!c) c=aiChatNew(true);
+  state.aiChatId=c.id;
+  if(AI.msgs!==c.msgs) AI.msgs=c.msgs;
+  return c;
+}
+function aiChatOpen(id){
+  const c=AI_CHATS.find(x=>x.id===id); if(!c) return;
+  state.aiChatId=id; AI.msgs=c.msgs; AI.started=c.msgs.length>0;
+  aiRenderAll();
+}
+function aiChatDelete(id){
+  const i=AI_CHATS.findIndex(x=>x.id===id); if(i<0) return;
+  AI_CHATS.splice(i,1);
+  if(state.aiChatId===id){ state.aiChatId=AI_CHATS[0]?.id||null; AI.msgs=AI_CHATS[0]?AI_CHATS[0].msgs:[]; }
+  tikiPush(); aiRenderAll(); toast('Chat deleted');
+}
+function aiChatPin(id){
+  const c=AI_CHATS.find(x=>x.id===id); if(!c) return;
+  c.pinned=!c.pinned; tikiPush(); aiRenderAll();
+}
+function aiChatRename(id){
+  const c=AI_CHATS.find(x=>x.id===id); if(!c) return;
+  const v=prompt('Rename chat', c.title); if(v===null) return;
+  c.title=v.trim()||c.title; tikiPush(); aiRenderAll();
+}
+function aiChatMenu(ev,id){
+  ev.stopPropagation();
+  const c=AI_CHATS.find(x=>x.id===id); if(!c) return;
+  openModal(modalShell('Chat',`<div style="font-size:.86rem;color:var(--ink-2)">${esc(c.title)}</div>`,
+    `<button class="btn btn-ghost" onclick="closeModal();aiChatPin('${id}')">${c.pinned?'Unpin':'Pin'}</button>
+     <button class="btn btn-ghost" onclick="closeModal();aiChatRename('${id}')">Rename</button>
+     <button class="btn btn-ghost" style="color:var(--crit-ink)" onclick="closeModal();aiChatDelete('${id}')">Delete</button>`));
+}
+/* Title a chat from its first real question, the way every chat app does. */
+function aiChatTitleFrom(text){
+  const c=aiChat();
+  if(c.title!=='New chat') return;
+  c.title=String(text||'').replace(/<[^>]+>/g,'').trim().slice(0,52)||'New chat';
+}
+
+/* ---- process / "working" blocks ---------------------------------------- */
+function aiSnapMeta(){
+  const cov=(typeof vidCoverage==='function')?vidCoverage():null;
+  const bits=[state.dateRange];
+  if(PROFIT_ORDERS.length) bits.push(PROFIT_ORDERS.length+' orders');
+  if(typeof VIDEO_DAILY!=='undefined'&&VIDEO_DAILY.length) bits.push(new Set(VIDEO_DAILY.map(r=>r.video_id)).size+' videos');
+  if(CREATORS.length) bits.push(CREATORS.length+' creators');
+  if(cov) bits.push(cov.lo+' → '+cov.hi);
+  return bits.join(' · ');
+}
+function aiWorkStart(){
+  const w={ who:'work', done:false, t0:Date.now(), steps:[
+    { ic:'📊', tx:'Read the account snapshot', meta:aiSnapMeta() } ] };
+  AI.msgs.push(w); aiRenderAll(); return w;
+}
+function aiWorkStep(w, ic, tx, meta){ if(!w) return; w.steps.push({ic,tx,meta}); aiRenderAll(); }
+function aiWorkEnd(w, ok){
+  if(!w) return;
+  w.done=true; w.ok=ok!==false; w.secs=((Date.now()-w.t0)/1000).toFixed(1);
+  aiRenderAll();
+}
+function aiWorkHTML(w, cls){
+  const head = w.done
+    ? `<span class="tick">✓</span> Worked through ${w.steps.length} step${w.steps.length===1?'':'s'}<span class="cx">${w.secs}s · click to collapse</span>`
+    : `<span class="spin"></span> Working…<span class="cx">step ${w.steps.length}</span>`;
+  return `<div class="${cls}${w.done?' shut':''}" onclick="this.classList.toggle('shut')">
+    <div class="wh">${head}</div>
+    <div class="wb">${w.steps.map(s=>`<div class="asx-step"><span class="ic">${s.ic}</span>
+      <div class="tx">${s.tx}${s.meta?`<div class="meta">${esc(s.meta)}</div>`:''}</div></div>`).join('')}</div>
+  </div>`;
+}
+
+function aiRenderAll(){ aiRender(); if(state.page==='assistant') renderAssistant(); }
+
+/* ---- full-page assistant workspace ------------------------------------- */
+function asxToggle(what){
+  if(what==='nav'){ state.asxNav=!state.asxNav; document.body.classList.toggle('asx-nav',state.asxNav); }
+  else if(what==='hist'){ state.asxHist=!state.asxHist; }
+  else { const on=state.asxNav&&state.asxHist; state.asxNav=!on; state.asxHist=!on;
+         document.body.classList.toggle('asx-nav',state.asxNav); }
+  renderAssistant();
+}
+function asxSend(){
+  const ta=$('asxTa'); const q=(ta?.value||'').trim(); if(!q) return;
+  ta.value=''; ta.style.height='auto';
+  aiPush('me', esc(q));
+  if(AI.cloud!==false) aiCloudRespond(q); else aiTyping(()=>aiRespond(q));
+}
+function asxKey(ev){
+  if(ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); asxSend(); return; }
+  const ta=ev.target; ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,170)+'px';
+}
+function asxAsk(q){ aiPush('me', esc(q)); if(AI.cloud!==false) aiCloudRespond(q); else aiTyping(()=>aiRespond(q)); }
+
+function renderAssistant(){
+  const chat=aiChat();
+  const q=(state.asxSearch||'').toLowerCase();
+  const list=AI_CHATS.filter(c=>!q||c.title.toLowerCase().includes(q));
+  const day=86400000, now=Date.now();
+  const grp=c=>c.pinned?'Pinned':(now-c.updated<day?'Today':(now-c.updated<2*day?'Yesterday':(now-c.updated<8*day?'Previous 7 days':'Older')));
+  const order=['Pinned','Today','Yesterday','Previous 7 days','Older'];
+  const groups={}; list.forEach(c=>{ (groups[grp(c)] ||= []).push(c); });
+
+  const suggestions=[
+    ['Why did gross profit move?','Decompose it into GMV, fees, COGS and ad spend'],
+    ['Which retainer is underperforming?','£ gross profit per £1 of retainer'],
+    ['Who has gone quiet?','Creators who stopped posting'],
+    ['What needs my attention today?','Overdue tasks, stock cover, break-even']
+  ];
+
+  const thread = AI.msgs.length ? `<div class="asx-mid">${AI.msgs.map(m=>{
+      if(m.who==='work') return `<div class="asx-turn asx-ai">${aiWorkHTML(m,'asx-work')}</div>`;
+      if(m.who==='card') return `<div class="asx-turn">${m.html}</div>`;
+      if(m.who==='me')   return `<div class="asx-turn asx-me"><div class="bub">${m.html}</div></div>`;
+      return `<div class="asx-turn asx-ai"><div class="who"><span class="av">T</span><span class="nm">Tiki</span></div>
+        <div class="body">${m.html}</div></div>`;
+    }).join('')}</div>`
+  : `<div class="asx-empty">
+      <h3>What are we working on?</h3>
+      <p>I read the live account — GMV, fees, COGS, creators, videos and retainers — and I can create tasks and remember decisions.</p>
+      <div class="asx-sugg">${suggestions.map(([t,s])=>
+        `<div class="asx-sg" onclick="asxAsk('${t.replace(/'/g,"\\'")}')"><div class="t">${t}</div><div class="s">${s}</div></div>`).join('')}</div>
+    </div>`;
+
+  $('page-assistant').innerHTML=`
+  <div class="asx">
+    <div class="asx-hist ${state.asxHist?'min':''}">
+      <div class="asx-hh">
+        <button class="asx-new" onclick="aiChatNew()">＋ New chat</button>
+        <input class="asx-search" placeholder="Search chats…" value="${esc(state.asxSearch||'')}"
+          oninput="state.asxSearch=this.value;clearTimeout(window._asxq);window._asxq=setTimeout(renderAssistant,200)">
+      </div>
+      <div class="asx-list">
+        ${order.filter(g=>groups[g]).map(g=>`<div class="asx-grp">${g}</div>`+
+          groups[g].sort((a,b)=>b.updated-a.updated).map(c=>`
+            <div class="asx-item ${c.id===chat.id?'on':''}" onclick="aiChatOpen('${c.id}')" title="${esc(c.title)}">
+              ${c.pinned?'★ ':''}${esc(c.title)}
+              <button class="dots" onclick="aiChatMenu(event,'${c.id}')">⋯</button>
+            </div>`).join('')).join('')
+          || `<div class="asx-grp">No chats match</div>`}
+      </div>
+      <div class="asx-foot">${AI_CHATS.length} chat${AI_CHATS.length===1?'':'s'} · synced to the team</div>
+    </div>
+
+    <div class="asx-main">
+      <div class="asx-top">
+        <button class="asx-ib ${state.asxNav?'act':''}" onclick="asxToggle('nav')" title="Hide the main menu">◧</button>
+        <button class="asx-ib ${state.asxHist?'act':''}" onclick="asxToggle('hist')" title="Hide the chat list">☰</button>
+        <div style="min-width:0">
+          <h2>${esc(chat.title)}</h2>
+          <div class="sub">Full account context · ${esc(state.dateRange)} · ${AI.learnings.length} learning${AI.learnings.length===1?'':'s'}</div>
+        </div>
+        <button class="asx-ib ${state.asxNav&&state.asxHist?'act':''}" style="margin-left:auto" onclick="asxToggle('focus')" title="Focus mode">⛶</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleAI(true)">Side panel</button>
+      </div>
+
+      <div class="asx-thread" id="asxThread">${thread}</div>
+
+      <div class="asx-comp">
+        <div class="asx-box">
+          <textarea class="asx-ta" id="asxTa" rows="1" placeholder="Ask about the account, or tell me what to do…"
+            onkeydown="asxKey(event)"></textarea>
+          <div class="asx-crow">
+            <button class="asx-ib" title="Attach an image" onclick="toast('Image upload needs the assistant function extended for vision — say the word and I will add it')">📎</button>
+            <button class="asx-ib" title="Attach a video" onclick="navTo('videos')">🎬</button>
+            <button class="asx-send" onclick="asxSend()">↑</button>
+          </div>
+        </div>
+        <div class="asx-hint">Tiki can create tasks, add creators and remember decisions. It can't message creators or browse the web.</div>
+      </div>
+    </div>
+  </div>`;
+
+  const th=$('asxThread'); if(th) th.scrollTop=th.scrollHeight;
+  if(!AI.msgs.length) setTimeout(()=>$('asxTa')?.focus(),40);
+}
 function toggleAI(force){
   AI.open = force!==undefined?force:!AI.open;
   document.body.classList.toggle('ai-open', AI.open);
@@ -8526,9 +8815,18 @@ function aiCtxUpdate(){
   const p=PAGES.find(x=>x.id===state.page);
   const el=$('aiCtx'); if(el) el.textContent=`Watching: ${p?p.label:'Overview'} · ${brandInfo(state.brand).name}`;
 }
-function aiPush(who, html){ AI.msgs.push({who,html}); aiRender(); }
+function aiPush(who, html){
+  aiChat();
+  if(who==='me') aiChatTitleFrom(html);
+  AI.msgs.push({who,html});
+  const c=AI_CHATS.find(x=>x.id===state.aiChatId); if(c) c.updated=Date.now();
+  aiRenderAll();
+}
 function aiRender(){
-  $('aiBody').innerHTML = AI.msgs.map(m=> m.who==='card' ? m.html :
+  if(!$('aiBody')) return;
+  $('aiBody').innerHTML = AI.msgs.map(m=>
+    m.who==='work' ? aiWorkHTML(m,'asx-work') :
+    m.who==='card' ? m.html :
     `<div class="msg ${m.who}">${m.html}</div>`).join('');
   $('aiLearn').innerHTML = `<span style="width:11px;display:inline-flex">${ICONS.grad}</span> ${AI.learnings.length} learnings stored · <button class="link-btn" style="font-size:.66rem" onclick="aiShowLearnings()">view</button>`;
   $('aiChips').innerHTML = AI.msgs.length<=2 ? [
@@ -8702,8 +9000,11 @@ function aiHistory(){
     role: m.who==='me'?'user':'assistant',
     content: m.html.replace(/<[^>]+>/g,'').slice(0,1200) }));
 }
-async function aiCloudRespond(q, toolResults, prior){
-  if(!toolResults){ $('aiBody').insertAdjacentHTML('beforeend','<div class="ai-typing" id="aiTy"><i></i><i></i><i></i></div>'); $('aiBody').scrollTop=$('aiBody').scrollHeight; }
+async function aiCloudRespond(q, toolResults, prior, work){
+  if(!toolResults){
+    work = aiWorkStart();
+    if($('aiBody')){ $('aiBody').insertAdjacentHTML('beforeend','<div class="ai-typing" id="aiTy"><i></i><i></i><i></i></div>'); $('aiBody').scrollTop=$('aiBody').scrollHeight; }
+  }
   try{
     const body={ snapshot:aiSnapshot(), history:aiHistory().slice(0,-1), question:q };
     if(toolResults){ body.continue={ prior, toolResults }; }
@@ -8713,20 +9014,38 @@ async function aiCloudRespond(q, toolResults, prior){
     const j=await r.json();
     $('aiTy')?.remove();
     let pendingTools=[];
+    let text=[];
     (j.content||[]).forEach(blk=>{
-      if(blk.type==='text' && blk.text.trim()) aiPush('ai', aiMd(blk.text));
+      if(blk.type==='text' && blk.text.trim()) text.push(blk.text);
       if(blk.type==='tool_use') pendingTools.push(blk);
     });
     if(pendingTools.length && j.stop_reason==='tool_use'){
+      /* Show the tools BEFORE running them, so the process block reads like a
+         narration of the work rather than a summary printed afterwards. */
+      pendingTools.forEach(t=>aiWorkStep(work,'🛠️',
+        `<span class="asx-tool">${esc(t.name)}</span> ${esc(aiToolLabel(t.name,t.input))}`));
       const results=pendingTools.map(t=>({ tool_use_id:t.id, content:aiRunTool(t.name,t.input) }));
-      await aiCloudRespond(q, results, j);
+      if(text.length) aiWorkStep(work,'💭', esc(text.join(' ').slice(0,150)));
+      await aiCloudRespond(q, results, j, work);
       return;
     }
+    aiWorkEnd(work,true);
+    text.forEach(t=>aiPush('ai', aiMd(t)));
   }catch(e){
     $('aiTy')?.remove();
+    aiWorkEnd(work,false);
     AI.cloud=false;
     aiRespond(q);
   }
+}
+/* Human label for a tool call, shown in the process block. */
+function aiToolLabel(name, inp){
+  inp=inp||{};
+  if(name==='create_task')   return inp.title||'new task';
+  if(name==='add_creator')   return (inp.name||'')+' '+(inp.handle||'');
+  if(name==='complete_task') return 'task '+(inp.id||'');
+  if(name==='save_memory')   return String(inp.memory||'').slice(0,80);
+  return '';
 }
 /* minimal markdown → safe html for assistant replies */
 function aiMd(t){
@@ -9313,8 +9632,9 @@ function collectTikiState(){
   /* v4 adds the team and brand lists so invites and new brands reach every device.
      v5 adds brief page colours and embedded photos (both nested inside briefs). */
   /* v7 adds the brief shelf — videos parked from the Videos page for reuse in briefs. */
-  /* v8 adds outreach campaigns (the four-step wizard config). */
-  return { v:8, campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  /* v9 adds saved assistant chats. aiChat (legacy, last 60 messages of the old
+     single thread) is kept so an older client doesn't lose its history. */
+  return { v:9, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
@@ -9327,6 +9647,11 @@ function applyTikiState(d){
   if(!d) return;
   if(Array.isArray(d.tasks)) state.tasks=d.tasks;
   replaceArr(BRIEF_SHELF,d.briefShelf); replaceArr(CAMPAIGNS,d.campaigns);
+  if(Array.isArray(d.aiChats)&&d.aiChats.length){
+    replaceArr(AI_CHATS,d.aiChats);
+    const c=AI_CHATS.find(x=>x.id===state.aiChatId)||AI_CHATS[0];
+    if(c){ state.aiChatId=c.id; AI.msgs=c.msgs; AI.started=c.msgs.length>0; }
+  }
   replaceArr(CREATORS,d.creators); replaceArr(RETAINERS,d.retainers); replaceArr(COURSES,d.courses);
   replaceArr(BRIEFS,d.briefs); replaceArr(OUTREACH_FLOWS,d.flows); replaceArr(SAMPLE_REQS,d.samples);
   replaceArr(CHATS,d.chats); replaceArr(PROFIT_VENDORS,d.profitVendors);
