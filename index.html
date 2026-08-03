@@ -258,14 +258,30 @@ body.sb-hidden .sb-restore{display:flex}
   color:#fff;cursor:pointer;font-size:.88rem;font-family:inherit}
 .asx-send:disabled{opacity:.4;cursor:default}
 .asx-hint{max-width:780px;margin:8px auto 0;font-size:.7rem;color:var(--ink-3);text-align:center}
-.asx-empty{max-width:640px;margin:0 auto;padding-top:6vh;text-align:center}
-.asx-empty h3{font-size:1.45rem;letter-spacing:-.02em;margin:0 0 7px}
-.asx-empty p{color:var(--ink-3);font-size:.88rem;margin:0 0 22px}
-.asx-sugg{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;text-align:left}
-.asx-sg{border:1px solid var(--line);border-radius:13px;padding:12px 14px;cursor:pointer;background:var(--surface)}
-.asx-sg:hover{border-color:#cfd4dc;background:var(--surface-2)}
-.asx-sg .t{font-size:.83rem;font-weight:650;margin-bottom:3px}
-.asx-sg .s{font-size:.75rem;color:var(--ink-3);line-height:1.4}
+/* Empty state: everything centred in the middle of the pane, composer included
+   — the way ChatGPT does it. On the first message the layout flips and the
+   composer settles at the bottom. */
+.asx-hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:20px 22px 8vh;background:var(--bg);overflow-y:auto}
+.asx-hero h3{font-size:1.75rem;letter-spacing:-.025em;margin:0 0 22px;text-align:center;font-weight:650}
+.asx-hero .asx-box{width:100%;max-width:660px;margin:0}
+.asx-sugg{margin-top:16px;width:100%;max-width:660px;display:flex;flex-direction:column;gap:2px}
+.asx-sg{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:11px;cursor:pointer;
+  font-size:.87rem;color:var(--ink-2)}
+.asx-sg:hover{background:var(--surface-2)}
+.asx-sg .ico{width:19px;text-align:center;flex:none;font-size:.92rem}
+.asx-sg .s{color:var(--ink-3);font-size:.8rem}
+/* + menu */
+.asx-plus{position:relative}
+.asx-menu{position:absolute;bottom:38px;left:0;min-width:290px;background:var(--surface);
+  border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-lg);padding:6px;
+  display:none;z-index:40}
+.asx-menu.open{display:block}
+.asx-mi{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:10px;cursor:pointer;
+  font-size:.85rem;color:var(--ink);white-space:nowrap}
+.asx-mi:hover{background:var(--surface-2)}
+.asx-mi .ico{width:19px;text-align:center;flex:none}
+.asx-mi .s{color:var(--ink-3);font-size:.79rem;margin-left:auto;padding-left:16px}
 @media(max-width:900px){.asx-hist{display:none}}
 /* ---- Forms + campaign wizard ---- */
 .fi{width:100%;font-family:inherit;font-size:.84rem;padding:9px 12px;border:1px solid var(--line);
@@ -8631,8 +8647,10 @@ const AI_CHATS = [];
 function aiChatNew(silent){
   const c={ id:'ch-'+Math.random().toString(36).slice(2,9), title:'New chat',
     pinned:false, created:Date.now(), updated:Date.now(), msgs:[] };
-  AI_CHATS.unshift(c); state.aiChatId=c.id; AI.msgs=c.msgs; AI.started=false;
-  if(!silent){ aiIntro(); tikiPush(); aiRenderAll(); }
+  AI_CHATS.unshift(c); state.aiChatId=c.id; AI.msgs=c.msgs; AI.started=true;
+  /* No auto-intro. A new chat should be an empty canvas, not a page of
+     information nobody asked for. The empty state offers suggestions instead. */
+  if(!silent){ tikiPush(); aiRender(); if(state.page==='assistant') renderAssistant(); }
   return c;
 }
 function aiChat(){
@@ -8736,18 +8754,6 @@ function asxKey(ev){
 function asxAsk(q){ aiPush('me', esc(q)); if(AI.cloud!==false) aiCloudRespond(q); else aiTyping(()=>aiRespond(q)); }
 
 function asxThreadHTML(){
-  const suggestions=[
-    ['Why did gross profit move?','Decompose it into GMV, fees, COGS and ad spend'],
-    ['Which retainer is underperforming?','£ gross profit per £1 of retainer'],
-    ['Which videos convert best?','Top GPM in the current period'],
-    ['What needs my attention today?','Overdue tasks, stock cover, break-even']
-  ];
-  if(!AI.msgs.length) return `<div class="asx-empty">
-      <h3>What are we working on?</h3>
-      <p>I can read every dataset in the account — videos, creators, briefs, retainers, settlements, costs, the profit map — and create tasks or remember decisions.</p>
-      <div class="asx-sugg">${suggestions.map(([t,s])=>
-        `<div class="asx-sg" onclick="asxAsk('${t.replace(/'/g,"\\'")}')"><div class="t">${t}</div><div class="s">${s}</div></div>`).join('')}</div>
-    </div>`;
   return `<div class="asx-mid">${AI.msgs.map(m=>{
       if(m.who==='work') return `<div class="asx-turn asx-ai">${aiWorkHTML(m,'asx-work')}</div>`;
       if(m.who==='card') return `<div class="asx-turn">${m.html}</div>`;
@@ -8777,7 +8783,9 @@ function asxListHTML(){
 function asxSoft(){
   if(state.page!=='assistant') return;
   const th=$('asxThread');
-  if(!th){ renderAssistant(); return; }
+  /* No thread element means we're in the centred empty state — the first
+     message flips the whole layout, so that needs a full render. */
+  if(!th || !AI.msgs.length){ renderAssistant(); return; }
   th.innerHTML=asxThreadHTML();
   th.scrollTop=th.scrollHeight;
   const ls=$('asxList'); if(ls) ls.innerHTML=asxListHTML();
@@ -8812,25 +8820,84 @@ function renderAssistant(){
         <button class="btn btn-ghost btn-sm" onclick="toggleAI(true)">Side panel</button>
       </div>
 
-      <div class="asx-thread" id="asxThread">${asxThreadHTML()}</div>
-
-      <div class="asx-comp">
-        <div class="asx-box">
-          <textarea class="asx-ta" id="asxTa" rows="1" placeholder="Ask about the account, or tell me what to do…"
-            onkeydown="asxKey(event)"></textarea>
-          <div class="asx-crow">
-            <button class="asx-ib" title="Attach an image" onclick="toast('Image upload needs the assistant function extended for vision — say the word and I will add it')">📎</button>
-            <button class="asx-ib" title="Open the Videos tab" onclick="navTo('videos')">🎬</button>
-            <button class="asx-send" onclick="asxSend()" title="Send (Enter)">↑</button>
+      ${AI.msgs.length ? `
+        <div class="asx-thread" id="asxThread">${asxThreadHTML()}</div>
+        <div class="asx-comp">${asxComposerHTML()}
+          <div class="asx-hint">Tiki reads every dataset in the account and can create tasks, add creators and remember decisions. It can't message creators or browse the web.</div>
+        </div>`
+      : `
+        <div class="asx-hero">
+          <h3>What can I help with?</h3>
+          ${asxComposerHTML()}
+          <div class="asx-sugg">
+            ${[['📉','Why did gross profit move?','Decompose GMV, fees, COGS, ad spend'],
+               ['💷','Which retainer is underperforming?','£ profit per £1 of retainer'],
+               ['🎬','Which videos convert best?','Top GPM this period'],
+               ['📌','What needs my attention today?','Overdue, stock cover, break-even']]
+              .map(([i,t,s])=>`<div class="asx-sg" onclick="asxAsk('${t.replace(/'/g,"\\'")}')">
+                 <span class="ico">${i}</span><span>${t}</span><span class="s">${s}</span></div>`).join('')}
           </div>
-        </div>
-        <div class="asx-hint">Tiki reads every dataset in the account and can create tasks, add creators and remember decisions. It can't message creators or browse the web.</div>
-      </div>
+        </div>`}
     </div>
   </div>`;
 
   const th=$('asxThread'); if(th) th.scrollTop=th.scrollHeight;
   setTimeout(()=>$('asxTa')?.focus(),40);
+}
+
+function asxComposerHTML(){
+  return `<div class="asx-box">
+    <textarea class="asx-ta" id="asxTa" rows="1" placeholder="Ask about the account, or tell me what to do…"
+      onkeydown="asxKey(event)"></textarea>
+    <div class="asx-crow">
+      <div class="asx-plus">
+        <button class="asx-ib" title="Add" onclick="asxPlus(event)">＋</button>
+        <div class="asx-menu" id="asxMenu">
+          <div class="asx-mi" onclick="asxMenuPick('file')"><span class="ico">📎</span>Add photos &amp; files<span class="s">Upload from computer</span></div>
+          <div class="asx-mi" onclick="asxMenuPick('video')"><span class="ico">🎬</span>Add a video<span class="s">From your Videos tab</span></div>
+          <div class="asx-mi" onclick="asxMenuPick('creator')"><span class="ico">👤</span>Add a creator<span class="s">Pull one into the chat</span></div>
+          <div class="asx-mi" onclick="asxMenuPick('brief')"><span class="ico">📄</span>Add a brief<span class="s">Reference its content</span></div>
+          <div class="asx-mi" onclick="asxMenuPick('deep')"><span class="ico">🔬</span>Deep analysis<span class="s">Segment and decompose fully</span></div>
+        </div>
+      </div>
+      <button class="asx-send" onclick="asxSend()" title="Send (Enter)">↑</button>
+    </div>
+  </div>`;
+}
+function asxPlus(ev){
+  ev.stopPropagation();
+  const m=$('asxMenu'); if(!m) return;
+  m.classList.toggle('open');
+  if(m.classList.contains('open')){
+    const close=e=>{ if(!m.contains(e.target)){ m.classList.remove('open'); document.removeEventListener('click',close); } };
+    setTimeout(()=>document.addEventListener('click',close),0);
+  }
+}
+function asxInsert(t){
+  const ta=$('asxTa'); if(!ta) return;
+  ta.value=(ta.value?ta.value.replace(/\s*$/,' '):'')+t;
+  ta.focus(); ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,170)+'px';
+}
+function asxMenuPick(what){
+  $('asxMenu')?.classList.remove('open');
+  if(what==='file')  return toast('Image and file upload needs the assistant function extended for vision — say the word and I will add it');
+  if(what==='video') return navTo('videos');
+  if(what==='deep')  return asxInsert('Go deep on this: segment it, separate rate from mix, and value everything in £.');
+  if(what==='creator'){
+    const names=CREATORS.filter(inBrand).slice(0,60).map(c=>c.handle).filter(Boolean);
+    if(!names.length) return toast('No creators in the pipeline yet');
+    return openModal(modalShell('Add a creator',
+      `<div style="max-height:52vh;overflow:auto">${names.map(h=>
+        `<div class="asx-mi" onclick="closeModal();asxInsert('${esc(h)} ')">${esc(h)}</div>`).join('')}</div>`,
+      `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>`));
+  }
+  if(what==='brief'){
+    if(!BRIEFS.length) return toast('No briefs yet');
+    return openModal(modalShell('Add a brief',
+      `<div style="max-height:52vh;overflow:auto">${BRIEFS.slice(0,60).map(b=>
+        `<div class="asx-mi" onclick="closeModal();asxInsert('the brief &quot;${esc(b.name||b.title||'Untitled')}&quot; ')">${esc(b.name||b.title||'Untitled')}</div>`).join('')}</div>`,
+      `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>`));
+  }
 }
 function toggleAI(force){
   AI.open = force!==undefined?force:!AI.open;
@@ -8838,7 +8905,7 @@ function toggleAI(force){
   if(AI.open){
     AI.unread=0; $('aiBadge').style.display='none';
     aiCtxUpdate();
-    if(!AI.started){ AI.started=true; aiIntro(); }
+    AI.started=true;   /* no auto-intro — the empty state carries the prompts */
     setTimeout(()=>$('aiInput').focus(),300);
   }
 }
