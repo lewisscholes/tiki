@@ -249,6 +249,137 @@ a{color:var(--accent-ink);text-decoration:none}
 .nav-item.soon span:first-of-type{filter:blur(.35px)}
 .soon-tag{margin-left:auto;font-size:.6rem;font-weight:800;letter-spacing:.04em;
   background:rgba(0,0,0,.08);color:var(--ink-3);border-radius:20px;padding:2px 7px}
+/* ============================================================================
+   LIQUID GLASS SHELL
+   The sidebar is gone. Navigation is a floating glass dock at the bottom, the
+   brand and profile live in a thin top bar, and search is the detached circle
+   on the right of the dock.
+
+   Glass needs something behind it to refract — that is what .aura is for. On a
+   flat background a glass pill just reads as a grey pill, which is why the
+   ambient wash is stronger in light mode, not weaker.
+   ========================================================================== */
+:root{
+  --glass:rgba(52,52,56,.55); --glass-brd:rgba(255,255,255,.13);
+  --glass-hi:inset 0 1px 0 rgba(255,255,255,.14);
+  --glass-shadow:0 20px 50px -14px rgba(0,0,0,.85);
+  --glass-on:rgba(255,255,255,.13);
+  --pop:rgba(46,46,50,.72); --hover:rgba(255,255,255,.10);
+  --spring:cubic-bezier(.22,1,.36,1);
+}
+body:not(.dark){
+  --glass:rgba(255,255,255,.66); --glass-brd:rgba(255,255,255,.85);
+  --glass-hi:inset 0 1px 0 rgba(255,255,255,.9);
+  --glass-shadow:0 18px 44px -14px rgba(20,30,60,.30);
+  --glass-on:rgba(0,0,0,.055);
+  --pop:rgba(255,255,255,.80); --hover:rgba(0,0,0,.05);
+}
+.sidebar{display:none !important}
+.main{margin-left:0 !important}
+.content{padding:72px 28px 132px;max-width:1180px;margin:0 auto}
+body{background:var(--bg)}
+.aura{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(52% 42% at 20% 8%,rgba(255,110,90,.26),transparent 70%),
+    radial-gradient(50% 46% at 84% 18%,rgba(90,150,255,.26),transparent 72%),
+    radial-gradient(64% 54% at 50% 106%,rgba(150,120,255,.22),transparent 70%)}
+body.dark .aura{background:
+    radial-gradient(48% 38% at 22% 12%,rgba(255,59,48,.16),transparent 70%),
+    radial-gradient(46% 42% at 82% 22%,rgba(10,132,255,.16),transparent 72%),
+    radial-gradient(60% 50% at 50% 108%,rgba(120,80,255,.14),transparent 70%)}
+.main,.page{position:relative;z-index:1}
+
+/* ---- top bar ---- */
+.rtop{position:fixed;top:0;left:0;right:0;height:58px;z-index:44;display:flex;align-items:center;
+  gap:10px;padding:0 20px}
+.rtop .rbrand{display:flex;align-items:center;gap:9px;cursor:pointer}
+.rtop .rmark{width:29px;height:29px;border-radius:8px;flex:none;display:flex;align-items:center;
+  justify-content:center;background:linear-gradient(145deg,#ff3b30,#c1121f)}
+.rtop .rmark svg{width:18px;height:18px}
+.rtop .rnm{font-weight:750;letter-spacing:-.02em;font-size:1rem}
+.rglass{background:var(--glass);border:1px solid var(--glass-brd);
+  backdrop-filter:blur(26px) saturate(190%);-webkit-backdrop-filter:blur(26px) saturate(190%);
+  box-shadow:var(--glass-hi)}
+.rchip{height:34px;border-radius:999px;padding:0 13px;display:flex;align-items:center;gap:8px;
+  font-size:.8rem;font-weight:600;color:var(--ink-2);transition:transform .16s var(--spring)}
+.rchip:active{transform:scale(.95)}
+.rchip .bd{width:8px;height:8px;border-radius:50%}
+.rtop .rspacer{flex:1}
+.ravatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:.76rem;font-weight:700;overflow:hidden;transition:transform .16s var(--spring)}
+.ravatar:active{transform:scale(.94)}
+.ravatar .av{width:100%;height:100%;border-radius:50%}
+.rbell{position:relative}
+.rbell .bdot{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;border-radius:9px;
+  background:var(--crit);color:#fff;font-size:.6rem;font-weight:800;display:flex;align-items:center;
+  justify-content:center;padding:0 4px}
+.rmenu{position:fixed;top:52px;right:20px;width:244px;border-radius:18px;padding:6px;z-index:60;
+  background:var(--pop);border:1px solid var(--glass-brd);
+  backdrop-filter:blur(30px) saturate(190%);-webkit-backdrop-filter:blur(30px) saturate(190%);
+  box-shadow:var(--glass-shadow),var(--glass-hi);opacity:0;transform:translateY(-8px) scale(.97);
+  pointer-events:none;transition:.24s var(--spring)}
+.rmenu.on{opacity:1;transform:none;pointer-events:auto}
+.rmi{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:12px;font-size:.85rem;
+  cursor:pointer;color:var(--ink);width:100%;text-align:left}
+.rmi:hover{background:var(--hover)}
+.rmi .ic{width:20px;display:flex;align-items:center;justify-content:center;flex:none}
+.rmi .ic svg{width:15px;height:15px}
+.rmi .s{margin-left:auto;font-size:.74rem;color:var(--ink-3)}
+.rm-sep{height:1px;background:var(--line-2);margin:5px 9px}
+.rm-cap{font-size:.64rem;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);
+  font-weight:700;padding:8px 12px 4px}
+
+/* ---- dock ---- */
+.rdock{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:45;
+  display:flex;align-items:center;gap:10px}
+.rbar{display:flex;align-items:center;gap:2px;padding:6px;border-radius:999px;
+  background:var(--glass);border:1px solid var(--glass-brd);
+  backdrop-filter:blur(34px) saturate(200%);-webkit-backdrop-filter:blur(34px) saturate(200%);
+  box-shadow:var(--glass-shadow),var(--glass-hi)}
+.rtab{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:9px 19px;border-radius:999px;color:var(--ink-2);transition:.26s var(--spring)}
+.rtab svg{width:21px;height:21px}
+.rtab .lb{font-size:.67rem;font-weight:650}
+.rtab:hover{color:var(--ink)}
+.rtab.on{color:var(--ink);background:var(--glass-on)}
+body.dark .rtab.on{box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 2px 10px rgba(0,0,0,.3)}
+body:not(.dark) .rtab.on{box-shadow:0 1px 3px rgba(0,0,0,.10)}
+.rtab.on svg,.rtab.on .lb{color:var(--accent)}
+.rtab .ct{position:absolute;top:3px;right:11px;min-width:16px;height:16px;border-radius:9px;
+  background:var(--crit);color:#fff;font-size:.58rem;font-weight:800;display:flex;
+  align-items:center;justify-content:center;padding:0 4px}
+.rorb{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:var(--glass);border:1px solid var(--glass-brd);
+  backdrop-filter:blur(34px) saturate(200%);-webkit-backdrop-filter:blur(34px) saturate(200%);
+  box-shadow:var(--glass-shadow),var(--glass-hi);transition:transform .18s var(--spring);color:var(--ink-2)}
+.rorb:hover{transform:scale(1.06);color:var(--ink)} .rorb:active{transform:scale(.95)}
+.rorb svg{width:21px;height:21px}
+.rfly{position:absolute;bottom:74px;left:50%;transform:translateX(-50%) translateY(10px) scale(.96);
+  min-width:252px;padding:7px;border-radius:22px;opacity:0;pointer-events:none;
+  background:var(--pop);border:1px solid var(--glass-brd);
+  backdrop-filter:blur(34px) saturate(200%);-webkit-backdrop-filter:blur(34px) saturate(200%);
+  box-shadow:var(--glass-shadow),var(--glass-hi);transition:.26s var(--spring)}
+.rfly.on{opacity:1;transform:translateX(-50%) translateY(0) scale(1);pointer-events:auto}
+.rfo{display:flex;align-items:center;gap:12px;padding:10px 13px;border-radius:15px;font-size:.87rem;
+  cursor:pointer;width:100%;text-align:left;color:var(--ink)}
+.rfo:hover{background:var(--hover)}
+.rfo .ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;flex:none;background:var(--hover)}
+.rfo .ic svg{width:15px;height:15px}
+.rfo .ct{margin-left:auto;font-size:.72rem;color:var(--ink-3)}
+.rfo.soon{opacity:.42;cursor:default}
+/* The brief editor takes the whole screen — the shell gets out of the way. */
+.rsync{width:7px;height:7px;border-radius:50%;background:var(--good-ink);margin-left:4px;flex:none;
+  transition:background .25s;box-shadow:0 0 0 3px color-mix(in srgb,var(--good-ink) 18%,transparent)}
+.rsync.saving{background:var(--warn-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--warn-ink) 18%,transparent)}
+.rsync.error{background:var(--crit-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--crit-ink) 18%,transparent)}
+/* The old chrome is retired, not deleted — hiding it keeps every call site alive. */
+.mob-menu,.sb-restore{display:none !important}
+body.brief-full .rdock,body.brief-full .rtop{display:none}
+@media(max-width:760px){
+  .rtab{padding:9px 13px}.rtab .lb{display:none}
+  .content{padding:66px 14px 128px}
+}
 /* ---- Hero KPI: one number leads, the rest support ---- */
 .kpi-hero-grid{display:grid;grid-template-columns:1.55fr 1fr 1fr;gap:14px;align-items:stretch}
 .kpi-hero{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--radius);
@@ -1353,7 +1484,36 @@ body.sb-hidden .main{margin-left:0}
 <body>
 <div class="app">
   <div class="sidebar-overlay" id="sbOverlay" onclick="toggleSidebar(false)"></div>
-  <button class="sb-restore" onclick="document.body.classList.remove('sb-hidden');state.asxNav=false;if(state.page==='assistant')renderAssistant()" title="Show the menu">▤</button>
+  <div class="aura"></div>
+
+  <div class="rtop">
+    <div class="rbrand" onclick="navTo('assistant')">
+      <div class="rmark">
+        <svg viewBox="0 0 48 48" fill="none"><defs><mask id="rarriTop"><rect width="48" height="48" fill="#fff"/><path d="M2 34 L48 14" stroke="#000" stroke-width="4.6"/></mask></defs><g mask="url(#rarriTop)" fill="#fff"><path d="M15 36 L20.5 12 h9.5 c5.6 0 8.6 3 7.6 7.6 -.7 3.4 -3.2 5.6 -6.8 6.4 l4.2 10 h-7.4 l-3.4 -9.2 h-1.6 L24.3 36 z M25.6 21.4 h3.2 c2.2 0 3.6 -1 3.9 -2.6 .3 -1.6 -.7 -2.5 -2.8 -2.5 h-3.2 z"/></g></svg>
+      </div>
+      <span class="rnm">Rarri</span>
+    </div>
+    <button class="rchip rglass" id="rBrandChip" onclick="if(BRAND_IDS().length>1)toggleDD(event,'brandMenuTop')">
+      <span class="bd" id="rBrandDot"></span><span id="rBrandName">All Brands</span>
+      <div class="dd-menu left" id="brandMenuTop" style="top:calc(100% + 6px);left:0;min-width:180px"></div>
+    </button>
+    <span class="rsync" id="rSync" title="Cloud sync"></span>
+    <div class="rspacer"></div>
+    <button class="rchip rglass" onclick="toggleDD(event,'newMenuTop')" title="Create new" style="width:34px;padding:0;justify-content:center">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      <div class="dd-menu left" id="newMenuTop" style="top:calc(100% + 6px);left:auto;right:0;min-width:200px"></div>
+    </button>
+    <button class="rchip rglass" onclick="openSpotlight()" title="Search (⌘K)" style="padding:0 12px">⌘K</button>
+    <button class="rchip rglass rbell" onclick="toggleNotifs()" title="Notifications" style="width:34px;padding:0;justify-content:center">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      <span class="bdot" id="rBellDot">0</span>
+    </button>
+    <button class="ravatar rglass" id="rAvatar" onclick="event.stopPropagation();toggleProfileMenu()"></button>
+  </div>
+  <div class="rmenu" id="rMenu"></div>
+
+  <div class="rdock" id="rDock"></div>
+
   <aside class="sidebar" id="sidebar">
     <div class="sb-logo">
       <div class="mark">
@@ -2026,6 +2186,7 @@ function renderSidebar(){
     grp('Operations',['creators','videos','outreach','retainers','briefs']) +
     grp('Content',['genvideo','genimage']);
   $('sbSettingsBtn')?.classList.toggle('active', state.page==='settings');
+  renderDock();   /* the sidebar is hidden now — the dock is the real nav */
   function navBtn(p){
     if(p.soon) return `<button class="nav-item soon" onclick="toast('${esc(p.label)} — on the roadmap, not built yet')">
       ${ICONS[p.icon]}<span>${p.label}</span><span class="soon-tag">Soon</span></button>`;
@@ -2035,6 +2196,114 @@ function renderSidebar(){
       ${ICONS[p.icon]}<span>${p.label}</span>${c?`<span class="count ${hot?'hot':''}">${c}</span>`:''}</button>`;
   }
 }
+/* ============================================================================
+   GLASS SHELL — dock, top bar, profile menu
+   renderSidebar() still exists and is called from everywhere, so it now drives
+   the dock instead. That keeps every existing call site working without
+   touching thirty functions.
+   ========================================================================== */
+const DOCK_TABS = ['assistant','overview','tasks'];
+const DOCK_OPS  = ['creators','videos','outreach','retainers','briefs'];
+
+function renderDock(){
+  const dock=$('rDock'); if(!dock) return;
+  const P=id=>PAGES.find(p=>p.id===id);
+  const opsOn = DOCK_OPS.includes(state.page);
+
+  const tab=(p)=>{
+    const c=p.count?p.count():0;
+    return `<button class="rtab ${state.page===p.id?'on':''}" onclick="navTo('${p.id}')">
+      ${ICONS[p.icon]}<span class="lb">${p.label}</span>${c?`<span class="ct">${c}</span>`:''}</button>`;
+  };
+  const row=(p)=>{
+    const c=p.count?p.count():0;
+    return `<button class="rfo ${p.soon?'soon':''}" ${p.soon
+      ? `onclick="toast('${esc(p.label)} — on the roadmap, not built yet')"`
+      : `onclick="rFlyGo('${p.id}')"`}>
+      <span class="ic">${ICONS[p.icon]}</span>${p.label}${c?`<span class="ct">${c}</span>`:''}</button>`;
+  };
+
+  dock.innerHTML=`
+    <div class="rbar">
+      ${DOCK_TABS.map(id=>P(id)).filter(Boolean).map(tab).join('')}
+      <button class="rtab ${opsOn?'on':''}" id="rOpsTab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
+        <span class="lb">Operations</span></button>
+    </div>
+    <button class="rorb" onclick="openSpotlight()" title="Search (⌘K)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    </button>
+    <div class="rfly" id="rFly">
+      <div class="rm-cap">Operations</div>
+      ${DOCK_OPS.map(id=>P(id)).filter(Boolean).map(row).join('')}
+      <div class="rm-cap">Content</div>
+      ${['genvideo','genimage'].map(id=>P(id)).filter(Boolean).map(row).join('')}
+    </div>`;
+
+  /* Hover to open, and a grace period so the pointer can travel from the tab
+     up into the panel without it closing underneath. */
+  const fly=$('rFly'), tabEl=$('rOpsTab'); let t;
+  const open=()=>{ clearTimeout(t); fly.classList.add('on'); };
+  const shut=()=>{ t=setTimeout(()=>fly.classList.remove('on'),220); };
+  tabEl.addEventListener('mouseenter',open); tabEl.addEventListener('mouseleave',shut);
+  fly.addEventListener('mouseenter',open);   fly.addEventListener('mouseleave',shut);
+  tabEl.onclick=()=>fly.classList.toggle('on');
+
+  /* top bar bits */
+  const b=brandInfo(state.brand);
+  const nm=$('rBrandName'); if(nm) nm.textContent=b.name;
+  const dt=$('rBrandDot');  if(dt) dt.style.background=b.color;
+  const chip=$('rBrandChip'); if(chip) chip.style.display=BRAND_IDS().length>1?'':'none';
+  const av=$('rAvatar'); if(av) av.innerHTML=userAv(ME);
+  const bell=$('rBellDot');
+  if(bell){ const n=state.notifs.filter(x=>!x.read).length; bell.textContent=n; bell.style.display=n?'':'none'; }
+}
+function rFlyGo(id){ $('rFly')?.classList.remove('on'); navTo(id); }
+
+function toggleProfileMenu(force){
+  const m=$('rMenu'); if(!m) return;
+  const on = force!==undefined?force:!m.classList.contains('on');
+  if(on) renderProfileMenu();
+  m.classList.toggle('on',on);
+}
+function renderProfileMenu(){
+  const m=$('rMenu'); if(!m) return;
+  const u=USERS[ME]||{};
+  const back=[['memory','Assistant memory',AI.learnings.length?String(AI.learnings.length):''],
+              ['roadmap','Roadmap',ROADMAP.length?String(ROADMAP.length):''],
+              ['profit','Profit',''],['courses','Courses',''],['map','Profit cause map','']];
+  m.innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 11px 11px">
+      <span style="width:34px;height:34px;display:inline-block">${userAv(ME)}</span>
+      <div style="min-width:0">
+        <div style="font-size:.86rem;font-weight:650">${esc(u.name||'You')}</div>
+        <div style="font-size:.73rem;color:var(--ink-3)">${esc(u.role||'')}</div>
+      </div>
+    </div>
+    <div class="rm-sep"></div>
+    <button class="rmi" onclick="toggleProfileMenu(false);navTo('settings')"><span class="ic">${ICONS.gear}</span>Settings</button>
+    <div class="rm-cap">Back office</div>
+    ${back.map(([id,label,val])=>{
+      const p=PAGES.find(x=>x.id===id)||{icon:'doc'};
+      return `<button class="rmi" onclick="toggleProfileMenu(false);navTo('${id}')">
+        <span class="ic">${ICONS[p.icon]}</span>${label}${val?`<span class="s">${val}</span>`:''}</button>`;
+    }).join('')}
+    <div class="rm-sep"></div>
+    <div class="rmi" style="cursor:default">
+      <span class="ic">${ICONS.eye}</span>Appearance
+      <span class="s"><span class="seg" style="display:inline-flex">
+        ${[['auto','Auto'],['light','Light'],['dark','Dark']].map(([v,l])=>
+          `<button class="${state.theme===v?'active':''}" onclick="event.stopPropagation();setTheme('${v}');renderProfileMenu()">${l}</button>`).join('')}
+      </span></span>
+    </div>
+    <div class="rm-sep"></div>
+    <button class="rmi" onclick="toggleProfileMenu(false);tikiSignOut&&tikiSignOut()">Sign out</button>`;
+}
+document.addEventListener('click',e=>{
+  const m=$('rMenu');
+  if(m&&m.classList.contains('on')&&!m.contains(e.target)) m.classList.remove('on');
+});
+
 function goNeedsLewis(){
   state.taskStatusFilter='Waiting on Lewis';
   navTo('tasks',{taskView:'list'});
@@ -2092,11 +2361,17 @@ function renderBrandUI(){
     chip.style.cursor = multi ? 'pointer' : 'default';
     const chev=chip.querySelector('.chev'); if(chev) chev.style.display = multi ? '' : 'none';
   }
-  if(!multi){ $('brandMenuSb').innerHTML=''; return; }
+  /* top bar mirrors the same brand state */
+  const tn=$('rBrandName'); if(tn) tn.textContent=b.name;
+  const td=$('rBrandDot');  if(td) td.style.background=b.color;
+  const tc=$('rBrandChip'); if(tc) tc.style.display=multi?'':'none';
+  const ta=$('rAvatar');    if(ta) ta.innerHTML=userAv(ME);
+  if(!multi){ $('brandMenuSb').innerHTML=''; const t=$('brandMenuTop'); if(t) t.innerHTML=''; return; }
   const items = ['all',...BRAND_IDS()].map(k=>`
     <button class="dd-item ${state.brand===k?'sel':''}" onclick="setBrand('${k}')">
       <span class="b-dot" style="background:${brandInfo(k).color}"></span>${brandInfo(k).name}<span class="check">✓</span></button>`).join('');
   $('brandMenuSb').innerHTML=`<div class="dd-label">Switch brand</div>`+items;
+  const tm=$('brandMenuTop'); if(tm) tm.innerHTML=`<div class="dd-label">Switch brand</div>`+items;
 }
 function setDateRange(r){
   state.dateRange=r; closeAllDD();
@@ -2106,12 +2381,14 @@ function setDateRange(r){
 
 /* ============ NEW MENU / PROFILE ============ */
 function renderNewMenu(){
-  $('newMenu').innerHTML = `
+  const html = `
     <div class="dd-label">Create new</div>
     <button class="dd-item" onclick="closeAllDD();openTaskModal()">${ICONS.tasks}Task</button>
     <button class="dd-item" onclick="closeAllDD();openCreatorModal()">${ICONS.users}Creator</button>
     <button class="dd-item" onclick="closeAllDD();openRetainerModal()">${ICONS.card}Retainer</button>
     <button class="dd-item" onclick="closeAllDD();newBrief()">${ICONS.canvas}Brief</button>`;
+  $('newMenu').innerHTML = html;
+  const t=$('newMenuTop'); if(t) t.innerHTML = html;
 }
 
 /* ============ SPOTLIGHT SEARCH (⌘K) ============ */
@@ -2186,6 +2463,7 @@ function renderNotifs(){
   $('npUnread').textContent = unread+' unread';
   $('npUnread').style.display = unread?'':'none';
   const bd=$('sbBellDot'); if(bd){ bd.textContent=unread; bd.style.display=unread?'flex':'none'; }
+  const rb=$('rBellDot'); if(rb){ rb.textContent=unread; rb.style.display=unread?'flex':'none'; }
   const filters=[['all','All'],['unread','Unread'],['urgent','Urgent']];
   $('notifPills').innerHTML = filters.map(([k,l])=>`<button class="pill ${state.notifFilter===k?'active':''}" onclick="state.notifFilter='${k}';renderNotifs()">${l}</button>`).join('');
   let list = state.notifs;
@@ -10442,7 +10720,12 @@ const TIKI_CFG={ url:'https://pkmanpmvjcjaocszmrfe.supabase.co', key:'eyJhbGciOi
 let tikiSession=null, tikiLastPushed='', tikiSaving=false;
 function tikiLoadSession(){ try{ tikiSession=JSON.parse(localStorage.getItem('tikiSession')||'null'); }catch(e){ tikiSession=null; } }
 function tikiStoreSession(s){ tikiSession=s; if(s) localStorage.setItem('tikiSession', JSON.stringify(s)); else localStorage.removeItem('tikiSession'); }
-function syncStatus(cls, txt){ const el=$('syncStatus'); if(!el) return; el.className='sync-status '+(cls||''); $('syncStatusTxt').textContent=txt; }
+function syncStatus(cls, txt){
+  const el=$('syncStatus'); if(el){ el.className='sync-status '+(cls||''); $('syncStatusTxt').textContent=txt; }
+  /* The sidebar is hidden in the glass shell, so the same state has to show
+     somewhere the eye actually goes — a single dot in the top bar. */
+  const d=$('rSync'); if(d){ d.className='rsync '+(cls||''); d.title=txt; }
+}
 async function tikiSignIn(){
   const email=$('gateEmail').value.trim(), pw=$('gatePw').value;
   const err=$('gateErr'); err.textContent='';
@@ -10576,7 +10859,7 @@ async function tikiEnter(inviteType){
   if(TIKTOK_STATUS&&TIKTOK_STATUS.shop_id){ await tiktokLoadData(); await settlementsLoad(); await creatorsLoad(); await videosLoad(); await adSpendLoad(); }
   if(XERO_STATUS&&XERO_STATUS.tenant_id) await xeroLoadData();
   rerenderAll(); renderNotifs();
-  navTo('overview');
+  navTo('assistant');
   setInterval(tikiPush, 4000);
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') tikiPush(); });
   /* Profile completion is mandatory for everyone — invited users also set a password. */
@@ -10586,7 +10869,7 @@ async function tikiEnter(inviteType){
 /* ============ INIT ============ */
 async function init(){
   renderBrandUI(); renderNewMenu(); renderSidebar(); renderNotifs();
-  navTo('overview');
+  navTo('assistant');
   /* A shared brief is a public page: no session, no gate, nothing loaded from
      the workspace. Handled before auth so a creator is never asked to sign in. */
   const shared=new URLSearchParams(location.search).get('b');
