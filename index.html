@@ -180,6 +180,27 @@ a{color:var(--accent-ink);text-decoration:none}
 .nav-item.soon span:first-of-type{filter:blur(.35px)}
 .soon-tag{margin-left:auto;font-size:.6rem;font-weight:800;letter-spacing:.04em;
   background:rgba(0,0,0,.08);color:var(--ink-3);border-radius:20px;padding:2px 7px}
+/* ---- Assistant memory ---- */
+.mem-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:13px}
+.mem-area{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--radius);
+  padding:14px 15px;box-shadow:var(--shadow)}
+.mem-area.empty{background:var(--surface-2);border-style:dashed}
+.mem-ah{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.mem-ah .t{font-size:.86rem;font-weight:700}
+.mem-ah .n{margin-left:auto;font-size:.68rem;font-weight:700;border-radius:20px;padding:2px 8px;
+  background:var(--good-soft);color:var(--good-ink)}
+.mem-area.empty .mem-ah .n{background:var(--crit-soft);color:var(--crit-ink)}
+.mem-ah .lab{font-size:.74rem;color:var(--ink-3)}
+.mem-item{display:flex;gap:8px;align-items:flex-start;font-size:.8rem;line-height:1.45;
+  color:var(--ink-2);padding:7px 0;border-top:1px solid var(--line-2)}
+.mem-item .x{margin-left:auto;opacity:0;border:none;background:none;cursor:pointer;
+  color:var(--ink-3);font-size:.85rem;font-family:inherit;padding:0 2px}
+.mem-item:hover .x{opacity:1}
+.mem-gap{font-size:.78rem;color:var(--ink-3);line-height:1.5;margin-top:7px}
+.mem-gap b{color:var(--ink-2)}
+.mem-teach{margin-top:9px;font-size:.75rem;background:var(--accent-soft);color:var(--accent-ink);
+  border:none;border-radius:9px;padding:7px 11px;cursor:pointer;font-family:inherit;font-weight:600;width:100%}
+.mem-teach:hover{background:#d9e9fa}
 /* ---- Roadmap ---- */
 .rm-cols{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start}
 .rm-col{background:var(--surface-2);border:1px solid var(--line-2);border-radius:var(--radius);padding:11px}
@@ -1282,6 +1303,7 @@ body.sb-hidden .main{margin-left:0}
       <div class="page" id="page-overview"></div>
       <div class="page" id="page-assistant"></div>
       <div class="page" id="page-roadmap"></div>
+      <div class="page" id="page-memory"></div>
       <div class="page" id="page-tasks"></div>
       <div class="page" id="page-creators"></div>
       <div class="page" id="page-videos"></div>
@@ -1859,6 +1881,7 @@ const PAGES = [
   { id:'genimage',  label:'Image Generation', icon:'image', soon:true },
   /* Roadmap is a back-office tool — Settings only, never the daily sidebar. */
   { id:'roadmap',   label:'Roadmap',   icon:'flag',   hidden:true },
+  { id:'memory',    label:'Assistant memory', icon:'grad', hidden:true },
   /* Courses and Profit are complete and unchanged — they just don't belong in
      the daily sidebar. hidden:true keeps them out of the nav; they're reached
      from Settings → Back office, same as the Profit Cause Map. */
@@ -1915,7 +1938,7 @@ function navTo(page, opts={}){
 function renderPage(page){
   ({ overview:renderOverview, assistant:renderAssistant, tasks:renderTasks, creators:renderCreators, videos:renderVideos, outreach:renderOutreach,
      retainers:renderRetainers, briefs:renderBriefs, courses:renderCourses,
-     profit:renderProfit, map:renderMap, roadmap:renderRoadmap, settings:renderSettings })[page]();
+     profit:renderProfit, map:renderMap, roadmap:renderRoadmap, memory:renderMemory, settings:renderSettings })[page]();
 }
 function rerenderAll(){ renderSidebar(); renderPage(state.page); renderBrandUI(); }
 
@@ -3822,6 +3845,11 @@ function renderSettingsInner(){
             <span style="width:26px;display:inline-flex;color:var(--ink-2)">${ICONS.grad}</span>
             <div class="ri-meta"><div class="n">Courses</div><div class="s">Training library for the team${COURSES.filter(c=>!c.watched).length?` · ${COURSES.filter(c=>!c.watched).length} unwatched`:''}</div></div>
             <button class="btn btn-soft btn-xs" onclick="event.stopPropagation();navTo('courses')">Open courses →</button>
+          </div>
+          <div class="rank-item clickable" style="cursor:pointer" onclick="navTo('memory')">
+            <span style="width:26px;display:inline-flex;color:var(--ink-2)">${ICONS.grad}</span>
+            <div class="ri-meta"><div class="n">Assistant memory</div><div class="s">What the assistant has been taught, and where it's still guessing${AI.learnings.length?` · ${AI.learnings.length} stored`:' · nothing stored yet'}</div></div>
+            <button class="btn btn-soft btn-xs" onclick="event.stopPropagation();navTo('memory')">Open memory →</button>
           </div>
           <div class="rank-item clickable" style="cursor:pointer" onclick="navTo('roadmap')">
             <span style="width:26px;display:inline-flex;color:var(--ink-2)">${ICONS.flag}</span>
@@ -8849,6 +8877,108 @@ function asxSoft(){
 }
 
 /* ============================================================================
+   ASSISTANT MEMORY
+   Memory is AI.learnings — plain sentences the assistant saved via save_memory,
+   synced in tiki_state and injected into every prompt as snapshot.memory.
+   This page makes it visible and, more usefully, shows the GAPS: which parts of
+   the business it has been told nothing about. An assistant with no memory of
+   your unit economics will reason correctly and conclude wrongly.
+   ========================================================================== */
+const MEM_AREAS = [
+  { id:'econ',     label:'Unit economics', icon:'💷',
+    kw:['cost','cogs','margin','price','vat','landed','unit','profit','overhead','break-even','breakeven'],
+    gap:'What a unit actually costs you landed, your target margin, and what you consider an acceptable payback.',
+    teach:'remember our unit cost is £X landed and we target Y% gross margin' },
+  { id:'creators', label:'Creators & retainers', icon:'👤',
+    kw:['creator','retainer','affiliate','commission','xainlo','rod','gifting','sample'],
+    gap:'What a creator is worth to you, when a retainer gets cut, what commission you will go to.',
+    teach:'remember we cut a retainer if it returns under £X gross profit per £1 spent' },
+  { id:'content',  label:'Content & brand voice', icon:'🎬',
+    kw:['video','hook','content','brief','tone','voice','angle','script','caption','brand'],
+    gap:'How Lytes should sound, angles that are off limits, what a good hook looks like to you.',
+    teach:'remember our tone is blunt and funny, never wellness-guru, and we never make health claims' },
+  { id:'product',  label:'Product & stock', icon:'📦',
+    kw:['stock','product','flavour','yerbalytes','lytes','sku','inventory','supplier','lead time','reorder'],
+    gap:'Lead times, reorder points, which SKU you actually want pushed.',
+    teach:'remember our supplier lead time is X weeks so we reorder at Y units' },
+  { id:'ops',      label:'How you work', icon:'⚙️',
+    kw:['rod','lewis','team','weekly','monday','process','prefer','always','never','report','meeting'],
+    gap:'Who does what, when you want to be told things, how you like answers.',
+    teach:'remember Rod owns creator outreach and I should assign those tasks to him' },
+  { id:'goals',    label:'Goals & constraints', icon:'🎯',
+    kw:['target','goal','budget','cash','runway','quarter','aim','want to','plan'],
+    gap:'What you are actually aiming at this quarter, and what you cannot spend.',
+    teach:'remember our goal this quarter is £X GMV per month at Y% gross margin' }
+];
+function memAreaOf(m){
+  const s=String(m).toLowerCase();
+  const hit=MEM_AREAS.find(a=>a.kw.some(k=>s.includes(k)));
+  return hit? hit.id : 'other';
+}
+function memAdd(){
+  const v=prompt('Teach the assistant something it should always know:');
+  if(v===null) return;
+  const m=v.trim(); if(!m) return;
+  if(!AI.learnings.includes(m)) AI.learnings.push(m);
+  tikiPush(); renderMemory(); toast('Saved to memory');
+}
+function memDelete(i){
+  AI.learnings.splice(i,1); tikiPush(); renderMemory(); toast('Forgotten');
+}
+function memTeach(text){
+  navTo('assistant');
+  setTimeout(()=>{ const ta=$('asxTa'); if(ta){ ta.value=text; ta.focus(); } },120);
+}
+function renderMemory(){
+  const mem=AI.learnings.map((m,i)=>({m,i,area:memAreaOf(m)}));
+  const covered=MEM_AREAS.filter(a=>mem.some(x=>x.area===a.id)).length;
+  const other=mem.filter(x=>x.area==='other');
+  $('page-memory').innerHTML=`
+    <div class="page-head">
+      <div><h1>Assistant memory</h1><div class="desc">
+        ${mem.length} thing${mem.length===1?'':'s'} the assistant has been taught · ${covered} of ${MEM_AREAS.length} areas covered</div></div>
+      <div class="actions">
+        <button class="btn btn-ghost btn-sm" onclick="navTo('settings')">← Back office</button>
+        <button class="btn btn-primary btn-sm" onclick="memAdd()">${ICONS.plus} Teach it something</button>
+      </div>
+    </div>
+
+    <div class="card" style="background:var(--accent-soft);border-color:transparent;margin-bottom:18px">
+      <div class="card-b" style="padding:12px 16px;font-size:.8rem;color:var(--accent-ink);line-height:1.55">
+        Memory is injected into <b>every</b> conversation, so anything here shapes every answer.
+        It reasons well but it only knows what the data says and what you've told it — the red areas below
+        are where it is guessing.
+      </div>
+    </div>
+
+    <div class="mem-grid">
+      ${MEM_AREAS.map(a=>{
+        const items=mem.filter(x=>x.area===a.id);
+        return `<div class="mem-area ${items.length?'':'empty'}">
+          <div class="mem-ah"><span>${a.icon}</span><span class="t">${a.label}</span>
+            <span class="n">${items.length||'none'}</span></div>
+          ${items.length
+            ? items.map(x=>`<div class="mem-item"><span>·</span><span>${esc(x.m)}</span>
+                <button class="x" title="Forget this" onclick="memDelete(${x.i})">✕</button></div>`).join('')
+            : `<div class="mem-gap"><b>Nothing taught here.</b> ${a.gap}</div>
+               <button class="mem-teach" onclick="memTeach('${a.teach.replace(/'/g,"\\'")}')">Teach it →</button>`}
+        </div>`;
+      }).join('')}
+      ${other.length?`<div class="mem-area">
+        <div class="mem-ah"><span>🗂️</span><span class="t">Uncategorised</span><span class="n">${other.length}</span></div>
+        ${other.map(x=>`<div class="mem-item"><span>·</span><span>${esc(x.m)}</span>
+          <button class="x" onclick="memDelete(${x.i})">✕</button></div>`).join('')}
+      </div>`:''}
+    </div>
+
+    <div class="card" style="margin-top:20px"><div class="card-b" style="font-size:.82rem;color:var(--ink-2);line-height:1.6">
+      <b>How it learns.</b> Say “remember …” in any conversation and it saves that sentence itself.
+      It also saves durable decisions unprompted — if you tell it a retainer rule or a tone preference, it should
+      keep it. Everything saved lands here, syncs to the team, and can be deleted if it picks up something wrong.
+    </div></div>`;
+}
+
+/* ============================================================================
    ROADMAP — the app's second brain
    Ideas you've had but don't want to build yet. Back office only: it is about
    the app, not the business, and it does not belong in the daily sidebar.
@@ -9186,9 +9316,7 @@ function aiCommit(id){
   }
 }
 function aiDismiss(id){ delete AI.previews[id]; $('card-'+id)?.remove(); }
-function aiShowLearnings(){
-  aiPush('ai','<b>What I\'ve learned so far:</b>\n'+AI.learnings.map(l=>'· '+esc(l)).join('\n')+'\n\nTell me “remember …” to teach me more.');
-}
+function aiShowLearnings(){ navTo('memory'); }
 /* ---- message handling ---- */
 function aiAsk(q){ $('aiInput').value=q; aiSend(); }
 function aiSend(){
