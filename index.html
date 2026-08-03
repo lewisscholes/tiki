@@ -241,6 +241,13 @@ body.sb-hidden .sb-restore{display:flex}
 .asx-work .wh .cx{margin-left:auto;font-size:.71rem;color:var(--ink-3);font-weight:500}
 .asx-work.shut .wb{display:none}
 .asx-work .wb{padding:5px 13px 10px}
+/* While it's still working, only the last few steps stay visible and the ones
+   above fade out — a running commentary rather than a growing wall. Click to
+   open the lot. */
+.asx-work.run .wb{max-height:96px;overflow:hidden;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 42%);
+  mask-image:linear-gradient(to bottom,transparent 0,#000 42%)}
+.asx-work.run.all .wb{max-height:none;-webkit-mask-image:none;mask-image:none}
 .asx-step{display:flex;gap:10px;padding:6px 0;font-size:.79rem;line-height:1.45;align-items:flex-start}
 .asx-step .ic{width:17px;flex:none;text-align:center;font-size:.76rem;margin-top:1px}
 .asx-step .tx{color:var(--ink-2)}
@@ -8718,10 +8725,14 @@ function aiWorkEnd(w, ok){
   aiRenderAll();
 }
 function aiWorkHTML(w, cls){
+  /* Running: last step in the header, older ones fading behind it.
+     Finished: one collapsed line you can open. Never a wall of every call. */
+  const last=w.steps[w.steps.length-1];
+  const lastTx=last? String(last.tx).replace(/<[^>]+>/g,'').trim().slice(0,64) : 'Reading the account';
   const head = w.done
-    ? `<span class="tick">✓</span> Worked through ${w.steps.length} step${w.steps.length===1?'':'s'}<span class="cx">${w.secs}s · click to collapse</span>`
-    : `<span class="spin"></span> Working…<span class="cx">step ${w.steps.length}</span>`;
-  return `<div class="${cls}${w.done?' shut':''}" onclick="this.classList.toggle('shut')">
+    ? `<span class="tick">✓</span> Worked through ${w.steps.length} step${w.steps.length===1?'':'s'}<span class="cx">${w.secs}s · show</span>`
+    : `<span class="spin"></span> ${esc(lastTx)}<span class="cx">${w.steps.length} step${w.steps.length===1?'':'s'}</span>`;
+  return `<div class="${cls}${w.done?' shut':' run'}" onclick="this.classList.toggle(this.classList.contains('run')?'all':'shut')">
     <div class="wh">${head}</div>
     <div class="wb">${w.steps.map(s=>`<div class="asx-step"><span class="ic">${s.ic}</span>
       <div class="tx">${s.tx}${s.meta?`<div class="meta">${esc(s.meta)}</div>`:''}</div></div>`).join('')}</div>
@@ -9101,9 +9112,12 @@ function aiSnapshot(){
         gmv:+gmv.toFixed(2), views, gpm:views?+(gmv/views*1000).toFixed(2):0,
         note:'Per-video detail is in the videos dataset — query it rather than guessing' };
     })() : null,
-    datasets: Object.entries(AI_DATASETS()).map(([k,v])=>({
-      dataset:k, rows:(()=>{ try{ return (v.rows()||[]).length; }catch(e){ return 0; } })(), about:v.desc
-    }))
+    /* Field names ship WITH the catalogue. Without them the model guesses,
+       guesses wrong, and burns four round trips finding out. */
+    datasets: Object.entries(AI_DATASETS()).map(([k,v])=>{
+      let rows=[]; try{ rows=v.rows()||[]; }catch(e){}
+      return { dataset:k, rows:rows.length, about:v.desc, fields:aiFieldsOf(rows) };
+    })
   };
 }
 function aiHistory(){
@@ -9159,6 +9173,7 @@ function aiToolLabel(name, inp){
     const a=inp.aggregate&&inp.aggregate.group_by?` grouped by ${inp.aggregate.group_by}`:'';
     return `${inp.dataset}${w?' where '+w:''}${a}${s}`;
   }
+  if(name==='create_brief')  return `“${inp.title||'brief'}” · ${(inp.sections||[]).length} sections`;
   if(name==='create_task')   return inp.title||'new task';
   if(name==='add_creator')   return (inp.name||'')+' '+(inp.handle||'');
   if(name==='complete_task') return 'task '+(inp.id||'');
@@ -9253,16 +9268,46 @@ function AI_DATASETS(){
     notifications: { desc:'Notifications', rows:()=>state.notifs }
   };
 }
+/* The single biggest cause of a slow answer is the model guessing field names
+   and looping. So: every error hands back the real field list, and group_by
+   understands date bucketing rather than failing silently on DATE(x). */
+function aiFieldsOf(rows){
+  const f=new Set();
+  rows.slice(0,25).forEach(r=>{ if(r&&typeof r==='object') Object.keys(r).forEach(k=>f.add(k)); });
+  return [...f];
+}
+function aiBucket(v, gran){
+  const d=new Date(v); if(isNaN(d)) return String(v??'—');
+  if(gran==='month') return d.toISOString().slice(0,7);
+  if(gran==='week'){ const t=new Date(d); t.setDate(t.getDate()-((t.getDay()+6)%7)); return t.toISOString().slice(0,10)+' (wk)'; }
+  return d.toISOString().slice(0,10);
+}
 function aiQuery(inp){
   const sets=AI_DATASETS();
   const key=String(inp.dataset||'').toLowerCase();
   if(!sets[key]) return JSON.stringify({ ok:false, error:'unknown dataset',
-    available:Object.keys(sets).map(k=>({dataset:k, description:sets[k].desc})) });
+    hint:'Pick one of these exactly. Field names are listed so you do not have to guess.',
+    available:Object.keys(sets).map(k=>{
+      let rows=[]; try{ rows=sets[k].rows()||[]; }catch(e){}
+      return { dataset:k, rows:rows.length, description:sets[k].desc, fields:aiFieldsOf(rows) };
+    }) });
 
   let rows=(sets[key].rows()||[]).slice();
   const total=rows.length;
+  const FIELDS=aiFieldsOf(rows);
 
   const val=(r,f)=>String(f).split('.').reduce((o,k)=>(o==null?o:o[k]), r);
+
+  /* Reject unknown fields immediately with the real list rather than returning
+     an empty result the model then retries a different wrong way. */
+  const bad=[...(inp.where||[]).map(w=>w.field),
+             inp.sort&&inp.sort.field,
+             inp.aggregate&&inp.aggregate.group_by]
+    .filter(Boolean).map(f=>String(f).split('|')[0].split('.')[0])
+    .filter(f=>FIELDS.length && !FIELDS.includes(f));
+  if(bad.length) return JSON.stringify({ ok:false, dataset:key, error:'unknown field(s): '+[...new Set(bad)].join(', '),
+    hint:'Use one of these exact field names. For dates, group_by supports "field|day", "field|week" or "field|month" — SQL functions like DATE(x) are not supported.',
+    fields:FIELDS, rows:total, sample:rows[0]||null });
   (inp.where||[]).forEach(w=>{
     const f=w.field, op=(w.op||'eq').toLowerCase(), v=w.value;
     rows=rows.filter(r=>{
@@ -9281,14 +9326,19 @@ function aiQuery(inp){
   const matched=rows.length;
 
   if(inp.aggregate && inp.aggregate.group_by){
-    const g=inp.aggregate.group_by, sums=inp.aggregate.sum||[];
+    const [gf,gran]=String(inp.aggregate.group_by).split('|');
+    const sums=inp.aggregate.sum||[];
     const m=new Map();
     rows.forEach(r=>{
-      const k=String(val(r,g)??'—');
-      let o=m.get(k); if(!o){ o={ [g]:k, count:0 }; sums.forEach(s=>o[s]=0); m.set(k,o); }
+      const raw=val(r,gf);
+      const k=gran? aiBucket(raw,gran) : String(raw??'—');
+      let o=m.get(k); if(!o){ o={ [gf]:k, count:0 }; sums.forEach(s=>o[s]=0); m.set(k,o); }
       o.count++; sums.forEach(s=>o[s]=+((o[s]+(Number(val(r,s))||0)).toFixed(2)));
     });
     rows=[...m.values()];
+    if(rows.length===1 && rows[0][gf]==='—')
+      return JSON.stringify({ ok:false, dataset:key, error:`group_by "${gf}" produced no distinct values — that field is empty on these rows`,
+        fields:FIELDS, sample:(sets[key].rows()||[])[0]||null });
   }
 
   if(inp.sort && inp.sort.field){
@@ -9312,9 +9362,42 @@ function aiQuery(inp){
   return out;
 }
 
+/* Build a real brief on the canvas from structured sections. The assistant
+   supplies the thinking; this lays it out as frames and text the same way a
+   hand-built brief is, so it opens in the editor and can be shared as-is. */
+function aiCreateBrief(inp){
+  const title=String(inp.title||'Untitled brief').slice(0,120);
+  const secs=(Array.isArray(inp.sections)?inp.sections:[]).slice(0,8);
+  if(!secs.length) return JSON.stringify({ ok:false, error:'sections required — each needs a heading and body' });
+
+  const els=[]; let n=0, y=100;
+  const FW=640, PAD=34;
+  els.push({ id:'t'+(++n), type:'text', x:80+PAD, y:44, w:FW-PAD*2, size:'h1', text:title });
+  if(inp.summary) els.push({ id:'t'+(++n), type:'text', x:80+PAD, y:82, w:FW-PAD*2, size:'body', text:String(inp.summary).slice(0,400) });
+
+  secs.forEach((s,i)=>{
+    const body=String(s.body||'').slice(0,1400);
+    const lines=Math.max(1,Math.ceil(body.length/68)+body.split('\n').length);
+    const h=Math.max(150, 70+lines*19);
+    els.push({ id:'f'+(++n), type:'frame', x:80, y:y, w:FW, h:h, title:`${i+1} · ${String(s.heading||'Section').slice(0,60)}` });
+    els.push({ id:'t'+(++n), type:'text', x:80+PAD, y:y+44, w:FW-PAD*2, size:'body', text:body });
+    y+=h+26;
+  });
+
+  const b={ id:'b'+Date.now()%1000000, name:title,
+    brand:state.brand==='all'?defaultBrand():state.brand, status:'Draft',
+    sharedWith:[], updated:'Just now', elements:els, comments:[],
+    createdBy:'assistant' };
+  BRIEFS.unshift(b); tikiPush();
+  if(state.page==='briefs') renderBriefs();
+  return JSON.stringify({ ok:true, id:b.id, name:b.name, sections:secs.length,
+    summary:'Brief created as a draft — open it from the Briefs page to edit or share' });
+}
+
 function aiRunTool(name, inp){
   try{
     if(name==='query_account') return aiQuery(inp||{});
+    if(name==='create_brief')  return aiCreateBrief(inp||{});
     if(name==='create_task'){
       const id='t'+Date.now();
       state.tasks.unshift({ id, name:(inp.title||'Untitled task').slice(0,120), desc:(inp.description||'').slice(0,400),
