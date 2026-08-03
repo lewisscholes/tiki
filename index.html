@@ -380,114 +380,6 @@ body.brief-full .rdock,body.brief-full .rtop{display:none}
   .rtab{padding:9px 13px}.rtab .lb{display:none}
   .content{padding:66px 14px 128px}
 }
-/* ============================================================================
-   GLASS SHELL — page harmonisation
-   The shell landed but the pages underneath were still drawn for a sidebar app:
-   opaque cards, hard borders, near-white "active" states that vanish on black.
-   This block brings them onto the prototype's recipe. It sits after every rule
-   it overrides so source order does the work, not !important.
-   ========================================================================== */
-
-/* ---- Assistant: floats on the aura, it is not a boxed website ---- */
-.asx{border:none;background:transparent;border-radius:0;overflow:visible;
-  height:calc(100vh - 214px);min-height:460px;margin:0;gap:16px}
-.asx-hist{width:238px;border-right:none;border-radius:22px;overflow:hidden;
-  background:var(--glass);border:1px solid var(--glass-brd);
-  backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);
-  box-shadow:var(--glass-shadow),var(--glass-hi)}
-.asx-hist.min{width:0;border:none;box-shadow:none}
-.asx-hh{border-bottom:1px solid var(--glass-brd)}
-.asx-new{background:var(--glass-on);border:1px solid var(--glass-brd);border-radius:12px;color:var(--ink)}
-.asx-new:hover{background:var(--hover)}
-.asx-search{background:var(--glass-on);border:1px solid var(--glass-brd);border-radius:11px;color:var(--ink)}
-.asx-item:hover{background:var(--hover)}
-.asx-item.on{background:var(--glass-on);color:var(--ink)}
-.asx-item .dots:hover{background:var(--hover)}
-.asx-foot{border-top:1px solid var(--glass-brd)}
-/* The thread column stays fully transparent — that is what makes the ambient
-   wash read as depth rather than as a background image behind a card. */
-.asx-main{background:transparent;border:none}
-.asx-top{border-bottom:none;background:transparent;padding:4px 6px 12px}
-.asx-top h2{font-size:1rem;font-weight:650}
-.asx-thread,.asx-comp,.asx-hero{background:transparent}
-.asx-comp{padding:0 0 4px}
-.asx-thread{padding:6px 6px 6px}
-.asx-ib{background:var(--glass);border:1px solid var(--glass-brd);border-radius:11px;
-  width:32px;height:32px;color:var(--ink-2);
-  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
-.asx-ib:hover{background:var(--hover);color:var(--ink)}
-.asx-ib.act{background:var(--glass-on);border-color:var(--glass-brd);color:var(--accent)}
-.asx-ib svg{width:15px;height:15px}
-.asx-box{border-radius:24px;padding:14px 16px;background:var(--glass);border:1px solid var(--glass-brd);
-  backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);
-  box-shadow:var(--glass-shadow),var(--glass-hi)}
-.asx-box:focus-within{border-color:var(--accent)}
-.asx-send{border-radius:11px;width:33px;height:33px}
-.asx-work{border:1px solid var(--glass-brd);background:var(--glass-on)}
-.asx-ai .body .asx-work,.asx-ai .body .rc{background:var(--glass-on)}
-
-/* Empty state — the prototype's hero, orb and all */
-.asx-hero{padding:2vh 22px 6vh;justify-content:center}
-.asx-orb{width:74px;height:74px;margin:0 auto 22px;border-radius:50%;position:relative;flex:none;
-  background:conic-gradient(from 210deg,#ff3b30,#ff8a00,#0a84ff,#7a5cff,#ff3b30);
-  animation:rspin 9s linear infinite}
-.asx-orb::after{content:'';position:absolute;inset:9px;border-radius:50%;background:var(--bg)}
-.asx-orb::before{content:'';position:absolute;inset:-16px;border-radius:50%;
-  background:conic-gradient(from 210deg,#ff3b30,#0a84ff,#7a5cff,#ff3b30);filter:blur(24px);opacity:.42}
-body:not(.dark) .asx-orb::before{opacity:.30}
-@keyframes rspin{to{transform:rotate(360deg)}}
-.asx-hero h3{font-size:2.15rem;letter-spacing:-.04em;font-weight:650;margin:0 0 8px}
-.asx-hero .hsub{color:var(--ink-3);font-size:.92rem;margin:0 0 28px;line-height:1.6;text-align:center}
-/* Suggestions are pills, centred — a stacked list read as a settings menu */
-.asx-sugg{flex-direction:row;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:18px;max-width:680px}
-.asx-sg{border:1px solid var(--glass-brd);background:var(--glass);border-radius:999px;
-  padding:8px 15px;font-size:.81rem;color:var(--ink-2);display:inline-flex;gap:7px;
-  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
-.asx-sg:hover{background:var(--hover);color:var(--ink)}
-.asx-sg .s{display:none}
-.asx-menu{background:var(--pop);border:1px solid var(--glass-brd);border-radius:18px;
-  backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);
-  box-shadow:var(--glass-shadow),var(--glass-hi)}
-.asx-mi{border-radius:13px}
-.asx-mi:hover{background:var(--hover)}
-
-/* ---- Kanban: the board scrolls, but a permanent grey bar under two columns
-        is just visual noise. Hide the track, keep the scrolling. ---- */
-.kanban{scrollbar-width:none;-ms-overflow-style:none}
-.kanban::-webkit-scrollbar{display:none}
-
-/* ---- Active chips: --ink is near-white in dark mode, so "ink background,
-        white text" was white on white. Accent reads in both themes. ---- */
-.vchip{background:var(--glass);border:1px solid var(--glass-brd);color:var(--ink-2);
-  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
-.vchip:hover{background:var(--hover);color:var(--ink)}
-.vchip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:650}
-.pill{background:var(--glass);border:1px solid var(--glass-brd);color:var(--ink-2);
-  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
-.pill:hover{background:var(--hover);color:var(--ink)}
-.pill.active{background:var(--accent);border-color:var(--accent);color:#fff}
-.vbasis{border:1px solid var(--glass-brd);background:var(--glass)}
-.vbasis button{background:transparent;color:var(--ink-2)}
-.vbasis button:hover{color:var(--ink)}
-.vbasis button.on{background:var(--accent);color:#fff;font-weight:650}
-.vperiod{background:var(--glass);border:1px solid var(--glass-brd);border-radius:20px;
-  backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
-  box-shadow:var(--glass-hi)}
-.vdates input{background:var(--glass-on);border:1px solid var(--glass-brd);color:var(--ink)}
-.seg{background:var(--glass-on)}
-.seg button.active{background:var(--accent);color:#fff;box-shadow:none}
-body.dark .seg button.active{background:var(--accent);color:#fff}
-
-/* ---- Operations fly-out: tinted icon tiles, as designed ---- */
-.rfo .ic{background:var(--tint,var(--hover));color:var(--tint-ink,var(--ink))}
-.rfo.soon .ic{background:var(--hover);color:var(--ink-3)}
-
-/* ---- Profile menu: the segmented control was wider than the menu ---- */
-.rmi .s{margin-left:auto;font-size:.74rem;color:var(--ink-3);max-width:110px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rmi .thm{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:.74rem;
-  color:var(--ink-3);font-weight:600}
-
 /* ---- Hero KPI: one number leads, the rest support ---- */
 .kpi-hero-grid{display:grid;grid-template-columns:1.55fr 1fr 1fr;gap:14px;align-items:stretch}
 .kpi-hero{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--radius);
@@ -1587,6 +1479,131 @@ body.sb-hidden .main{margin-left:0}
 .tt-result.err{border-left-color:var(--crit)}
 .tt-result b{font-size:.92rem;display:block;margin-bottom:4px}
 .tt-result div{font-size:.8rem;color:var(--ink-2);line-height:1.5}
+/* ============================================================================
+   GLASS SHELL — page harmonisation
+   The shell landed but the pages underneath were still drawn for a sidebar app:
+   opaque cards, hard borders, near-white "active" states that vanish on black.
+   This block brings them onto the prototype's recipe. It sits after every rule
+   it overrides so source order does the work, not !important.
+   ========================================================================== */
+
+/* ---- Assistant: the page IS the stage ----
+   Every other page is a document inside a padded column. The assistant is not —
+   it owns the whole viewport between the top bar and the dock, exactly like the
+   prototype. Nothing here draws a panel; the aura is the background. */
+body.pg-assistant{overflow:hidden}
+body.pg-assistant .content{padding:0;max-width:none;height:100vh;overflow:hidden}
+body.pg-assistant #page-assistant{height:100%}
+.asx{border:none;background:transparent;border-radius:0;overflow:hidden;
+  height:100%;margin:0;gap:0;padding:58px 0 112px}
+
+/* Chat rail: no card, no borders — just quiet text at the edge of the stage */
+.asx-hist{width:246px;border-right:none;background:transparent;padding:6px 10px 0 20px;
+  transition:width .24s var(--spring),opacity .2s}
+.asx-hist.min{width:0;opacity:0;padding:0}
+.asx-hh{padding:6px 2px 10px;border-bottom:none}
+.asx-new{background:var(--glass);border:1px solid var(--glass-brd);border-radius:13px;color:var(--ink);
+  font-weight:650;padding:9px 12px;
+  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
+.asx-new:hover{background:var(--hover)}
+.asx-search{background:transparent;border:1px solid var(--glass-brd);border-radius:11px;color:var(--ink)}
+.asx-search:focus{border-color:var(--accent);background:var(--glass-on)}
+.asx-list{padding:4px 0;scrollbar-width:none;-ms-overflow-style:none}
+.asx-list::-webkit-scrollbar{display:none}
+.asx-grp{padding:12px 10px 5px}
+.asx-item{border-radius:11px;color:var(--ink-2)}
+.asx-item:hover{background:var(--hover);color:var(--ink)}
+.asx-item.on{background:var(--glass-on);color:var(--ink);font-weight:650}
+.asx-item .dots:hover{background:var(--hover)}
+.asx-foot{border-top:none;padding:10px 10px 4px;opacity:.7}
+
+/* Thread column: fully transparent, and it is the only thing that scrolls */
+.asx-main{background:transparent;border:none;position:relative}
+.asx-thread,.asx-comp,.asx-hero{background:transparent}
+.asx-thread{padding:18px 22px 6px;scrollbar-width:none;-ms-overflow-style:none}
+.asx-thread::-webkit-scrollbar{display:none}
+.asx-comp{padding:8px 22px 0}
+/* The chat-list toggle floats over the stage instead of sitting in a banner. */
+.asx-tgl{position:absolute;top:10px;left:10px;z-index:5}
+.asx-ib{background:var(--glass);border:1px solid var(--glass-brd);border-radius:11px;
+  width:32px;height:32px;color:var(--ink-2);
+  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
+.asx-ib:hover{background:var(--hover);color:var(--ink)}
+.asx-ib.act{background:var(--glass-on);border-color:var(--glass-brd);color:var(--accent)}
+.asx-ib svg{width:15px;height:15px}
+.asx-box{border-radius:24px;padding:14px 16px;background:var(--glass);border:1px solid var(--glass-brd);
+  backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);
+  box-shadow:var(--glass-shadow),var(--glass-hi)}
+.asx-box:focus-within{border-color:var(--accent)}
+.asx-send{border-radius:11px;width:33px;height:33px}
+.asx-work{border:1px solid var(--glass-brd);background:var(--glass-on)}
+.asx-ai .body .asx-work,.asx-ai .body .rc{background:var(--glass-on)}
+
+/* Empty state — the prototype's hero, orb and all. No scroll: it is centred in
+   the stage, and if the viewport is too short the pills wrap rather than the
+   pane growing a scrollbar. */
+.asx-hero{padding:0 22px;justify-content:center;overflow:visible}
+.asx-hero .asx-box{max-width:660px}
+.asx-orb{width:74px;height:74px;margin:0 auto 22px;border-radius:50%;position:relative;flex:none;
+  background:conic-gradient(from 210deg,#ff3b30,#ff8a00,#0a84ff,#7a5cff,#ff3b30);
+  animation:rspin 9s linear infinite}
+.asx-orb::after{content:'';position:absolute;inset:9px;border-radius:50%;background:var(--bg)}
+.asx-orb::before{content:'';position:absolute;inset:-16px;border-radius:50%;
+  background:conic-gradient(from 210deg,#ff3b30,#0a84ff,#7a5cff,#ff3b30);filter:blur(24px);opacity:.42}
+body:not(.dark) .asx-orb::before{opacity:.30}
+@keyframes rspin{to{transform:rotate(360deg)}}
+.asx-hero h3{font-size:2.15rem;letter-spacing:-.04em;font-weight:650;margin:0 0 8px}
+.asx-hero .hsub{color:var(--ink-3);font-size:.92rem;margin:0 0 28px;line-height:1.6;text-align:center}
+/* Suggestions are pills, centred — a stacked list read as a settings menu */
+.asx-sugg{flex-direction:row;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:18px;max-width:680px}
+.asx-sg{border:1px solid var(--glass-brd);background:var(--glass);border-radius:999px;
+  padding:8px 15px;font-size:.81rem;color:var(--ink-2);display:inline-flex;gap:7px;
+  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
+.asx-sg:hover{background:var(--hover);color:var(--ink)}
+.asx-sg .s{display:none}
+.asx-menu{background:var(--pop);border:1px solid var(--glass-brd);border-radius:18px;
+  backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);
+  box-shadow:var(--glass-shadow),var(--glass-hi)}
+.asx-mi{border-radius:13px}
+.asx-mi:hover{background:var(--hover)}
+
+/* ---- Kanban: the board scrolls, but a permanent grey bar under two columns
+        is just visual noise. Hide the track, keep the scrolling. ---- */
+.kanban{scrollbar-width:none;-ms-overflow-style:none}
+.kanban::-webkit-scrollbar{display:none}
+
+/* ---- Active chips: --ink is near-white in dark mode, so "ink background,
+        white text" was white on white. Accent reads in both themes. ---- */
+.vchip{background:var(--glass);border:1px solid var(--glass-brd);color:var(--ink-2);
+  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
+.vchip:hover{background:var(--hover);color:var(--ink)}
+.vchip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:650}
+.pill{background:var(--glass);border:1px solid var(--glass-brd);color:var(--ink-2);
+  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
+.pill:hover{background:var(--hover);color:var(--ink)}
+.pill.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.vbasis{border:1px solid var(--glass-brd);background:var(--glass)}
+.vbasis button{background:transparent;color:var(--ink-2)}
+.vbasis button:hover{color:var(--ink)}
+.vbasis button.on{background:var(--accent);color:#fff;font-weight:650}
+.vperiod{background:var(--glass);border:1px solid var(--glass-brd);border-radius:20px;
+  backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+  box-shadow:var(--glass-hi)}
+.vdates input{background:var(--glass-on);border:1px solid var(--glass-brd);color:var(--ink)}
+.seg{background:var(--glass-on)}
+.seg button.active{background:var(--accent);color:#fff;box-shadow:none}
+body.dark .seg button.active{background:var(--accent);color:#fff}
+
+/* ---- Operations fly-out: tinted icon tiles, as designed ---- */
+.rfo .ic{background:var(--tint,var(--hover));color:var(--tint-ink,var(--ink))}
+.rfo.soon .ic{background:var(--hover);color:var(--ink-3)}
+
+/* ---- Profile menu: the segmented control was wider than the menu ---- */
+.rmi .s{margin-left:auto;font-size:.74rem;color:var(--ink-3);max-width:110px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rmi .thm{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:.74rem;
+  color:var(--ink-3);font-weight:600}
+
 </style>
 </head>
 <body>
@@ -2434,6 +2451,9 @@ function navTo(page, opts={}){
   }
   if(page==='briefs') document.body.classList.remove('sb-hidden');
   state.page=page;
+  /* The assistant is the only page that takes the whole viewport rather than
+     living inside the padded content column. */
+  document.body.classList.toggle('pg-assistant', page==='assistant');
   if(opts.taskView) state.taskView=opts.taskView;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $('page-'+page).classList.add('active');
@@ -9638,18 +9658,10 @@ function renderAssistant(){
     </div>
 
     <div class="asx-main">
-      <div class="asx-top">
-        <button class="asx-ib ${state.asxHist?'act':''}" onclick="asxToggle('hist')" title="Hide the chat list">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9.5 4v16"/></svg>
-        </button>
-        <div style="min-width:0">
-          <h2 id="asxTitle">${esc(chat.title)}</h2>
-          <div class="sub">Full account context · ${esc(state.dateRange)} · ${AI.learnings.length} learning${AI.learnings.length===1?'':'s'}</div>
-        </div>
-        <button class="asx-ib" style="margin-left:auto" onclick="toggleAI(true)" title="Open as a side panel">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M15 4v16"/></svg>
-        </button>
-      </div>
+      <button class="asx-ib asx-tgl ${state.asxHist?'act':''}" onclick="asxToggle('hist')"
+        title="${state.asxHist?'Show':'Hide'} the chat list">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9.5 4v16"/></svg>
+      </button>
 
       ${AI.msgs.length ? `
         <div class="asx-thread" id="asxThread">${asxThreadHTML()}</div>
