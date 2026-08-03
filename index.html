@@ -65,13 +65,53 @@ body.dark{
   --shadow-lg:0 18px 50px -12px rgba(0,0,0,.8);
   color-scheme:dark;
 }
-/* Surfaces hard-coded to white before dark mode existed. */
+/* Surfaces hard-coded to #fff before dark mode existed. Left alone they keep a
+   white background while the text switches to light — unreadable. Mapped here
+   in one place rather than editing forty rules. */
+body.dark .sb-brand,
+body.dark .sb-search kbd,
+body.dark .nav-item.active,
+body.dark .btn-ghost,
+body.dark .dd-menu,
+body.dark .pill,
+body.dark .kb-col-h .cnt,
+body.dark .kb-card,
+body.dark .cal .cal-day,
 body.dark .modal,
+body.dark .field input, body.dark .field select, body.dark .field textarea,
+body.dark .notif-panel,
+body.dark .stage-chip,
+body.dark .ai-toggle,
+body.dark .ai-panel,
+body.dark .ai-card,
 body.dark .seg button.active,
+body.dark .brf-link,
+body.dark .brf-thread,
+body.dark .present-sec,
+body.dark .mchip, body.dark .mbtn,
+body.dark .nodeCard,
+body.dark .m-aside .field input, body.dark .m-aside .field select, body.dark .m-aside .field textarea,
+body.dark .m-aside .signToggle button,
+body.dark .gate-card,
+body.dark .onb,
 body.dark .pic-tabs button.on,
-body.dark .btn-ghost{background:var(--surface-2)}
+body.dark .avchip,
+body.dark .timeline-mini .tm-item::before,
+body.dark .brf-zoom button:hover{background:var(--surface-2);color:var(--ink)}
+body.dark .brf-frame{background:var(--surface);border-color:var(--line)}
+body.dark .phone-frame{background:var(--surface)}
+body.dark .msg-btn.ghost{background:rgba(255,255,255,.10);color:var(--ink-2)}
+body.dark .msg-btn.ghost:hover{background:rgba(255,255,255,.16);color:var(--ink)}
 body.dark .phone,body.dark .vmleft,body.dark .vthumb{background:#000}
-body.dark img.brf-img{filter:brightness(.92)}
+body.dark .switch .sl::before{background:#f5f5f7}
+/* iMessage bubbles: blue out, grey back. Reads the same in both themes, which
+   is exactly why Apple picked it. */
+body.dark .msg.ai{background:#2c2c2e;color:var(--ink)}
+.asx-me .bub{background:linear-gradient(180deg,#0a84ff,#0071e3);color:#fff}
+.asx-ai .body{background:#e9e9eb;color:var(--ink);border-radius:18px 18px 18px 5px;
+  padding:11px 15px;display:inline-block;max-width:100%}
+body.dark .asx-ai .body{background:#2c2c2e}
+.asx-ai .body .asx-work,.asx-ai .body .rc{background:var(--surface)}
 *{margin:0;padding:0;box-sizing:border-box}
 html{font-size:15px}
 body{font-family:var(--font);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;overflow-x:hidden}
@@ -3897,34 +3937,6 @@ function renderSettingsInner(){
             Nobody else on the account yet. Invite a member and they get their own task view, day dashboard and Courses progress automatically.</div>`}
         </div>
       </div>
-      <div class="card" style="grid-column:1/-1">
-        <div class="card-h">
-          <div><div class="t">📋 API Activity Log</div>
-            <div class="sub">Every call Tiki makes to TikTok, Xero and the assistant — newest first</div></div>
-          <div class="right" style="display:flex;gap:8px;align-items:center">
-            ${API_LOG.length?`<span class="badge ${API_LOG.some(l=>!l.ok)?'bg-warn':'bg-good'}">${API_LOG.filter(l=>!l.ok).length} failed / ${API_LOG.length}</span>`:'<span class="badge bg-neutral">no calls yet</span>'}
-            <button class="btn btn-ghost btn-sm" onclick="apiLogRefresh()">Refresh</button>
-          </div>
-        </div>
-        <div class="card-b flush tbl-wrap" style="max-height:340px;overflow-y:auto">
-          <table class="tbl"><thead><tr>
-            <th>When</th><th>Source</th><th>Action</th><th>Result</th><th class="num">Records</th><th class="num">Took</th><th>Detail</th>
-          </tr></thead><tbody>
-          ${API_LOG.map(l=>`<tr>
-            <td style="white-space:nowrap;font-size:.76rem">${new Date(l.ts).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'})}</td>
-            <td><span class="badge ${l.source==='tiktok'?'bg-accent':l.source==='xero'?'bg-aqua':'bg-neutral'}">${esc(l.source)}</span></td>
-            <td style="font-size:.8rem">${esc(l.action)}</td>
-            <td>${l.ok?'<span class="badge bg-good">✓ ok</span>':`<span class="badge bg-crit">✕ ${l.status||'failed'}</span>`}</td>
-            <td class="num">${l.records!=null?l.records:'—'}</td>
-            <td class="num" style="color:var(--ink-3)">${l.duration_ms!=null?l.duration_ms+'ms':'—'}</td>
-            <td style="font-size:.74rem;color:${l.ok?'var(--ink-3)':'var(--crit-ink)'};max-width:340px;white-space:normal">${esc(l.message||'—')}</td>
-          </tr>`).join('')||`<tr><td colspan="7"><div class="empty" style="padding:44px 20px"><div class="e-ico">📋</div>
-            <div style="font-weight:700;color:var(--ink);margin-bottom:6px">Nothing logged yet</div>
-            Every sync, connection and assistant call will appear here with its result.
-            If a sync silently does nothing, this is where you'll see why.</div></td></tr>`}
-          </tbody></table>
-        </div>
-      </div>
       <div class="card">
         <div class="card-h"><div><div class="t">Back office</div><div class="sub">Tools that sit behind the day-to-day pages</div></div></div>
         <div class="card-b">
@@ -3970,7 +3982,6 @@ function renderSettingsInner(){
             </div>
           </div>
         </div>
-        </div>
       </div>
       <div class="card">
         <div class="card-h"><div class="t">Notification Preferences</div></div>
@@ -3978,6 +3989,34 @@ function renderSettingsInner(){
           ${[['Task overdue alerts',true],['Retainer payment reminders',true],['Creator gone-quiet alerts (7 days)',true],['GMV milestone celebrations',true],['New course uploaded',true],['Low stock warnings',true],['Daily digest email',false]].map(([l,on],i)=>`
             <label style="display:flex;align-items:center;gap:10px;font-size:.84rem;cursor:pointer">
               <input type="checkbox" ${on?'checked':''} onchange="toast('Preference saved (prototype)')" style="width:16px;height:16px;accent-color:var(--accent)">${l}</label>`).join('')}
+        </div>
+      </div>
+      <div class="card" style="grid-column:1/-1">
+        <div class="card-h">
+          <div><div class="t">📋 API Activity Log</div>
+            <div class="sub">Every call Tiki makes to TikTok, Xero and the assistant — newest first</div></div>
+          <div class="right" style="display:flex;gap:8px;align-items:center">
+            ${API_LOG.length?`<span class="badge ${API_LOG.some(l=>!l.ok)?'bg-warn':'bg-good'}">${API_LOG.filter(l=>!l.ok).length} failed / ${API_LOG.length}</span>`:'<span class="badge bg-neutral">no calls yet</span>'}
+            <button class="btn btn-ghost btn-sm" onclick="apiLogRefresh()">Refresh</button>
+          </div>
+        </div>
+        <div class="card-b flush tbl-wrap" style="max-height:340px;overflow-y:auto">
+          <table class="tbl"><thead><tr>
+            <th>When</th><th>Source</th><th>Action</th><th>Result</th><th class="num">Records</th><th class="num">Took</th><th>Detail</th>
+          </tr></thead><tbody>
+          ${API_LOG.map(l=>`<tr>
+            <td style="white-space:nowrap;font-size:.76rem">${new Date(l.ts).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'})}</td>
+            <td><span class="badge ${l.source==='tiktok'?'bg-accent':l.source==='xero'?'bg-aqua':'bg-neutral'}">${esc(l.source)}</span></td>
+            <td style="font-size:.8rem">${esc(l.action)}</td>
+            <td>${l.ok?'<span class="badge bg-good">✓ ok</span>':`<span class="badge bg-crit">✕ ${l.status||'failed'}</span>`}</td>
+            <td class="num">${l.records!=null?l.records:'—'}</td>
+            <td class="num" style="color:var(--ink-3)">${l.duration_ms!=null?l.duration_ms+'ms':'—'}</td>
+            <td style="font-size:.74rem;color:${l.ok?'var(--ink-3)':'var(--crit-ink)'};max-width:340px;white-space:normal">${esc(l.message||'—')}</td>
+          </tr>`).join('')||`<tr><td colspan="7"><div class="empty" style="padding:44px 20px"><div class="e-ico">📋</div>
+            <div style="font-weight:700;color:var(--ink);margin-bottom:6px">Nothing logged yet</div>
+            Every sync, connection and assistant call will appear here with its result.
+            If a sync silently does nothing, this is where you'll see why.</div></td></tr>`}
+          </tbody></table>
         </div>
       </div>
     </div>`;
