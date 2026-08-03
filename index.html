@@ -1702,8 +1702,11 @@ const PAGES = [
     count:()=>SAMPLE_REQS.filter(s=>s.status==='pending').length + CHATS.reduce((n,c)=>n+c.unread,0) },
   { id:'retainers', label:'Retainers', icon:'card' },
   { id:'briefs',    label:'Briefs',    icon:'canvas' },
-  { id:'courses',   label:'Courses',   icon:'grad',   count:()=>COURSES.filter(c=>!c.watched).length },
-  { id:'profit',    label:'Profit',    icon:'pound' },
+  /* Courses and Profit are complete and unchanged — they just don't belong in
+     the daily sidebar. hidden:true keeps them out of the nav; they're reached
+     from Settings → Back office, same as the Profit Cause Map. */
+  { id:'courses',   label:'Courses',   icon:'grad',   hidden:true, count:()=>COURSES.filter(c=>!c.watched).length },
+  { id:'profit',    label:'Profit',    icon:'pound',  hidden:true },
   /* Map is a back-office tool — reachable from Settings, not the sidebar.
      hidden:true keeps it out of the nav and out of Spotlight results. */
   { id:'map',       label:'Profit Cause Map', icon:'graph', hidden:true },
@@ -1715,9 +1718,7 @@ function renderSidebar(){
   const grp=(title,ids)=>{ const ps=n.filter(p=>ids.includes(p.id)); return ps.length?`<div class="sb-section">${title}</div>`+ps.map(navBtn).join(''):''; };
   $('sbNav').innerHTML =
     grp('Workspace',['overview','tasks']) +
-    grp('Operations',['creators','videos','outreach','retainers','briefs']) +
-    grp('Learning',['courses']) +
-    grp('Insights',['profit']);
+    grp('Operations',['creators','videos','outreach','retainers','briefs']);
   $('sbSettingsBtn')?.classList.toggle('active', state.page==='settings');
   function navBtn(p){
     const c = p.count? p.count() : 0;
@@ -1819,7 +1820,10 @@ function buildSpotResults(q){
     add('Actions','canvas','New brief','',()=>newBrief());
     add('Actions','users','Add creator','',()=>openCreatorModal());
   } else {
-    PAGES.filter(p=>!p.hidden&&p.label.toLowerCase().includes(q)).forEach(p=>add('Pages',p.icon,p.label,'Page',()=>navTo(p.id)));
+    /* Hidden pages (Profit, Courses, the cause map) stay searchable — they're
+       out of the sidebar, not out of the app. Spotlight is how you reach them
+       quickly without going via Settings. */
+    PAGES.filter(p=>p.label.toLowerCase().includes(q)).forEach(p=>add('Pages',p.icon,p.label,p.hidden?'Back office':'Page',()=>navTo(p.id)));
     state.tasks.filter(t=>t.name.toLowerCase().includes(q)).slice(0,5).forEach(t=>add('Tasks','tasks',t.name,t.status,()=>{navTo('tasks');openTaskDetail(t.id);}));
     CREATORS.filter(c=>(c.name+' '+c.handle).toLowerCase().includes(q)).slice(0,5).forEach(c=>add('Creators','users',c.name,c.handle,()=>{navTo('creators');openCreatorDetail(c.id);}));
     BRIEFS.filter(b=>b.name.toLowerCase().includes(q)).slice(0,4).forEach(b=>add('Briefs','canvas',b.name,b.status,()=>openBriefEditor(b.id)));
@@ -3641,6 +3645,16 @@ function renderSettingsInner(){
       <div class="card">
         <div class="card-h"><div><div class="t">Back office</div><div class="sub">Tools that sit behind the day-to-day pages</div></div></div>
         <div class="card-b flush">
+          <div class="rank-item clickable" style="cursor:pointer" onclick="navTo('profit')">
+            <span style="width:26px;display:inline-flex;color:var(--ink-2)">${ICONS.pound}</span>
+            <div class="ri-meta"><div class="n">Profit</div><div class="s">P&amp;L, cost of goods, bank, orders and the margin calculator</div></div>
+            <button class="btn btn-soft btn-xs" onclick="event.stopPropagation();navTo('profit')">Open profit →</button>
+          </div>
+          <div class="rank-item clickable" style="cursor:pointer" onclick="navTo('courses')">
+            <span style="width:26px;display:inline-flex;color:var(--ink-2)">${ICONS.grad}</span>
+            <div class="ri-meta"><div class="n">Courses</div><div class="s">Training library for the team${COURSES.filter(c=>!c.watched).length?` · ${COURSES.filter(c=>!c.watched).length} unwatched`:''}</div></div>
+            <button class="btn btn-soft btn-xs" onclick="event.stopPropagation();navTo('courses')">Open courses →</button>
+          </div>
           <div class="rank-item clickable" style="cursor:pointer" onclick="navTo('map')">
             <span style="width:26px;display:inline-flex;color:var(--ink-2)">${ICONS.graph}</span>
             <div class="ri-meta"><div class="n">Profit Cause Map</div><div class="s">The causal model behind the numbers — what drives profit, and which checks fail</div></div>
