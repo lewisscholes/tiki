@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tiki — TikTok Operations Hub</title>
+<title>Rarri — TikTok Operations</title>
 <!-- V1.1 · Apple-inspired UI · system SF typography, no external fonts — fully offline -->
 <!-- Charts are hand-rolled SVG — no external chart library needed -->
 <style>
@@ -104,14 +104,9 @@ body.dark .msg-btn.ghost{background:rgba(255,255,255,.10);color:var(--ink-2)}
 body.dark .msg-btn.ghost:hover{background:rgba(255,255,255,.16);color:var(--ink)}
 body.dark .phone,body.dark .vmleft,body.dark .vthumb{background:#000}
 body.dark .switch .sl::before{background:#f5f5f7}
-/* iMessage bubbles: blue out, grey back. Reads the same in both themes, which
-   is exactly why Apple picked it. */
+/* iMessage bubbles: blue out, grey back. The .asx rules live with the rest of
+   the assistant CSS so they win on source order; only the panel needs help. */
 body.dark .msg.ai{background:#2c2c2e;color:var(--ink)}
-.asx-me .bub{background:linear-gradient(180deg,#0a84ff,#0071e3);color:#fff}
-.asx-ai .body{background:#e9e9eb;color:var(--ink);border-radius:18px 18px 18px 5px;
-  padding:11px 15px;display:inline-block;max-width:100%}
-body.dark .asx-ai .body{background:#2c2c2e}
-.asx-ai .body .asx-work,.asx-ai .body .rc{background:var(--surface)}
 *{margin:0;padding:0;box-sizing:border-box}
 html{font-size:15px}
 body{font-family:var(--font);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;overflow-x:hidden}
@@ -131,8 +126,8 @@ a{color:var(--accent-ink);text-decoration:none}
 /* ============ SIDEBAR (Apple-style: light, translucent) ============ */
 .sidebar{backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-right:1px solid var(--line-2)}
 .sb-logo{display:flex;align-items:center;gap:10px;padding:22px 18px 14px}
-.sb-logo .mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#2a78d6,#4a3aa7);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.sb-logo .mark svg{width:17px;height:17px}
+.sb-logo .mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(145deg,#ff3b30,#c1121f);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-logo .mark svg{width:19px;height:19px}
 .sb-logo .name{font-size:1.05rem;font-weight:700;color:var(--ink);letter-spacing:-.02em}
 .sb-logo .tag{display:none}
 .sb-new{margin-left:auto;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.06);color:var(--ink-2);display:flex;align-items:center;justify-content:center;transition:all .15s}
@@ -379,13 +374,22 @@ body.sb-hidden .sb-restore{display:flex}
 .asx-mid{max-width:780px;margin:0 auto}
 .asx-turn{margin-bottom:22px}
 .asx-me{display:flex;justify-content:flex-end}
-.asx-me .bub{background:var(--ink);color:#fff;border-radius:16px 16px 4px 16px;padding:11px 15px;
+/* iMessage: blue gradient outbound. Defined here rather than in the dark block
+   so it wins on source order in both themes. */
+.asx-me .bub{background:linear-gradient(180deg,#0a84ff,#0071e3);color:#fff;
+  border-radius:18px 18px 5px 18px;padding:11px 15px;
   font-size:.88rem;line-height:1.5;max-width:80%}
 .asx-ai .who{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .asx-ai .av{width:23px;height:23px;border-radius:7px;background:#111;color:#fff;display:flex;
   align-items:center;justify-content:center;font-size:.66rem;font-weight:800}
 .asx-ai .nm{font-size:.78rem;font-weight:700}
-.asx-ai .body{font-size:.89rem;line-height:1.62;white-space:pre-wrap}
+.asx-ai .body{font-size:.89rem;line-height:1.62;white-space:pre-wrap;
+  background:#e9e9eb;color:var(--ink);border-radius:18px 18px 18px 5px;
+  padding:11px 15px;display:inline-block;max-width:100%}
+body.dark .asx-ai .body{background:#2c2c2e;color:var(--ink)}
+/* Process blocks and tables sit inside the bubble, so lift them onto their own
+   surface or they disappear into it. */
+.asx-ai .body .asx-work,.asx-ai .body .rc{background:var(--surface)}
 .asx-work{border:1px solid var(--line-2);border-radius:12px;background:var(--surface);
   margin-bottom:12px;overflow:hidden}
 .asx-work .wh{display:flex;align-items:center;gap:9px;padding:9px 13px;cursor:pointer;
@@ -1238,8 +1242,8 @@ body.sb-hidden .main{margin-left:0}
 .gate{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px}
 .gate.hidden{display:none}
 .gate-card{width:360px;background:#fff;border-radius:24px;box-shadow:0 24px 70px -20px rgba(0,0,0,.25),0 0 0 .5px rgba(0,0,0,.05);padding:36px 32px;text-align:center;animation:pop .25s ease}
-.gate-card .g-mark{width:52px;height:52px;border-radius:15px;background:linear-gradient(135deg,#2a78d6,#4a3aa7);display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
-.gate-card .g-mark svg{width:28px;height:28px}
+.gate-card .g-mark{width:52px;height:52px;border-radius:15px;background:linear-gradient(145deg,#ff3b30,#c1121f);display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+.gate-card .g-mark svg{width:31px;height:31px}
 .gate-card h2{font-size:1.3rem;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
 .gate-card .g-sub{font-size:.8rem;color:var(--ink-3);margin-bottom:22px}
 .gate-card input{width:100%;padding:11px 14px;border:1px solid var(--line);border-radius:11px;font-size:.9rem;outline:none;margin-bottom:10px;background:var(--surface-2)}
@@ -1353,11 +1357,11 @@ body.sb-hidden .main{margin-left:0}
   <aside class="sidebar" id="sidebar">
     <div class="sb-logo">
       <div class="mark">
-        <svg viewBox="0 0 24 24" fill="none"><circle cx="9.5" cy="9.5" r="6.5" fill="#fff"/><circle cx="9.5" cy="9.5" r="2.6" fill="#2a78d6"/><rect x="14.6" y="13.2" width="3.4" height="8.4" rx="1.7" transform="rotate(-45 14.6 13.2)" fill="#fff"/></svg>
+        <svg viewBox="0 0 48 48" fill="none"><defs><mask id="rarriCut"><rect width="48" height="48" fill="#fff"/><path d="M2 34 L48 14" stroke="#000" stroke-width="4.6"/></mask></defs><g mask="url(#rarriCut)" fill="#fff"><path d="M15 36 L20.5 12 h9.5 c5.6 0 8.6 3 7.6 7.6 -.7 3.4 -3.2 5.6 -6.8 6.4 l4.2 10 h-7.4 l-3.4 -9.2 h-1.6 L24.3 36 z M25.6 21.4 h3.2 c2.2 0 3.6 -1 3.9 -2.6 .3 -1.6 -.7 -2.5 -2.8 -2.5 h-3.2 z"/></g></svg>
       </div>
       <div>
-        <div class="name">Tiki</div>
-        <div class="tag">TikTok Ops Hub</div>
+        <div class="name">Rarri</div>
+        <div class="tag">TikTok Ops</div>
       </div>
       <div class="dd" style="margin-left:auto">
         <button class="sb-new" onclick="toggleDD(event,'newMenu')" title="Create new">
@@ -1487,9 +1491,9 @@ body.sb-hidden .main{margin-left:0}
 
 <div class="gate" id="gate">
   <div class="gate-card">
-    <div class="g-mark"><svg viewBox="0 0 24 24" fill="none"><circle cx="9.5" cy="9.5" r="6.5" fill="#fff"/><circle cx="9.5" cy="9.5" r="2.6" fill="#2a78d6"/><rect x="14.6" y="13.2" width="3.4" height="8.4" rx="1.7" transform="rotate(-45 14.6 13.2)" fill="#fff"/></svg></div>
-    <h2>Tiki</h2>
-    <div class="g-sub">TikTok Operations Hub · team access only</div>
+    <div class="g-mark"><svg viewBox="0 0 48 48" fill="none"><defs><mask id="rarriCutG"><rect width="48" height="48" fill="#fff"/><path d="M2 34 L48 14" stroke="#000" stroke-width="4.6"/></mask></defs><g mask="url(#rarriCutG)" fill="#fff"><path d="M15 36 L20.5 12 h9.5 c5.6 0 8.6 3 7.6 7.6 -.7 3.4 -3.2 5.6 -6.8 6.4 l4.2 10 h-7.4 l-3.4 -9.2 h-1.6 L24.3 36 z M25.6 21.4 h3.2 c2.2 0 3.6 -1 3.9 -2.6 .3 -1.6 -.7 -2.5 -2.8 -2.5 h-3.2 z"/></g></svg></div>
+    <h2>Rarri</h2>
+    <div class="g-sub">TikTok Operations · team access only</div>
     <input id="gateEmail" type="email" placeholder="Email" autocomplete="username">
     <input id="gatePw" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')tikiSignIn()">
     <button class="g-btn" id="gateBtn" onclick="tikiSignIn()">Sign in</button>
@@ -8989,7 +8993,7 @@ function asxThreadHTML(){
       if(m.who==='work') return `<div class="asx-turn asx-ai">${aiWorkHTML(m,'asx-work')}</div>`;
       if(m.who==='card') return `<div class="asx-turn">${m.html}</div>`;
       if(m.who==='me')   return `<div class="asx-turn asx-me"><div class="bub">${m.html}</div></div>`;
-      return `<div class="asx-turn asx-ai"><div class="who"><span class="av">T</span><span class="nm">Tiki</span></div>
+      return `<div class="asx-turn asx-ai"><div class="who"><span class="av">R</span><span class="nm">Rarri</span></div>
         <div class="body">${m.html}</div></div>`;
     }).join('')}</div>`;
 }
