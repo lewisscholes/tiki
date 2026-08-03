@@ -174,6 +174,35 @@ a{color:var(--accent-ink);text-decoration:none}
 .card-b{padding:16px 18px}
 .card-b.flush{padding:0}
 .grid{display:grid;gap:16px}
+/* ---- Coming-soon nav items ---- */
+.nav-item.soon{opacity:.42;filter:saturate(.4);cursor:default}
+.nav-item.soon:hover{background:transparent}
+.nav-item.soon span:first-of-type{filter:blur(.35px)}
+.soon-tag{margin-left:auto;font-size:.6rem;font-weight:800;letter-spacing:.04em;
+  background:rgba(0,0,0,.08);color:var(--ink-3);border-radius:20px;padding:2px 7px}
+/* ---- Roadmap ---- */
+.rm-cols{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start}
+.rm-col{background:var(--surface-2);border:1px solid var(--line-2);border-radius:var(--radius);padding:11px}
+.rm-ch{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:0 3px}
+.rm-ch .t{font-size:.8rem;font-weight:700}
+.rm-ch .n{font-size:.68rem;font-weight:700;color:var(--ink-3);background:rgba(0,0,0,.06);
+  border-radius:20px;padding:1px 7px}
+.rm-card{background:var(--surface);border:1px solid var(--line-2);border-radius:12px;
+  padding:11px 12px;margin-bottom:9px;box-shadow:var(--shadow);cursor:pointer}
+.rm-card:hover{border-color:#cfd4dc}
+.rm-card .t{font-size:.84rem;font-weight:650;line-height:1.35}
+.rm-card .n{font-size:.76rem;color:var(--ink-2);line-height:1.45;margin-top:5px;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.rm-meta{display:flex;align-items:center;gap:6px;margin-top:9px;flex-wrap:wrap}
+.rm-tag{font-size:.66rem;font-weight:650;border-radius:20px;padding:2px 8px;
+  background:var(--neutral-soft);color:var(--neutral-ink)}
+.rm-tag.imp3{background:var(--crit-soft);color:var(--crit-ink)}
+.rm-tag.imp2{background:var(--warn-soft);color:var(--warn-ink)}
+.rm-tag.imp1{background:var(--good-soft);color:var(--good-ink)}
+.rm-add{width:100%;border:1px dashed var(--line);background:transparent;border-radius:11px;
+  padding:8px;font-size:.79rem;color:var(--ink-3);cursor:pointer;font-family:inherit}
+.rm-add:hover{background:var(--surface);color:var(--ink-2)}
+@media(max-width:1080px){.rm-cols{grid-template-columns:repeat(2,1fr)}}
 /* ---- Assistant workspace page ---- */
 /* Focus mode reuses the app's existing sb-hidden mechanism (the one the brief
    editor uses) rather than inventing a second one. A floating restore button
@@ -1252,6 +1281,7 @@ body.sb-hidden .main{margin-left:0}
     <div class="content">
       <div class="page" id="page-overview"></div>
       <div class="page" id="page-assistant"></div>
+      <div class="page" id="page-roadmap"></div>
       <div class="page" id="page-tasks"></div>
       <div class="page" id="page-creators"></div>
       <div class="page" id="page-videos"></div>
@@ -1646,7 +1676,7 @@ const state = {
   videoFrom:'', videoTo:'', videoBasis:'earned', videoSort:'gmv',
   videoCreator:'all', videoAccount:'affiliate', videoSearch:'', videoPreset:'30',
   outreachTab:'recs', campEdit:null, campStep:1,
-  aiChatId:null, asxNav:false, asxHist:false, asxSearch:'',
+  aiChatId:null, asxNav:false, asxHist:false, asxSearch:'', rmSearch:'',
   notifFilter:'all', reportTab:'weekly',
   notifs: NOTIFICATIONS.map(n=>({...n})),
   tasks: TASKS.map(t=>({...t, comments:[...t.comments]}))
@@ -1823,6 +1853,12 @@ const PAGES = [
     count:()=>SAMPLE_REQS.filter(s=>s.status==='pending').length + CHATS.reduce((n,c)=>n+c.unread,0) },
   { id:'retainers', label:'Retainers', icon:'card' },
   { id:'briefs',    label:'Briefs',    icon:'canvas' },
+  /* Placeholders — deliberately not built. They sit in the sidebar greyed out
+     so the intent stays visible every day rather than living in a note. */
+  { id:'genvideo',  label:'Video Generation', icon:'video', soon:true },
+  { id:'genimage',  label:'Image Generation', icon:'image', soon:true },
+  /* Roadmap is a back-office tool — Settings only, never the daily sidebar. */
+  { id:'roadmap',   label:'Roadmap',   icon:'flag',   hidden:true },
   /* Courses and Profit are complete and unchanged — they just don't belong in
      the daily sidebar. hidden:true keeps them out of the nav; they're reached
      from Settings → Back office, same as the Profit Cause Map. */
@@ -1839,9 +1875,12 @@ function renderSidebar(){
   const grp=(title,ids)=>{ const ps=n.filter(p=>ids.includes(p.id)); return ps.length?`<div class="sb-section">${title}</div>`+ps.map(navBtn).join(''):''; };
   $('sbNav').innerHTML =
     grp('Workspace',['overview','assistant','tasks']) +
-    grp('Operations',['creators','videos','outreach','retainers','briefs']);
+    grp('Operations',['creators','videos','outreach','retainers','briefs']) +
+    grp('Content',['genvideo','genimage']);
   $('sbSettingsBtn')?.classList.toggle('active', state.page==='settings');
   function navBtn(p){
+    if(p.soon) return `<button class="nav-item soon" onclick="toast('${esc(p.label)} — on the roadmap, not built yet')">
+      ${ICONS[p.icon]}<span>${p.label}</span><span class="soon-tag">Soon</span></button>`;
     const c = p.count? p.count() : 0;
     const hot = p.id==='tasks' && state.tasks.some(t=>inBrand(t)&&isOverdue(t));
     return `<button class="nav-item ${state.page===p.id?'active':''}" onclick="navTo('${p.id}')">
@@ -1876,7 +1915,7 @@ function navTo(page, opts={}){
 function renderPage(page){
   ({ overview:renderOverview, assistant:renderAssistant, tasks:renderTasks, creators:renderCreators, videos:renderVideos, outreach:renderOutreach,
      retainers:renderRetainers, briefs:renderBriefs, courses:renderCourses,
-     profit:renderProfit, map:renderMap, settings:renderSettings })[page]();
+     profit:renderProfit, map:renderMap, roadmap:renderRoadmap, settings:renderSettings })[page]();
 }
 function rerenderAll(){ renderSidebar(); renderPage(state.page); renderBrandUI(); }
 
@@ -1952,7 +1991,7 @@ function buildSpotResults(q){
     /* Hidden pages (Profit, Courses, the cause map) stay searchable — they're
        out of the sidebar, not out of the app. Spotlight is how you reach them
        quickly without going via Settings. */
-    PAGES.filter(p=>p.label.toLowerCase().includes(q)).forEach(p=>add('Pages',p.icon,p.label,p.hidden?'Back office':'Page',()=>navTo(p.id)));
+    PAGES.filter(p=>!p.soon&&p.label.toLowerCase().includes(q)).forEach(p=>add('Pages',p.icon,p.label,p.hidden?'Back office':'Page',()=>navTo(p.id)));
     state.tasks.filter(t=>t.name.toLowerCase().includes(q)).slice(0,5).forEach(t=>add('Tasks','tasks',t.name,t.status,()=>{navTo('tasks');openTaskDetail(t.id);}));
     CREATORS.filter(c=>(c.name+' '+c.handle).toLowerCase().includes(q)).slice(0,5).forEach(c=>add('Creators','users',c.name,c.handle,()=>{navTo('creators');openCreatorDetail(c.id);}));
     BRIEFS.filter(b=>b.name.toLowerCase().includes(q)).slice(0,4).forEach(b=>add('Briefs','canvas',b.name,b.status,()=>openBriefEditor(b.id)));
@@ -3783,6 +3822,11 @@ function renderSettingsInner(){
             <span style="width:26px;display:inline-flex;color:var(--ink-2)">${ICONS.grad}</span>
             <div class="ri-meta"><div class="n">Courses</div><div class="s">Training library for the team${COURSES.filter(c=>!c.watched).length?` · ${COURSES.filter(c=>!c.watched).length} unwatched`:''}</div></div>
             <button class="btn btn-soft btn-xs" onclick="event.stopPropagation();navTo('courses')">Open courses →</button>
+          </div>
+          <div class="rank-item clickable" style="cursor:pointer" onclick="navTo('roadmap')">
+            <span style="width:26px;display:inline-flex;color:var(--ink-2)">${ICONS.flag}</span>
+            <div class="ri-meta"><div class="n">Roadmap</div><div class="s">Ideas for the app itself — capture now, decide later${ROADMAP.length?` · ${ROADMAP.length} idea${ROADMAP.length===1?'':'s'}`:''}</div></div>
+            <button class="btn btn-soft btn-xs" onclick="event.stopPropagation();navTo('roadmap')">Open roadmap →</button>
           </div>
           <div class="rank-item clickable" style="cursor:pointer" onclick="navTo('map')">
             <span style="width:26px;display:inline-flex;color:var(--ink-2)">${ICONS.graph}</span>
@@ -8804,6 +8848,104 @@ function asxSoft(){
   const ft=$('asxFoot'); if(ft) ft.textContent=`${AI_CHATS.length} chat${AI_CHATS.length===1?'':'s'} · synced to the team`;
 }
 
+/* ============================================================================
+   ROADMAP — the app's second brain
+   Ideas you've had but don't want to build yet. Back office only: it is about
+   the app, not the business, and it does not belong in the daily sidebar.
+   ========================================================================== */
+const ROADMAP = [];
+const RM_COLS = [['idea','Ideas'],['next','Up next'],['building','Building'],['done','Shipped']];
+const RM_AREAS = ['Outreach','Creators','Videos','Briefs','Assistant','Profit','Content','Ops','Other'];
+const RM_IMP = [[1,'Nice to have'],[2,'Worth doing'],[3,'High leverage']];
+
+function rmAdd(status){
+  const it={ id:'rm'+Date.now()%1000000, title:'', note:'', area:'Other', imp:2,
+    status:status||'idea', created:Date.now() };
+  ROADMAP.unshift(it); rmEdit(it.id, true);
+}
+function rmEdit(id, isNew){
+  const it=ROADMAP.find(x=>x.id===id); if(!it) return;
+  openModal(modalShell(isNew?'New idea':'Edit idea',`
+    <div class="fg"><label class="fl">Idea</label>
+      <input class="fi" id="rmT" value="${esc(it.title)}" placeholder="One line — what is it?"></div>
+    <div class="fg"><label class="fl">Notes</label>
+      <textarea class="fi" id="rmN" rows="5" placeholder="Why it matters, how it might work, anything you'd forget">${esc(it.note)}</textarea></div>
+    <div class="frow">
+      <div><label class="fl">Area</label><select class="fi" id="rmA">
+        ${RM_AREAS.map(a=>`<option ${it.area===a?'selected':''}>${a}</option>`).join('')}</select></div>
+      <div><label class="fl">Leverage</label><select class="fi" id="rmI">
+        ${RM_IMP.map(([v,l])=>`<option value="${v}" ${it.imp===v?'selected':''}>${l}</option>`).join('')}</select></div>
+      <div><label class="fl">Status</label><select class="fi" id="rmS">
+        ${RM_COLS.map(([v,l])=>`<option value="${v}" ${it.status===v?'selected':''}>${l}</option>`).join('')}</select></div>
+    </div>`,
+    `<button class="btn btn-ghost" style="color:var(--crit-ink)" onclick="rmDelete('${id}')">Delete</button>
+     <button class="btn btn-ghost" onclick="rmCancel('${id}',${!!isNew})">Cancel</button>
+     <button class="btn btn-primary" onclick="rmSave('${id}')">Save</button>`));
+  setTimeout(()=>$('rmT')?.focus(),40);
+}
+function rmSave(id){
+  const it=ROADMAP.find(x=>x.id===id); if(!it) return;
+  it.title=($('rmT')?.value||'').trim()||'Untitled idea';
+  it.note=($('rmN')?.value||'').trim();
+  it.area=$('rmA')?.value||it.area;
+  it.imp=Number($('rmI')?.value)||it.imp;
+  it.status=$('rmS')?.value||it.status;
+  it.updated=Date.now();
+  closeModal(); tikiPush(); renderRoadmap(); toast('Saved to the roadmap');
+}
+function rmCancel(id,isNew){
+  if(isNew){ const i=ROADMAP.findIndex(x=>x.id===id); if(i>=0) ROADMAP.splice(i,1); }
+  closeModal(); renderRoadmap();
+}
+function rmDelete(id){
+  const i=ROADMAP.findIndex(x=>x.id===id); if(i<0) return;
+  ROADMAP.splice(i,1); closeModal(); tikiPush(); renderRoadmap(); toast('Removed');
+}
+function rmMove(id,dir){
+  const it=ROADMAP.find(x=>x.id===id); if(!it) return;
+  const i=RM_COLS.findIndex(c=>c[0]===it.status);
+  const n=Math.max(0,Math.min(RM_COLS.length-1,i+dir));
+  it.status=RM_COLS[n][0]; it.updated=Date.now(); tikiPush(); renderRoadmap();
+}
+function renderRoadmap(){
+  const q=(state.rmSearch||'').toLowerCase();
+  const list=ROADMAP.filter(x=>!q||(x.title+' '+x.note+' '+x.area).toLowerCase().includes(q));
+  $('page-roadmap').innerHTML=`
+    <div class="page-head">
+      <div><h1>Roadmap</h1><div class="desc">Everything we might build in Tiki — captured now, decided later. ${ROADMAP.length} idea${ROADMAP.length===1?'':'s'}</div></div>
+      <div class="actions">
+        <button class="btn btn-ghost btn-sm" onclick="navTo('settings')">← Back office</button>
+        <button class="btn btn-primary btn-sm" onclick="rmAdd('idea')">${ICONS.plus} New idea</button>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;max-width:320px">
+      <input class="fi" placeholder="Search ideas…" value="${esc(state.rmSearch||'')}"
+        oninput="state.rmSearch=this.value;clearTimeout(window._rmq);window._rmq=setTimeout(renderRoadmap,180)">
+    </div>
+    <div class="rm-cols">
+      ${RM_COLS.map(([k,label])=>{
+        const items=list.filter(x=>x.status===k).sort((a,b)=>(b.imp-a.imp)||(b.created-a.created));
+        return `<div class="rm-col">
+          <div class="rm-ch"><span class="t">${label}</span><span class="n">${items.length}</span></div>
+          ${items.map(it=>`
+            <div class="rm-card" onclick="rmEdit('${it.id}')">
+              <div class="t">${esc(it.title)}</div>
+              ${it.note?`<div class="n">${esc(it.note)}</div>`:''}
+              <div class="rm-meta">
+                <span class="rm-tag">${esc(it.area)}</span>
+                <span class="rm-tag imp${it.imp}">${RM_IMP.find(i=>i[0]===it.imp)?.[1]||''}</span>
+                <span style="margin-left:auto;display:flex;gap:3px" onclick="event.stopPropagation()">
+                  <button class="btn btn-ghost btn-xs" onclick="rmMove('${it.id}',-1)" title="Move left">←</button>
+                  <button class="btn btn-ghost btn-xs" onclick="rmMove('${it.id}',1)" title="Move right">→</button>
+                </span>
+              </div>
+            </div>`).join('')}
+          <button class="rm-add" onclick="rmAdd('${k}')">＋ Add</button>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
 function renderAssistant(){
   const chat=aiChat();
   document.body.classList.toggle('sb-hidden', !!state.asxNav);
@@ -10063,7 +10205,8 @@ function collectTikiState(){
   /* v7 adds the brief shelf — videos parked from the Videos page for reuse in briefs. */
   /* v9 adds saved assistant chats. aiChat (legacy, last 60 messages of the old
      single thread) is kept so an older client doesn't lose its history. */
-  return { v:9, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  /* v10 adds the roadmap — ideas for the app itself. */
+  return { v:10, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
@@ -10075,7 +10218,7 @@ function replaceArr(target, src){ if(Array.isArray(src)){ target.length=0; src.f
 function applyTikiState(d){
   if(!d) return;
   if(Array.isArray(d.tasks)) state.tasks=d.tasks;
-  replaceArr(BRIEF_SHELF,d.briefShelf); replaceArr(CAMPAIGNS,d.campaigns);
+  replaceArr(BRIEF_SHELF,d.briefShelf); replaceArr(CAMPAIGNS,d.campaigns); replaceArr(ROADMAP,d.roadmap);
   if(Array.isArray(d.aiChats)&&d.aiChats.length){
     replaceArr(AI_CHATS,d.aiChats);
     const c=AI_CHATS.find(x=>x.id===state.aiChatId)||AI_CHATS[0];
