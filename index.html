@@ -9109,7 +9109,7 @@ function aiSnapshot(){
        assistant into its offline pattern matcher for the rest of the session. */
     videoPeriod: (()=>{ try{
       if(typeof vidCoverage!=='function' || !VIDEO_DAILY.length) return null;
-      const cov=vidCoverage(); const rows=aiVideoRows();
+      const cov=vidCoverage(); const rows=aiVideoRows('current');
       const gmv=rows.reduce((n,r)=>n+r.gmv,0), views=rows.reduce((n,r)=>n+r.views,0);
       return { window:{from:state.videoFrom,to:state.videoTo}, storedHistory:cov,
         videos:rows.length, creatorsPosting:new Set(rows.map(r=>r.username)).size,
@@ -9215,12 +9215,20 @@ function aiMd(t){
 /* Building the snapshot used to walk all 38,000 daily rows about four times
    per message. Memoised on the window plus row count, so a single message
    costs one pass and repeat queries cost nothing. */
-let AI_VROWS_CACHE=null;
-function aiVideoRows(){
+let AI_VROWS_CACHE={};
+/* period: 'current' (the dashboard window) or 'all' (every day we hold).
+   Creative decisions need ALL — a 30-day window made a £3,646 hero video look
+   like a £50 flop, and a £27 sale on 258 views look like the best thing on the
+   account. Trading decisions still want the current window. */
+function aiVideoRows(period){
   if(typeof vidAgg!=='function' || !VIDEO_DAILY.length) return [];
-  const ck=`${state.videoFrom}|${state.videoTo}|${VIDEO_DAILY.length}`;
-  if(AI_VROWS_CACHE && AI_VROWS_CACHE.k===ck) return AI_VROWS_CACHE.v;
+  const cov=vidCoverage();
+  const all = period==='all' && cov;
+  const from = all? cov.lo : state.videoFrom, to = all? cov.hi : state.videoTo;
+  const ck=`${from}|${to}|${VIDEO_DAILY.length}`;
+  if(AI_VROWS_CACHE[ck]) return AI_VROWS_CACHE[ck];
   const save={from:state.videoFrom,to:state.videoTo,basis:state.videoBasis,acct:state.videoAccount,cr:state.videoCreator,q:state.videoSearch};
+  state.videoFrom=from; state.videoTo=to;
   state.videoBasis='earned'; state.videoAccount='all'; state.videoCreator='all'; state.videoSearch='';
   const rows=vidAgg().map(v=>({
     video_id:v.id, username:v.username, caption:(v.title||'').slice(0,180),
@@ -9230,8 +9238,12 @@ function aiVideoRows(){
     product:(v.products&&v.products[0]&&(v.products[0].name||v.products[0].title))||null,
     url:v.username?`https://www.tiktok.com/@${v.username}/video/${v.id}`:null
   }));
-  Object.assign(state,{videoBasis:save.basis,videoAccount:save.acct,videoCreator:save.cr,videoSearch:save.q});
-  AI_VROWS_CACHE={k:ck, v:rows};
+  Object.assign(state,{videoFrom:save.from,videoTo:save.to,videoBasis:save.basis,
+    videoAccount:save.acct,videoCreator:save.cr,videoSearch:save.q});
+  rows.forEach(r=>{ r.period = all?'all-time':'current window';
+    r.proven = r.items_sold>=5;      /* five sales is the bar for "this works" */
+    r.gpm_reliable = r.views>=5000;  /* GPM under 5k views is one lucky sale */ });
+  AI_VROWS_CACHE[ck]=rows;
   return rows;
 }
 function aiCreatorRows(){
@@ -9259,7 +9271,8 @@ function aiBriefRows(){
 function AI_DATASETS(){
   const P=(a,f)=>({ rows:()=>(a()||[]).map(f) });
   return {
-    videos:        { desc:'One row per video for the current period — gmv, views, ctr, gpm, caption, product, url', rows:aiVideoRows },
+    videos:        { desc:'One row per video for the CURRENT dashboard window. Fields include proven (5+ sales) and gpm_reliable (5,000+ views). For creative work use videos_all_time instead.', rows:()=>aiVideoRows('current') },
+    videos_all_time:{ desc:'One row per video across ALL stored history (up to 180 days). USE THIS for briefs, hooks and any creative decision — a short window makes hero videos look like flops.', rows:()=>aiVideoRows('all') },
     video_days:    { desc:'Raw per-video-per-day rows (largest table)', rows:()=>VIDEO_DAILY },
     creators:      { desc:'Creators with period GMV/videos/views/GPM, stage, retainer, notes', rows:aiCreatorRows },
     briefs:        { desc:'Content briefs including their text', rows:aiBriefRows },
@@ -9387,21 +9400,68 @@ function aiQuery(inp){
 /* Build a real brief on the canvas from structured sections. The assistant
    supplies the thinking; this lays it out as frames and text the same way a
    hand-built brief is, so it opens in the editor and can be shared as-is. */
+const BRIEF_MIN_SALES = 5;   /* a video must have actually sold to be a reference */
+
 function aiCreateBrief(inp){
   const title=String(inp.title||'Untitled brief').slice(0,120);
   const secs=(Array.isArray(inp.sections)?inp.sections:[]).slice(0,8);
   if(!secs.length) return JSON.stringify({ ok:false, error:'sections required — each needs a heading and body' });
 
   const els=[]; let n=0, y=100;
-  const FW=640, PAD=34;
+  const FW=660, PAD=34;
+  const ord=()=>els.filter(e=>e.type==='frame').length;
+
   els.push({ id:'t'+(++n), type:'text', x:80+PAD, y:44, w:FW-PAD*2, size:'h1', text:title });
   if(inp.summary) els.push({ id:'t'+(++n), type:'text', x:80+PAD, y:82, w:FW-PAD*2, size:'body', text:String(inp.summary).slice(0,400) });
 
-  secs.forEach((s,i)=>{
+  /* ---- reference videos: the actual winning assets, on the canvas ----
+     This is the point of the whole feature. Rod should open a brief and find
+     the winning videos already sitting there, not a list of titles he then has
+     to go and hunt down. Anything under BRIEF_MIN_SALES sales is refused — a
+     video with one lucky sale is not evidence of anything. */
+  const wanted=(Array.isArray(inp.videos)?inp.videos:[]).map(String).slice(0,12);
+  let embedded=[], rejected=[];
+  if(wanted.length){
+    const all=aiVideoRows('all');
+    const byId=new Map(all.map(v=>[String(v.video_id),v]));
+    wanted.forEach(id=>{
+      const v=byId.get(id);
+      if(!v){ rejected.push({video_id:id, why:'not found in the video data'}); return; }
+      if((v.items_sold||0) < BRIEF_MIN_SALES){
+        rejected.push({video_id:id, caption:(v.caption||'').slice(0,50), items_sold:v.items_sold,
+          why:`only ${v.items_sold} sale${v.items_sold===1?'':'s'} — under the ${BRIEF_MIN_SALES} sale floor for briefs`});
+        return;
+      }
+      embedded.push(v);
+    });
+
+    if(embedded.length){
+      const perRow=4, VW=140, VH=Math.round(VW*16/9), GAP=16;
+      const rows=Math.ceil(embedded.length/perRow);
+      const fh=64+rows*(VH+46);
+      els.push({ id:'f'+(++n), type:'frame', x:80, y:y, w:FW, h:fh, ord:ord(),
+        title:`${ord()+1} · Reference — what is already selling` });
+      if(inp.video_note) els.push({ id:'t'+(++n), type:'text', x:80+PAD, y:y+42, w:FW-PAD*2, size:'body',
+        text:String(inp.video_note).slice(0,300) });
+      embedded.forEach((v,i)=>{
+        const r=Math.floor(i/perRow), c=i%perRow;
+        const vx=80+PAD+c*(VW+GAP), vy=y+(inp.video_note?76:52)+r*(VH+46);
+        els.push({ id:'v'+(++n), type:'video', x:vx, y:vy, w:VW, h:VH,
+          videoId:String(v.video_id), url:v.url||'',
+          handle:'@'+(v.username||''), thumb:(typeof VID_THUMBS!=='undefined'&&VID_THUMBS.get(String(v.video_id))||{}).thumb||null,
+          caption:(v.caption||'').slice(0,70),
+          views:`${money(v.gmv)} · ${v.items_sold} sold · ${v.views.toLocaleString('en-GB')} views` });
+      });
+      y+=fh+26;
+    }
+  }
+
+  secs.forEach((s)=>{
     const body=String(s.body||'').slice(0,1400);
-    const lines=Math.max(1,Math.ceil(body.length/68)+body.split('\n').length);
+    const lines=Math.max(1,Math.ceil(body.length/70)+body.split('\n').length);
     const h=Math.max(150, 70+lines*19);
-    els.push({ id:'f'+(++n), type:'frame', x:80, y:y, w:FW, h:h, title:`${i+1} · ${String(s.heading||'Section').slice(0,60)}` });
+    els.push({ id:'f'+(++n), type:'frame', x:80, y:y, w:FW, h:h, ord:ord(),
+      title:`${ord()+1} · ${String(s.heading||'Section').slice(0,60)}` });
     els.push({ id:'t'+(++n), type:'text', x:80+PAD, y:y+44, w:FW-PAD*2, size:'body', text:body });
     y+=h+26;
   });
@@ -9412,9 +9472,15 @@ function aiCreateBrief(inp){
     createdBy:'assistant' };
   BRIEFS.unshift(b); tikiPush();
   if(state.page==='briefs') renderBriefs();
+
   return JSON.stringify({ ok:true, id:b.id, name:b.name, sections:secs.length,
-    summary:'Brief created as a draft — open it from the Briefs page to edit or share' });
+    videosEmbedded:embedded.length, videosRejected:rejected,
+    openUrl:'Briefs page',
+    summary:`Brief created with ${embedded.length} reference video${embedded.length===1?'':'s'} on the canvas.`
+      + (rejected.length?` ${rejected.length} video(s) refused — see videosRejected and tell the user why.`:'') });
 }
+/* Jump the user straight into the brief the assistant just built. */
+function aiOpenBrief(id){ openBriefEditor(id); }
 
 function aiRunTool(name, inp){
   try{
