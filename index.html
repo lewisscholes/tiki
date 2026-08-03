@@ -1527,7 +1527,7 @@ const state = {
      earning in July. */
   videoFrom:'', videoTo:'', videoBasis:'earned', videoSort:'gmv',
   videoCreator:'all', videoAccount:'affiliate', videoSearch:'', videoPreset:'30',
-  outreachTab:'campaigns', campEdit:null, campStep:1,
+  outreachTab:'recs', campEdit:null, campStep:1,
   notifFilter:'all', reportTab:'weekly',
   notifs: NOTIFICATIONS.map(n=>({...n})),
   tasks: TASKS.map(t=>({...t, comments:[...t.comments]}))
@@ -7035,8 +7035,12 @@ async function vidSync(){
 }
 
 function renderOutreach(){
-  const tabs=[['campaigns','Campaigns'],['samples','Samples'],['recs','Recommender'],['flows','Triggers'],['personal','My List'],['messages','Messages']];
-  if(!state.outreachTab) state.outreachTab='campaigns';
+  /* Order runs left to right the way the work actually flows:
+     find them → decide who gets contacted → run the campaign → talk to them →
+     ship samples → Lewis's own list. */
+  const tabs=[['recs','Scraper'],['flows','Triggers'],['campaigns','Campaigns'],
+              ['messages','Messages'],['samples','Samples'],['personal','My List']];
+  if(!state.outreachTab || !tabs.some(t=>t[0]===state.outreachTab)) state.outreachTab='recs';
   const pend=SAMPLE_REQS.filter(s=>s.status==='pending').length;
   const unread=CHATS.reduce((n,c)=>n+c.unread,0);
   const badge={samples:pend, personal:PERSONAL_OUTREACH.filter(p=>p.status==='todo').length, messages:unread};
