@@ -3117,7 +3117,7 @@ function renderNotifs(){
       <div style="flex:1;min-width:0">
         <div class="ni-t">${n.type==='urgent'?'<span class="badge bg-crit" style="margin-right:6px">Urgent</span>':''}${esc(n.title)}</div>
         <div class="ni-d">${esc(n.desc)}</div>
-        <div class="ni-time">${n.time}</div>
+        <div class="ni-time">${esc(relTime(n))}</div>
       </div>${n.read?'':'<span class="un-dot"></span>'}
     </div>`).join('') : `<div class="empty"><div class="e-ico">🔔</div>No notifications here</div>`;
 }
@@ -3132,8 +3132,11 @@ function notify(type, title, desc, icon, key){
   const k=key||title;
   const found=state.notifs.find(n=>n.key===k);
   const row={ id:found?found.id:'n'+Date.now()%1000000, key:k, type:type||'neutral',
-    icon:icon||'alert', title, desc:desc||'', time:'just now', read:false };
-  if(found) Object.assign(found,row); else state.notifs.unshift(row);
+    icon:icon||'alert', title, desc:desc||'', ts:Date.now(), read:false };
+  if(found){ Object.assign(found,row);
+    /* An updated repeat belongs at the top again — it is new information. */
+    state.notifs=[found,...state.notifs.filter(n=>n!==found)];
+  } else state.notifs.unshift(row);
   renderNotifs();
 }
 
@@ -12929,10 +12932,19 @@ function mig_taskTitleField(){
   return true;
 }
 
+/* Notifications were written with a frozen time string, same bug as the brief
+   comments. Anything already stored has no real timestamp to recover, so it is
+   anchored to now — wrong by a little, rather than stuck on "just now" forever. */
+function mig_notifTimestamps(){
+  (state.notifs||[]).forEach(n=>{ if(!n.ts){ n.ts=Date.now(); delete n.time; } });
+  return true;
+}
+
 const MIGRATIONS = [
   { id:'2026-08-comment-authors', fn:mig_commentAuthors },
   { id:'2026-08-merge-founder',   fn:mig_mergeDuplicateFounder },
-  { id:'2026-08-task-title-field',fn:mig_taskTitleField }
+  { id:'2026-08-task-title-field',fn:mig_taskTitleField },
+  { id:'2026-08-notif-timestamps',fn:mig_notifTimestamps }
 ];
 function tikiMigrate(){
   if(!Array.isArray(state.migrations)) state.migrations=[];
