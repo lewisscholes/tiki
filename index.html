@@ -10888,7 +10888,7 @@ function parseCMap(txt){
 /* Pulls readable text out of one decompressed content stream.
    `fonts` maps the resource names used by Tf to their translation tables. */
 function pdfTextFromContent(str, fonts, forced){
-  let out='', i=0, cur=forced||null;
+  let out='', i=0, cur=forced||null, depth=0, curY=0, lineY=1e9; const nums=[];
   const unescape_=t=>t
     .replace(/\\([nrtbf])/g, (m,c)=>({n:'\n',r:'\n',t:'\t',b:'',f:''}[c]))
     .replace(/\\([0-7]{1,3})/g, (m,o)=>String.fromCharCode(parseInt(o,8)))
@@ -10936,13 +10936,39 @@ function pdfTextFromContent(str, fonts, forced){
     }
     if(c==='('){ out+=readParen(); continue; }
     if(c==='<' && str[i+1]!=='<'){ out+=readHex(); continue; }
-    if(c==='T'&&(str[i+1]==='d'||str[i+1]==='D'||str[i+1]==='*')){ out+='\n'; i+=2; continue; }
-    if(c==='E'&&str[i+1]==='T'){ out+='\n'; i+=2; continue; }
-    if(c==='-'||(c>='0'&&c<='9')){
+    /* Some writers place EVERY glyph with its own Td. Treating that as a line
+       break put a newline between every letter. Only a vertical move is a new
+       line; a purely horizontal one is just the next character along. */
+    /* Line breaks come from the text cursor actually MOVING down the page, not
+       from the operators themselves. Writers that place every glyph — or every
+       word — with its own Td or BT block would otherwise produce one word per
+       line. Track the y position and break only when it really changes. */
+    if(c==='T'&&(str[i+1]==='d'||str[i+1]==='D')){
+      const y=nums.length?nums[nums.length-1]:0;
+      curY+=y; if(Math.abs(curY-lineY)>2){ out+='\n'; lineY=curY; }
+      nums.length=0; i+=2; continue;
+    }
+    if(c==='T'&&str[i+1]==='*'){ out+='\n'; lineY=curY; nums.length=0; i+=2; continue; }
+    /* Tm only re-establishes the block origin; the Td that follows is what
+       actually places the text. Breaking here put every word on its own line,
+       because each word is its own BT/Tm/Td block. */
+    if(c==='T'&&str[i+1]==='m'){
+      curY=nums.length?nums[nums.length-1]:0;
+      nums.length=0; i+=2; continue;
+    }
+    if(c==='E'&&str[i+1]==='T'){ nums.length=0; i+=2; continue; }
+    if(c==='['){ depth++; i++; continue; }
+    if(c===']'){ depth=Math.max(0,depth-1); i++; continue; }
+    if(c==='-'||(c>='0'&&c<='9')||(c==='.'&&/[0-9]/.test(str[i+1]||''))){
       let j=i, num=''; while(j<str.length && /[-0-9.]/.test(str[j])){ num+=str[j]; j++; }
-      if(parseFloat(num)<-180) out+=' ';
+      const v=parseFloat(num);
+      /* A big negative kern inside a TJ array is a space in disguise — but only
+         inside the array, where it means spacing rather than positioning. */
+      if(depth>0 && v<-180) out+=' ';
+      if(!isNaN(v)){ nums.push(v); if(nums.length>6) nums.shift(); }
       i=j; continue;
     }
+    if(c!==' '&&c!=='\n'&&c!=='\r'&&c!=='\t') nums.length=0;
     i++;
   }
   return out;
@@ -10991,19 +11017,35 @@ async function pdfExtractText(arrayBuf){
   }
   if(!chunks.length) return { text:'', why: found?'its streams could not be decompressed':'no text streams were found — it is most likely a scan' };
 
-  /* Resource name (/F3) → font object → its ToUnicode CMap. */
-  const fonts={}; const cmapCache={};
-  const objToCMap={}; let m;
-  const fontObj=/(\d+)\s+0\s+obj([\s\S]{0,1200}?)\/ToUnicode\s+(\d+)\s+0\s+R/g;
-  while((m=fontObj.exec(latin))) objToCMap[m[1]]=m[3];
-  const resDict=/\/Font\s*<<([\s\S]{0,3000}?)>>/g;
-  while((m=resDict.exec(latin))){
+  /* Resource name (/F4) → font object → its ToUnicode CMap.
+     This has to be done object by object. Scanning the whole file with one
+     regex let matches run across object boundaries, which paired fonts with
+     the wrong tables — an object ended up mapped to itself. */
+  const objs={}; let m;
+  const objRe=/(\d+)\s+0\s+obj\b([\s\S]*?)(?:endobj|stream)/g;
+  while((m=objRe.exec(latin))) objs[m[1]]=m[2];
+
+  const toU={};
+  for(const num in objs){
+    const t=objs[num].match(/\/ToUnicode\s+(\d+)\s+0\s+R/);
+    if(t) toU[num]=t[1];
+  }
+  const fonts={}, cmapCache={};
+  for(const num in objs){
+    const fm=objs[num].match(/\/Font\s*<<([\s\S]*?)>>/);
+    if(!fm) continue;
     const pair=/\/([A-Za-z0-9._-]+)\s+(\d+)\s+0\s+R/g; let q;
-    while((q=pair.exec(m[1]))){
-      const cnum=objToCMap[q[2]]; if(!cnum) continue;
+    while((q=pair.exec(fm[1]))){
+      const cnum=toU[q[2]]; if(!cnum) continue;
       if(!(cnum in cmapCache)) cmapCache[cnum]= byObj[cnum] ? parseCMap(byObj[cnum]) : null;
       if(cmapCache[cnum] && cmapCache[cnum].n) fonts[q[1]]=cmapCache[cnum];
     }
+  }
+  /* Anything with a table but no resource entry still gets parsed, so the
+     merged fallback below has something to work with. */
+  for(const num in toU){
+    const cnum=toU[num];
+    if(!(cnum in cmapCache)) cmapCache[cnum]= byObj[cnum] ? parseCMap(byObj[cnum]) : null;
   }
   const tidy=t=>t.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').replace(/[ ]{2,}/g,' ').trim();
   const score=t=>{ if(!t||t.length<40) return 0;
