@@ -1669,16 +1669,6 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
 .bai-load .dot{width:5px;height:5px;border-radius:50%;background:var(--ink-3);animation:baibl 1.1s infinite}
 .bai-load .dot:nth-child(2){animation-delay:.15s}.bai-load .dot:nth-child(3){animation-delay:.3s}
 @keyframes baibl{0%,80%,100%{opacity:.25}40%{opacity:1}}
-.bai-tb{border:1px dashed var(--line);border-radius:13px;padding:11px 12px}
-.bai-tbh{font-size:.64rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);margin-bottom:8px}
-.bai-tcard{background:var(--surface-2);border:1px solid var(--line-2);border-radius:11px;padding:10px 11px}
-.bai-tcard .tt{font-size:.81rem;font-weight:700;margin-bottom:7px;line-height:1.4}
-.bai-tcard .tmeta{display:flex;gap:6px;align-items:center}
-.bai-tcard .pri{background:var(--warn-soft);color:var(--warn-ink);font-weight:800;padding:2px 7px;
-  border-radius:5px;font-size:.62rem}
-.bai-subs{font-size:.76rem;color:var(--ink-2);line-height:1.7;margin-top:8px}
-.bai-subs div{display:flex;gap:7px;align-items:flex-start}
-.bai-subs .bx{width:12px;height:12px;border:1.5px solid var(--ink-3);border-radius:3px;flex:none;margin-top:4px}
 .bai-chatdock{border-top:1px solid var(--line-2);padding:10px 12px}
 .bai-qs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .bai-q{font-size:.71rem;padding:6px 10px;border-radius:999px;background:var(--glass-on);
@@ -1693,6 +1683,15 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
   border-radius:12px;padding:9px 11px;margin-bottom:9px}
 .bai-msg.me{background:var(--accent);color:#fff;margin-left:auto;max-width:84%;border:none;
   border-radius:12px 12px 4px 12px}
+.bai-changes{border:1px solid var(--aqua-ink);background:var(--aqua-soft);border-radius:13px;
+  padding:11px 12px;margin-bottom:11px}
+.bai-changes .cx-h{display:flex;align-items:center;gap:8px;font-size:.7rem;font-weight:800;
+  text-transform:uppercase;letter-spacing:.05em;color:var(--aqua-ink);margin-bottom:8px}
+.bai-changes .cx-when{font-weight:600;text-transform:none;letter-spacing:0;color:var(--ink-3);font-size:.68rem}
+.bai-changes .cx-row{font-size:.81rem;line-height:1.55;color:var(--ink)}
+.bai-changes .cx-row+.cx-row{margin-top:7px}
+.bai-changes .cx-det{font-size:.75rem;color:var(--ink-3);font-style:italic;line-height:1.5;
+  margin-top:4px;border-left:2px solid var(--line);padding-left:8px}
 @media(max-width:1200px){.brf-ai{width:310px}}
 
 /* ---- Operations fly-out: tinted icon tiles, as designed ---- */
@@ -2842,6 +2841,16 @@ function notifClick(id){
   renderNotifs(); toggleNotifs(false); navTo(n.page);
 }
 function markAllRead(){ state.notifs.forEach(n=>n.read=true); renderNotifs(); toast('All notifications marked as read'); }
+/* Raises a bell notification, collapsing repeats: the same title firing again
+   updates the existing entry rather than stacking five identical rows. */
+function notify(type, title, desc, icon, key){
+  const k=key||title;
+  const found=state.notifs.find(n=>n.key===k);
+  const row={ id:found?found.id:'n'+Date.now()%1000000, key:k, type:type||'neutral',
+    icon:icon||'alert', title, desc:desc||'', time:'just now', read:false };
+  if(found) Object.assign(found,row); else state.notifs.unshift(row);
+  renderNotifs();
+}
 
 /* ============ GLOBAL SEARCH ============ */
 
@@ -5869,8 +5878,11 @@ function newBrief(){
 }
 function openBriefEditor(id){
   state.briefId=id;
-  Object.assign(state.brf,{ tool:'select', sel:null, selFrame:null, present:false, openThread:null, zoom:.62, panX:30, panY:20 });
+  Object.assign(state.brf,{ tool:'select', sel:null, selFrame:null, present:false, openThread:null, zoom:.62, panX:30, panY:20, ai:false });
+  BRF_AI.changes=null; BRF_AI.digest=null; BRF_AI.forBrief=null; BRF_AI.chat=[];
   if(state.page!=='briefs') navTo('briefs'); else renderBriefs();
+  const b=briefById(id);
+  if(b && !state.brf.publicView) setTimeout(()=>brfCatchUp(b), 260);
 }
 function closeBriefEditor(){ rtDisconnect(); BRF_UNDO=[]; BRF_REDO=[]; state.briefId=null; renderBriefs(); }
 /* ---- editor render ---- */
@@ -5940,7 +5952,64 @@ function renderBriefEditor(){
    all because it is waiting on another thread. That last case is the one that
    earns its keep — replying to a dependency achieves nothing.
    ========================================================================== */
-const BRF_AI = { digest:null, forBrief:null, loading:false, err:null, tab:'digest', chat:[] };
+const BRF_AI = { digest:null, forBrief:null, loading:false, err:null, tab:'digest', chat:[], changes:null };
+
+/* ---------------------------------------------------------------------------
+   ACTIVITY LOG + "what changed since you were last here"
+   Diffing two versions of a canvas would tell you that geometry moved; it would
+   not tell you a human added a video. So each meaningful edit appends a line to
+   b.log, and the catch-up reads the lines newer than your own last visit. It is
+   deterministic — no model involved — because a summary of what changed has to
+   be exactly right or it is worse than nothing.
+   ------------------------------------------------------------------------- */
+function brfLog(b, kind, what){
+  if(!b) return;
+  if(!Array.isArray(b.log)) b.log=[];
+  b.log.push({ ts:Date.now(), who:ME, kind, what:what||'' });
+  if(b.log.length>400) b.log=b.log.slice(-400);   /* a brief is not an audit trail */
+}
+function brfSeen(b){ return (b.seen&&b.seen[ME])||0; }
+function brfMarkSeen(b){
+  if(!b) return;
+  if(!b.seen||typeof b.seen!=='object') b.seen={};
+  b.seen[ME]=Date.now(); tikiPush();
+}
+/* Groups the log into the sentence a person would actually say. */
+function brfChangesSince(b, since){
+  const rows=(b.log||[]).filter(e=>e.ts>since && e.who!==ME);
+  if(!rows.length) return null;
+  const byWho={};
+  rows.forEach(e=>{ (byWho[e.who]=byWho[e.who]||[]).push(e); });
+  const LABEL={ image:['added','image','images'], video:['added','video','videos'],
+    text:['added','text block','text blocks'], link:['added','link','links'],
+    frame:['added','page','pages'], rotate:['rotated','image','images'],
+    delete:['deleted','element','elements'], comment:['left','comment','comments'],
+    resolve:['resolved','thread','threads'], edit:['edited','text block','text blocks'] };
+  const people=Object.entries(byWho).map(([uid,es])=>{
+    /* Group by VERB first. "added 1 video, 2 images and 3 text blocks" reads
+       like a person talking; "added 1 video, added 2 images…" reads like a
+       changelog, which is exactly what we are trying not to hand him. */
+    const byVerb={};
+    es.forEach(e=>{
+      const l=LABEL[e.kind]||['changed','thing','things'];
+      byVerb[l[0]]=byVerb[l[0]]||{};
+      byVerb[l[0]][e.kind]=(byVerb[l[0]][e.kind]||0)+1;
+    });
+    const clauses=Object.entries(byVerb).map(([verb,kinds])=>{
+      const nouns=Object.entries(kinds).map(([k,n])=>{
+        const l=LABEL[k]||['changed','thing','things'];
+        return `${n} ${n===1?l[1]:l[2]}`;
+      });
+      const lastN=nouns.pop();
+      return `${verb} ${nouns.length?nouns.join(', ')+' and '+lastN:lastN}`;
+    });
+    const lastC=clauses.pop();
+    return { who:whoName(uid),
+      text: clauses.length ? `${clauses.join(', ')} and ${lastC}` : lastC,
+      detail: es.filter(e=>e.what).slice(-4).map(e=>e.what) };
+  });
+  return { since, people, n:rows.length };
+}
 
 /* Open threads whose latest message came from somebody other than you. Those
    are the ones that are waiting on you; your own notes are not. */
@@ -5951,6 +6020,49 @@ function brfOpenFromOthers(b){
     return t[t.length-1].who !== ME;
   });
 }
+/* ---------------------------------------------------------------------------
+   AUTOMATIC TASKS
+   An unanswered comment IS a task, so it should not need a button. This keeps
+   exactly one card per brief per person: it appears when someone is waiting on
+   you, retitles itself as the count changes, and completes itself when the last
+   thread is answered or resolved. The task carries brfAuto so a card you made
+   by hand is never touched.
+   ------------------------------------------------------------------------- */
+function brfAutoTask(b){
+  if(!b) return;
+  const waiting=brfOpenFromOthers(b);
+  const idx=state.tasks.findIndex(t=>t.brfAuto && t.briefId===b.id && t.assignee===ME);
+  const t=idx>-1?state.tasks[idx]:null;
+
+  if(!waiting.length){
+    /* Nothing outstanding — close it rather than leaving a stale card behind. */
+    if(t && t.status!=='Completed'){
+      t.status='Completed'; t.title=`${b.name} — comments cleared`;
+      notify('good','Brief cleared',`Every comment on ${b.name} is answered`,'canvas');
+    }
+    return;
+  }
+  const names=[...new Set(waiting.map(c=>{ const th=c.thread; return whoName(th[th.length-1].who); }))];
+  const title=`${names.join(' & ')} left ${waiting.length} comment${waiting.length===1?'':'s'} · ${b.name}`;
+  const notes=waiting.map(c=>{
+    const th=c.thread, last=th[th.length-1];
+    return `Pin ${b.comments.indexOf(c)+1} · ${whoName(last.who)}: ${(last.text||'').slice(0,90)}`;
+  }).join('\n');
+
+  if(t){
+    t.title=title; t.notes=notes;
+    if(t.status==='Completed') t.status='Not Started';   /* reopened by a new comment */
+  } else {
+    state.tasks.unshift({ id:'t'+Date.now()%100000, title, brand:b.brand, briefId:b.id, brfAuto:true,
+      assignee:ME, priority:'High', due:TODAY_ISO, status:'Not Started',
+      creator:'', product:'', campaign:'', notes, link:'', comments:[] });
+    notify('warn','Comments waiting',title,'canvas');
+  }
+}
+/* Every brief, not just the open one — a comment left on a brief you have not
+   opened still needs to reach your board. */
+function brfAutoTaskSweep(){ (BRIEFS||[]).forEach(brfAutoTask); }
+
 function brfAiToggle(){
   state.brf.ai=!state.brf.ai;
   renderBriefEditor();
@@ -6076,7 +6188,7 @@ function brfAiInner(b){
         : 'Nothing waiting on you'}</div>
     </div>
     <div class="bai-tabs">
-      ${[['digest','Digest'],['task','Task board'],['chat','Ask']].map(([k,l])=>
+      ${[['digest','Digest'],['chat','Ask']].map(([k,l])=>
         `<button class="bai-tab ${BRF_AI.tab===k?'on':''}" onclick="BRF_AI.tab='${k}';brfAiPaint()">${l}</button>`).join('')}
     </div>`;
 
@@ -6095,25 +6207,6 @@ function brfAiInner(b){
         onkeydown="if(event.key==='Enter')brfAiAsk(this.value)">
         <button class="bai-send" onclick="brfAiAsk($('baiQ').value)">↑</button></div>
     </div>`;
-
-  if(BRF_AI.tab==='task'){
-    const subs=(d&&d.threads||[]).map(t=>t.subtask).filter(Boolean);
-    const existing=state.tasks.find(t=>t.briefId===b.id && t.status!=='Completed');
-    return head+`<div class="bai-body">
-      <div class="bai-hint" style="margin-bottom:11px">One card reaches your task board. The detail stays here, where it makes sense.</div>
-      <div class="bai-tb">
-        <div class="bai-tbh">Task board · ${existing?'on your board':'preview'}</div>
-        <div class="bai-tcard">
-          <div class="tt">${waiting.length?`${waiting.length} comment${waiting.length===1?'':'s'} waiting on you · ${esc(b.name)}`:esc(b.name)+' — all clear'}</div>
-          <div class="tmeta"><span class="pri">${waiting.length?'HIGH':'DONE'}</span>${brandBadge(b.brand)}</div>
-          ${subs.length?`<div class="bai-subs">${subs.map(s=>`<div><span class="bx"></span><span>${esc(s)}</span></div>`).join('')}</div>`:''}
-        </div>
-      </div>
-      ${waiting.length?`<button class="bai-act" style="width:100%;margin-top:11px" onclick="brfAiMakeTask()">
-        ${existing?'Update the task on my board':'Put this on my task board'}</button>`:''}
-      <div class="bai-hint" style="margin-top:10px">It closes itself when the last thread is cleared.</div>
-    </div>`;
-  }
 
   /* digest */
   if(!d) return head+`<div class="bai-body"><div class="bai-hint">Nothing read yet.</div>
@@ -6136,6 +6229,7 @@ function brfAiInner(b){
   }).join('');
 
   return head+`<div class="bai-body">
+    ${brfChangesHTML()}
     <div class="bai-verdict">${esc(d.verdict||'')}</div>
     ${cards||`<div class="bai-hint">No open threads.</div>`}
     ${BRF_AI.err?`<div class="bai-hint" style="color:var(--warn-ink);margin-top:8px">Offline reading — ${esc(BRF_AI.err)}</div>`:''}
@@ -6152,20 +6246,33 @@ function brfAiGoto(pin){
     s.panX=r.width/2 - c.x*s.zoom; s.panY=r.height/2 - c.y*s.zoom; }
   renderBriefEditor();
 }
-function brfAiMakeTask(){
-  const b=briefById(state.briefId); const waiting=brfOpenFromOthers(b);
-  const subs=((BRF_AI.digest&&BRF_AI.digest.threads)||[]).map(t=>t.subtask).filter(Boolean);
-  const title=`${waiting.length} comment${waiting.length===1?'':'s'} waiting on you · ${b.name}`;
-  let t=state.tasks.find(x=>x.briefId===b.id && x.status!=='Completed');
-  if(t){ t.title=title; t.notes=subs.join('\n'); toast('Task updated'); }
-  else{
-    state.tasks.unshift({ id:'t'+Date.now()%100000, title, brand:b.brand, briefId:b.id,
-      assignee:ME, priority:'High', due:TODAY_ISO, status:'Not Started',
-      creator:'', product:'', campaign:'', notes:subs.join('\n'),
-      link:'', comments:[] });
-    toast('Added to your task board');
-  }
-  tikiPush(); brfAiPaint();
+/* ---------------------------------------------------------------------------
+   CATCH-UP
+   Opening a brief you have been away from should not make you hunt for what
+   moved. This runs once per visit, only when somebody else has actually done
+   something since your last visit, and states it plainly.
+   ------------------------------------------------------------------------- */
+function brfCatchUp(b){
+  const since=brfSeen(b);
+  const ch=since ? brfChangesSince(b, since) : null;
+  brfMarkSeen(b);
+  if(!ch) return;
+  BRF_AI.changes=ch;
+  state.brf.ai=true;
+  BRF_AI.tab='digest';
+  renderBriefEditor();
+  brfAiEnsure();
+}
+function brfDismissChanges(){ BRF_AI.changes=null; brfAiPaint(); }
+function brfChangesHTML(){
+  const ch=BRF_AI.changes; if(!ch) return '';
+  const when=new Date(ch.since).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  return `<div class="bai-changes">
+    <div class="cx-h">Since you were last here <span class="cx-when">${when}</span>
+      <button class="bai-x" onclick="brfDismissChanges()">✕</button></div>
+    ${ch.people.map(p=>`<div class="cx-row"><b>${esc(p.who)}</b> ${esc(p.text)}.
+      ${p.detail.length?`<div class="cx-det">${p.detail.map(d=>`“${esc(d)}”`).join('<br>')}</div>`:''}</div>`).join('')}
+  </div>`;
 }
 async function brfAiAsk(q){
   q=(q||'').trim(); if(!q) return;
@@ -6614,6 +6721,7 @@ function brfRotStep(id){
   if(!el||el.locked) return;
   brfSnapshot();
   el.rot=(((el.rot||0)+90)%360+360)%360;
+  brfLog(b,'rotate', el.rot+'°');
   tikiPush(); renderBriefEditor(); toast(`Rotated to ${el.rot}°`);
 }
 
@@ -7020,7 +7128,8 @@ function brfImageChosen(ev){
   if(!files.length) return;
   const at=state.brf.dropAt||{x:200,y:200};
   files.reduce((chain,f,i)=>chain.then(()=>brfAddImage(f, at.x+i*24, at.y+i*24)), Promise.resolve())
-    .then(()=>{ state.brf.tool='select'; renderBriefEditor(); })
+    .then(()=>{ const b=briefById(state.briefId); files.forEach(()=>brfLog(b,'image',''));
+      state.brf.tool='select'; renderBriefEditor(); })
     .catch(e=>toast(e.message||'Could not read that image'));
 }
 function brfAddImage(file, x, y){
@@ -7541,13 +7650,16 @@ function brfAddAt(b,x,y){
     b.elements.unshift({id,type:'frame',x,y,w:560,h:400,ord:n,title:(n+1)+' · New page'});
   }
   else if(s.tool==='comment'){ b.comments.push({id:'c'+Date.now()%100000,x,y,resolved:false,thread:[]}); s.tool='select'; s.openThread=b.comments[b.comments.length-1].id; renderBriefEditor(); return; }
+  brfLog(b, s.tool==='frame'?'frame':s.tool, '');
   s.tool='select'; s.sel=id; renderBriefEditor();
   toast('Added — drag to position');
 }
 function brfDelete(id){
   const b=briefById(state.briefId);
   brfSnapshot();
+  const el=b.elements.find(e=>e.id===id);
   b.elements=b.elements.filter(e=>e.id!==id);
+  brfLog(b,'delete', el?el.type:'');
   state.brf.sel=null; renderBriefEditor(); toast('Deleted');
 }
 function brfEditFrameTitle(id){
@@ -7641,12 +7753,16 @@ function brfReply(cid){
   const b=briefById(state.briefId); const c=b.comments.find(x=>x.id===cid);
   const inp=$('brfReply'); const v=inp&&inp.value.trim(); if(!v) return;
   c.thread.push(stampMsg(v));
+  brfLog(b,'comment', v.length>60?v.slice(0,60)+'…':v);
+  brfAutoTask(b);
   tikiPush(); renderBriefEditor(); toast('Comment posted');
   setTimeout(()=>{ const i=$('brfReply'); if(i) i.focus(); },30);
 }
 function brfResolve(cid){
   const b=briefById(state.briefId); const c=b.comments.find(x=>x.id===cid);
   c.resolved=!c.resolved; if(c.resolved) state.brf.openThread=null;
+  if(c.resolved) brfLog(b,'resolve','pin '+(b.comments.indexOf(c)+1));
+  brfAutoTask(b); tikiPush();
   renderBriefEditor(); toast(c.resolved?'Thread resolved':'Thread reopened');
 }
 /* ---- present mode (affiliate view) ---- */
@@ -11690,6 +11806,7 @@ async function tikiEnter(inviteType){
     /* Repairs run here — after the load, before the autosave starts — so the
        corrected state is what gets written back. */
     resolveMe();
+    brfAutoTaskSweep();   /* unanswered comments reach the board without a click */
     const ran=tikiMigrate();
     if(ran.length){ tikiPush(); console.info('Applied migrations:', ran.join(', ')); }
     syncStatus('', 'Synced · '+tikiSession.email.split('@')[0]);
