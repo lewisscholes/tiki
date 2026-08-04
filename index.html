@@ -1627,6 +1627,74 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
   color:#fff;font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap;z-index:9}
 .brf-el,.brf-ovl{transform-origin:center center}
 
+/* ---- Brief assistant rail ---- */
+.brf-ai{width:360px;flex-shrink:0;border-left:1px solid var(--line-2);background:var(--surface);
+  display:flex;flex-direction:column;min-height:0}
+.bai-h{padding:13px 15px 11px;border-bottom:1px solid var(--line-2)}
+.bai-h .t{display:flex;align-items:center;gap:9px;font-weight:750;font-size:.88rem;letter-spacing:-.01em}
+.bai-x{margin-left:auto;width:24px;height:24px;border-radius:7px;color:var(--ink-3);font-size:.78rem}
+.bai-x:hover{background:var(--hover);color:var(--ink)}
+.bai-orb{width:20px;height:20px;border-radius:50%;flex:none;position:relative;
+  background:conic-gradient(from 210deg,#ff3b30,#ff8a00,#0a84ff,#7a5cff,#ff3b30);animation:rspin 9s linear infinite}
+.bai-orb::after{content:'';position:absolute;inset:5px;border-radius:50%;background:var(--surface)}
+.bai-h .s{font-size:.74rem;color:var(--ink-3);margin-top:5px}
+.bai-tabs{display:flex;gap:2px;padding:8px 10px;border-bottom:1px solid var(--line-2)}
+.bai-tab{flex:1;padding:7px 0;border-radius:9px;font-size:.76rem;font-weight:650;color:var(--ink-3)}
+.bai-tab.on{background:var(--glass-on);color:var(--ink)}
+.bai-body{flex:1;overflow-y:auto;padding:12px 14px 16px;scrollbar-width:none}
+.bai-body::-webkit-scrollbar{display:none}
+.bai-hint{font-size:.78rem;color:var(--ink-3);line-height:1.6}
+.bai-verdict{border-radius:13px;padding:11px 12px;font-size:.81rem;line-height:1.55;margin-bottom:11px;
+  background:var(--warn-soft);border:1px solid var(--line-2);color:var(--ink)}
+.bai-card{border:1px solid var(--line-2);background:var(--surface-2);border-radius:13px;padding:11px 12px;margin-bottom:9px}
+.bai-card .ch{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.bai-card .num{width:19px;height:19px;border-radius:50%;background:var(--aqua-ink);color:#fff;font-size:.64rem;
+  font-weight:800;display:flex;align-items:center;justify-content:center;flex:none}
+.bai-card .who{font-size:.75rem;font-weight:700}
+.bai-card .tag{margin-left:auto;font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+  padding:2px 7px;border-radius:5px}
+.tag.t-crit{background:var(--crit-soft);color:var(--crit-ink)}
+.tag.t-accent{background:var(--accent-soft);color:var(--accent-ink)}
+.tag.t-warn{background:var(--warn-soft);color:var(--warn-ink)}
+.tag.t-neutral{background:var(--neutral-soft);color:var(--ink-3)}
+.bai-card .quote{font-size:.75rem;color:var(--ink-3);line-height:1.5;font-style:italic;
+  border-left:2px solid var(--line);padding-left:9px;margin-bottom:8px}
+.bai-card .means{font-size:.8rem;line-height:1.55;margin-bottom:9px}
+.bai-card .acts{display:flex;gap:6px;flex-wrap:wrap}
+.bai-act{font-size:.74rem;font-weight:650;padding:6px 11px;border-radius:9px;background:var(--accent);color:#fff}
+.bai-act.ghost{background:var(--glass-on);color:var(--ink-2);border:1px solid var(--line-2)}
+.bai-act:hover{filter:brightness(1.08)}
+.bai-act.ghost:hover{background:var(--hover);color:var(--ink)}
+.bai-load{display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--ink-3);padding:6px 0}
+.bai-load .dot{width:5px;height:5px;border-radius:50%;background:var(--ink-3);animation:baibl 1.1s infinite}
+.bai-load .dot:nth-child(2){animation-delay:.15s}.bai-load .dot:nth-child(3){animation-delay:.3s}
+@keyframes baibl{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.bai-tb{border:1px dashed var(--line);border-radius:13px;padding:11px 12px}
+.bai-tbh{font-size:.64rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);margin-bottom:8px}
+.bai-tcard{background:var(--surface-2);border:1px solid var(--line-2);border-radius:11px;padding:10px 11px}
+.bai-tcard .tt{font-size:.81rem;font-weight:700;margin-bottom:7px;line-height:1.4}
+.bai-tcard .tmeta{display:flex;gap:6px;align-items:center}
+.bai-tcard .pri{background:var(--warn-soft);color:var(--warn-ink);font-weight:800;padding:2px 7px;
+  border-radius:5px;font-size:.62rem}
+.bai-subs{font-size:.76rem;color:var(--ink-2);line-height:1.7;margin-top:8px}
+.bai-subs div{display:flex;gap:7px;align-items:flex-start}
+.bai-subs .bx{width:12px;height:12px;border:1.5px solid var(--ink-3);border-radius:3px;flex:none;margin-top:4px}
+.bai-chatdock{border-top:1px solid var(--line-2);padding:10px 12px}
+.bai-qs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.bai-q{font-size:.71rem;padding:6px 10px;border-radius:999px;background:var(--glass-on);
+  border:1px solid var(--line-2);color:var(--ink-2)}
+.bai-q:hover{background:var(--hover);color:var(--ink)}
+.bai-cbox{display:flex;gap:7px;align-items:center;background:var(--glass-on);border:1px solid var(--line-2);
+  border-radius:12px;padding:7px 9px}
+.bai-cbox input{flex:1;background:none;border:none;outline:none;color:var(--ink);font-family:inherit;font-size:.79rem}
+.bai-send{width:26px;height:26px;border-radius:8px;background:var(--accent);color:#fff;display:flex;
+  align-items:center;justify-content:center;flex:none}
+.bai-msg{font-size:.8rem;line-height:1.6;background:var(--surface-2);border:1px solid var(--line-2);
+  border-radius:12px;padding:9px 11px;margin-bottom:9px}
+.bai-msg.me{background:var(--accent);color:#fff;margin-left:auto;max-width:84%;border:none;
+  border-radius:12px 12px 4px 12px}
+@media(max-width:1200px){.brf-ai{width:310px}}
+
 /* ---- Operations fly-out: tinted icon tiles, as designed ---- */
 .rfo .ic{background:var(--tint,var(--hover));color:var(--tint-ink,var(--ink))}
 .rfo.soon .ic{background:var(--hover);color:var(--ink-3)}
@@ -5656,7 +5724,7 @@ const BRIEF_FOLDERS = [];
 const BRIEF_SHELF = [];
 const BRIEFS = [];
 state.briefId=null;
-state.brf={ tool:'select', zoom:.62, panX:30, panY:20, sel:null, selFrame:null, dropAt:null, editing:null, present:false, device:'desktop', showComments:true, openThread:null, pendingPin:null };
+state.brf={ tool:'select', zoom:.62, panX:30, panY:20, sel:null, selFrame:null, dropAt:null, editing:null, present:false, device:'desktop', showComments:true, openThread:null, pendingPin:null, ai:false };
 function briefById(id){ return BRIEFS.find(b=>b.id===id); }
 function renderBriefs(){
   if(state.briefId){ renderBriefEditor(); return; }
@@ -5834,6 +5902,9 @@ function renderBriefEditor(){
             <button class="active">✏️ Edit</button>
             <button onclick="state.brf.present=true;renderBriefEditor()">▶ Present</button>
           </div>
+          <button class="btn btn-ghost btn-sm" onclick="brfAiToggle()" title="Brief assistant"
+            style="${s.ai?'background:var(--accent-soft);color:var(--accent-ink)':''}">✦ Assistant${
+            brfOpenFromOthers(b).length?`<span class="badge bg-warn" style="margin-left:6px">${brfOpenFromOthers(b).length}</span>`:''}</button>
           <button class="btn btn-primary btn-sm" onclick="openBriefShare('${b.id}')">${ICONS.send} Share</button>
         </div>
       </div>
@@ -5849,6 +5920,7 @@ function renderBriefEditor(){
           </div>
         </div>
         ${brfSidePanel(b)}
+        ${brfAiRail(b)}
       </div>
     </div>
     <input type="file" id="brfImgInput" accept="image/*" multiple style="display:none" onchange="brfImageChosen(event)">`;
@@ -5861,6 +5933,265 @@ function renderBriefEditor(){
   if(!state.brf.publicView && RT.topic!=='realtime:tiki-brief-'+b.id) rtConnect(b.id);
   rtPaint(); rtRenderPeers();
 }
+/* ============================================================================
+   BRIEF ASSISTANT — the creative strategist that lives in the brief
+   Summarising a comment is easy and not worth much. The job here is to say what
+   each thread actually ASKS OF YOU: a decision, a piece of work, or nothing at
+   all because it is waiting on another thread. That last case is the one that
+   earns its keep — replying to a dependency achieves nothing.
+   ========================================================================== */
+const BRF_AI = { digest:null, forBrief:null, loading:false, err:null, tab:'digest', chat:[] };
+
+/* Open threads whose latest message came from somebody other than you. Those
+   are the ones that are waiting on you; your own notes are not. */
+function brfOpenFromOthers(b){
+  return (b.comments||[]).filter(c=>{
+    if(c.resolved) return false;
+    const t=c.thread||[]; if(!t.length) return false;
+    return t[t.length-1].who !== ME;
+  });
+}
+function brfAiToggle(){
+  state.brf.ai=!state.brf.ai;
+  renderBriefEditor();
+  if(state.brf.ai) brfAiEnsure();
+}
+function brfAiEnsure(force){
+  const b=briefById(state.briefId); if(!b) return;
+  if(!force && BRF_AI.forBrief===b.id && (BRF_AI.digest||BRF_AI.loading)) return;
+  brfAiBuild(b);
+}
+
+/* A compact, faithful description of the brief. Sent as text rather than raw
+   JSON so the model spends its attention on the comments, not on schema. */
+function brfContextText(b){
+  const frames=b.elements.filter(e=>e.type==='frame');
+  const pages=frames.map((f,i)=>{
+    const kids=b.elements.filter(e=>e.type!=='frame'&&e.x>=f.x&&e.x<=f.x+f.w&&e.y>=f.y&&e.y<=f.y+f.h);
+    const txt=kids.filter(e=>e.type==='text').map(e=>(e.text||'').replace(/<[^>]*>/g,'').trim()).filter(Boolean);
+    const counts=['image','video','link'].map(t=>{const n=kids.filter(e=>e.type===t).length; return n?`${n} ${t}${n>1?'s':''}`:null;}).filter(Boolean);
+    return `PAGE ${i+1} "${f.title||'untitled'}" — ${counts.join(', ')||'no media'}\n  text: ${txt.slice(0,6).join(' | ')||'(none)'}`;
+  }).join('\n');
+  const threads=(b.comments||[]).map((c,i)=>{
+    if(!(c.thread||[]).length) return null;
+    const msgs=c.thread.map(m=>`    ${whoName(m.who)}${m.who===ME?' (me)':''} — "${(m.text||'').replace(/"/g,"'")}"`).join('\n');
+    const page=frames.findIndex(f=>c.x>=f.x&&c.x<=f.x+f.w&&c.y>=f.y&&c.y<=f.y+f.h);
+    return `PIN ${i+1}${page>-1?` (on page ${page+1})`:' (off-page)'}${c.resolved?' [RESOLVED]':''}\n${msgs}`;
+  }).filter(Boolean).join('\n');
+  return `BRIEF "${b.name}" · status ${b.status}\n${pages}\n\nCOMMENT THREADS\n${threads||'(none)'}`;
+}
+
+const BRF_AI_PROMPT = `You are the creative strategist sitting inside this brief with me. I am ${'${ME_NAME}'}.
+
+Read the comment threads and tell me what each one ACTUALLY asks of me. Classify honestly:
+- "block"  — someone has stopped working and needs a decision or a fix from me
+- "ask"    — a straight question or a go/no-go I can answer in one line
+- "depend" — it is waiting on ANOTHER thread, so replying to it directly achieves nothing
+- "fyi"    — no action needed
+
+Rules:
+- Say what it MEANS, not what it said. I can read.
+- If a thread is a dependency, name which pins must be cleared first.
+- A go/no-go that unlocks a lot of someone else's work is the highest-leverage item. Say so.
+- Subtasks must be concrete actions I can do, or null.
+- Be blunt and short. No praise, no filler.
+
+Reply with STRICT JSON only, no prose and no code fences:
+{"verdict":"one or two sentences on where this brief actually stands",
+ "threads":[{"pin":1,"author":"Rod","kind":"block|ask|depend|fyi",
+   "means":"what it asks of me","subtask":"concrete action or null",
+   "actions":[{"label":"short button text","kind":"reply|resolve|note"}]}]}`;
+
+async function brfAiBuild(b){
+  BRF_AI.loading=true; BRF_AI.err=null; BRF_AI.forBrief=b.id; BRF_AI.digest=null;
+  brfAiPaint();
+  const threads=brfOpenFromOthers(b);
+  if(!(b.comments||[]).some(c=>(c.thread||[]).length)){
+    BRF_AI.loading=false; BRF_AI.digest={verdict:'No comments on this brief yet.',threads:[]}; brfAiPaint(); return;
+  }
+  try{
+    const q=BRF_AI_PROMPT.replace('${ME_NAME}', whoName(ME))+'\n\n'+brfContextText(b);
+    const r=await tikiFetch('/functions/v1/assistant',{ method:'POST',
+      body:JSON.stringify({ snapshot:aiSnapshot(), history:[], question:q }) });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    const text=(j.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n').trim();
+    const m=text.match(/\{[\s\S]*\}/);
+    if(!m) throw new Error('no JSON in reply');
+    BRF_AI.digest=JSON.parse(m[0]);
+  }catch(e){
+    /* The rail must still be useful when the cloud brain is unavailable. */
+    BRF_AI.err=e.message||'unavailable';
+    BRF_AI.digest=brfAiLocal(b);
+  }
+  BRF_AI.loading=false; brfAiPaint();
+}
+
+/* Offline reading of the threads. Crude but honest — it only claims what the
+   wording plainly supports, and says so in the verdict. */
+function brfAiLocal(b){
+  const out=[];
+  (b.comments||[]).forEach((c,i)=>{
+    const t=c.thread||[]; if(!t.length||c.resolved) return;
+    const last=t[t.length-1]; if(last.who===ME) return;
+    const s=(last.text||'').toLowerCase();
+    let kind='fyi', means='Read it — no clear action requested.';
+    if(/once you approve|after you|waiting on|until you/.test(s)){
+      kind='depend'; means='Waiting on your other comments. Clear those first — replying here changes nothing.';
+    } else if(/\bhappy with\b|\bif so\b|\bshall i\b|\bshould i\b|approve/.test(s)){
+      kind='ask'; means='A go/no-go. One word from you unblocks the next chunk of their work.';
+    } else if(/can you help|can't|cant|cannot|unable|stuck|not working/.test(s)){
+      kind='block'; means='They have stopped and need something from you to continue.';
+    } else if(s.includes('?')){
+      kind='ask'; means='A direct question waiting on an answer.';
+    }
+    out.push({ pin:i+1, author:whoName(last.who), kind, means,
+      subtask: kind==='depend'?null:`Answer ${whoName(last.who)} on pin ${i+1}`,
+      actions:[{label:'Reply',kind:'reply'},{label:'Resolve',kind:'resolve'}] });
+  });
+  const blocking=out.filter(x=>x.kind==='block'||x.kind==='ask').length;
+  return { verdict: out.length
+      ? `${out.length} thread${out.length===1?'':'s'} waiting on you, ${blocking} of them blocking. Read offline — the cloud assistant could not be reached, so this is a plain reading of the wording only.`
+      : 'Nothing waiting on you.',
+    threads: out, local:true };
+}
+
+function brfAiRail(b){
+  if(!state.brf.ai) return '';
+  return `<div class="brf-ai" id="brfAi">${brfAiInner(b)}</div>`;
+}
+function brfAiPaint(){
+  const b=briefById(state.briefId); const el=$('brfAi');
+  if(b&&el) el.innerHTML=brfAiInner(b);
+}
+const BRF_KIND={ block:['Blocking','crit'], ask:['Needs a yes','accent'], depend:['Waiting on others','warn'], fyi:['FYI','neutral'] };
+
+function brfAiInner(b){
+  const d=BRF_AI.digest, waiting=brfOpenFromOthers(b);
+  const head=`<div class="bai-h">
+      <div class="t"><span class="bai-orb"></span>Brief assistant
+        <button class="bai-x" onclick="brfAiToggle()" title="Close">✕</button></div>
+      <div class="s">${waiting.length
+        ? `${waiting.length} thread${waiting.length===1?'':'s'} waiting on you`
+        : 'Nothing waiting on you'}</div>
+    </div>
+    <div class="bai-tabs">
+      ${[['digest','Digest'],['task','Task board'],['chat','Ask']].map(([k,l])=>
+        `<button class="bai-tab ${BRF_AI.tab===k?'on':''}" onclick="BRF_AI.tab='${k}';brfAiPaint()">${l}</button>`).join('')}
+    </div>`;
+
+  if(BRF_AI.loading) return head+`<div class="bai-body"><div class="bai-load">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      reading ${(b.comments||[]).length} thread${(b.comments||[]).length===1?'':'s'}…</div></div>`;
+
+  if(BRF_AI.tab==='chat') return head+`<div class="bai-body" id="baiChat">${
+      BRF_AI.chat.length?BRF_AI.chat.join(''):
+      `<div class="bai-hint">Ask about this brief. It can see every page, every element and every comment thread — who said what, and when.</div>`
+    }</div>
+    <div class="bai-chatdock">
+      <div class="bai-qs">${['What does everyone need from me?','Fastest way to unblock them?','Draft a reply','Is this ready to send?']
+        .map(q=>`<button class="bai-q" onclick="brfAiAsk('${esc(q).replace(/'/g,"\\'")}')">${q}</button>`).join('')}</div>
+      <div class="bai-cbox"><input id="baiQ" placeholder="Ask about this brief…"
+        onkeydown="if(event.key==='Enter')brfAiAsk(this.value)">
+        <button class="bai-send" onclick="brfAiAsk($('baiQ').value)">↑</button></div>
+    </div>`;
+
+  if(BRF_AI.tab==='task'){
+    const subs=(d&&d.threads||[]).map(t=>t.subtask).filter(Boolean);
+    const existing=state.tasks.find(t=>t.briefId===b.id && t.status!=='Completed');
+    return head+`<div class="bai-body">
+      <div class="bai-hint" style="margin-bottom:11px">One card reaches your task board. The detail stays here, where it makes sense.</div>
+      <div class="bai-tb">
+        <div class="bai-tbh">Task board · ${existing?'on your board':'preview'}</div>
+        <div class="bai-tcard">
+          <div class="tt">${waiting.length?`${waiting.length} comment${waiting.length===1?'':'s'} waiting on you · ${esc(b.name)}`:esc(b.name)+' — all clear'}</div>
+          <div class="tmeta"><span class="pri">${waiting.length?'HIGH':'DONE'}</span>${brandBadge(b.brand)}</div>
+          ${subs.length?`<div class="bai-subs">${subs.map(s=>`<div><span class="bx"></span><span>${esc(s)}</span></div>`).join('')}</div>`:''}
+        </div>
+      </div>
+      ${waiting.length?`<button class="bai-act" style="width:100%;margin-top:11px" onclick="brfAiMakeTask()">
+        ${existing?'Update the task on my board':'Put this on my task board'}</button>`:''}
+      <div class="bai-hint" style="margin-top:10px">It closes itself when the last thread is cleared.</div>
+    </div>`;
+  }
+
+  /* digest */
+  if(!d) return head+`<div class="bai-body"><div class="bai-hint">Nothing read yet.</div>
+    <button class="bai-act" style="width:100%;margin-top:10px" onclick="brfAiEnsure(true)">Read the comments</button></div>`;
+
+  const cards=(d.threads||[]).map(t=>{
+    const [label,tone]=BRF_KIND[t.kind]||BRF_KIND.fyi;
+    const c=(b.comments||[])[(t.pin||1)-1];
+    const said=c&&(c.thread||[]).length?c.thread[c.thread.length-1].text:'';
+    return `<div class="bai-card">
+      <div class="ch"><span class="num">${t.pin}</span><span class="who">${esc(t.author||'')}</span>
+        <span class="tag t-${tone}">${label}</span></div>
+      ${said?`<div class="quote">${esc(said.length>150?said.slice(0,150)+'…':said)}</div>`:''}
+      <div class="means">${esc(t.means||'')}</div>
+      <div class="acts">
+        <button class="bai-act" onclick="brfAiGoto(${t.pin})">Open pin ${t.pin}</button>
+        ${c&&!c.resolved?`<button class="bai-act ghost" onclick="brfResolve('${c.id}');brfAiEnsure(true)">Resolve</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  return head+`<div class="bai-body">
+    <div class="bai-verdict">${esc(d.verdict||'')}</div>
+    ${cards||`<div class="bai-hint">No open threads.</div>`}
+    ${BRF_AI.err?`<div class="bai-hint" style="color:var(--warn-ink);margin-top:8px">Offline reading — ${esc(BRF_AI.err)}</div>`:''}
+    <button class="bai-act ghost" style="width:100%;margin-top:10px" onclick="brfAiEnsure(true)">Re-read</button>
+  </div>`;
+}
+
+function brfAiGoto(pin){
+  const b=briefById(state.briefId); const c=(b.comments||[])[pin-1]; if(!c) return;
+  state.brf.openThread=c.id;
+  /* Centre the pin so "open pin 2" actually shows you pin 2. */
+  const vp=$('brfViewport');
+  if(vp){ const r=vp.getBoundingClientRect(), s=state.brf;
+    s.panX=r.width/2 - c.x*s.zoom; s.panY=r.height/2 - c.y*s.zoom; }
+  renderBriefEditor();
+}
+function brfAiMakeTask(){
+  const b=briefById(state.briefId); const waiting=brfOpenFromOthers(b);
+  const subs=((BRF_AI.digest&&BRF_AI.digest.threads)||[]).map(t=>t.subtask).filter(Boolean);
+  const title=`${waiting.length} comment${waiting.length===1?'':'s'} waiting on you · ${b.name}`;
+  let t=state.tasks.find(x=>x.briefId===b.id && x.status!=='Completed');
+  if(t){ t.title=title; t.notes=subs.join('\n'); toast('Task updated'); }
+  else{
+    state.tasks.unshift({ id:'t'+Date.now()%100000, title, brand:b.brand, briefId:b.id,
+      assignee:ME, priority:'High', due:TODAY_ISO, status:'Not Started',
+      creator:'', product:'', campaign:'', notes:subs.join('\n'),
+      link:'', comments:[] });
+    toast('Added to your task board');
+  }
+  tikiPush(); brfAiPaint();
+}
+async function brfAiAsk(q){
+  q=(q||'').trim(); if(!q) return;
+  const b=briefById(state.briefId); if(!b) return;
+  const inp=$('baiQ'); if(inp) inp.value='';
+  BRF_AI.chat.push(`<div class="bai-msg me">${esc(q)}</div>`);
+  BRF_AI.chat.push(`<div class="bai-load" id="baiTy"><span class="dot"></span><span class="dot"></span><span class="dot"></span> reading the brief…</div>`);
+  brfAiPaint();
+  try{
+    const ctx=`You are the creative strategist inside this brief, talking to ${whoName(ME)}. Be short and blunt. `+
+      `Answer from the brief below; if something is not in it, say so.\n\n${brfContextText(b)}\n\nQuestion: ${q}`;
+    const r=await tikiFetch('/functions/v1/assistant',{ method:'POST',
+      body:JSON.stringify({ snapshot:aiSnapshot(), history:[], question:ctx }) });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    const text=(j.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n').trim();
+    BRF_AI.chat=BRF_AI.chat.filter(x=>!x.includes('id="baiTy"'));
+    BRF_AI.chat.push(`<div class="bai-msg">${aiMd(text||'(no reply)')}</div>`);
+  }catch(e){
+    BRF_AI.chat=BRF_AI.chat.filter(x=>!x.includes('id="baiTy"'));
+    BRF_AI.chat.push(`<div class="bai-msg">Couldn't reach the assistant — ${esc(e.message||'unavailable')}.</div>`);
+  }
+  brfAiPaint();
+  const el=$('baiChat'); if(el) el.scrollTop=el.scrollHeight;
+}
+
 function brfWorldSize(b){
   const xs=b.elements.map(e=>e.x+(e.w||320)), ys=b.elements.map(e=>e.y+(e.h||240));
   return { w:Math.max(2400, ...xs)+500, h:Math.max(1400, ...ys)+500 };
