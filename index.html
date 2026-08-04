@@ -1695,6 +1695,27 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
 @media(max-width:1200px){.brf-ai{width:310px}}
 
 /* ---- Action Flows ---- */
+.flw-compose{margin-bottom:20px;max-width:920px}
+.flw-cbox{display:flex;gap:10px;align-items:center;background:var(--glass);border:1px solid var(--glass-brd);
+  border-radius:14px;padding:9px 11px;backdrop-filter:blur(24px) saturate(180%);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:var(--glass-hi)}
+.flw-cbox:focus-within{border-color:var(--accent)}
+.flw-cbox .sp{color:var(--ink-3);font-size:.95rem;padding-left:3px}
+.flw-cbox input{flex:1;background:none;border:none;outline:none;color:var(--ink);
+  font-family:inherit;font-size:.86rem}
+.flw-exs{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.flw-ex{font-size:.73rem;padding:6px 11px;border-radius:999px;background:var(--glass-on);
+  border:1px solid var(--line-2);color:var(--ink-2);cursor:pointer;font-family:inherit}
+.flw-ex:hover{background:var(--hover);color:var(--ink)}
+.flw-building{display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--ink-3);margin-top:11px}
+.flw-building .dot{width:5px;height:5px;border-radius:50%;background:var(--ink-3);animation:baibl 1.1s infinite}
+.flw-building .dot:nth-child(2){animation-delay:.15s}.flw-building .dot:nth-child(3){animation-delay:.3s}
+.flw-reject{margin-top:11px;border-radius:12px;padding:11px 13px;font-size:.81rem;line-height:1.55;
+  background:var(--warn-soft);border:1px solid var(--warn-ink)}
+.flw-reject .sm{font-size:.75rem;color:var(--ink-3);margin-top:6px}
+.flw-reject code{font-family:ui-monospace,monospace;font-size:.72rem}
+.flw-built{margin-top:11px;border-radius:12px;padding:11px 13px;font-size:.81rem;
+  background:var(--good-soft);border:1px solid var(--good-ink)}
 .flw-wrap{display:flex;gap:18px;align-items:flex-start}
 .flw-rail{width:250px;flex:none}
 .flw-rh{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);margin-bottom:9px}
@@ -2462,8 +2483,9 @@ function applyTheme(t){
 function setTheme(t){ applyTheme(t); if(state.page==='settings') renderSettingsInner(); toast(t==='auto'?'Following your system':(t==='dark'?'Dark':'Light')); }
 /* One row, one tap — Light → Dark → Auto. A three-way segmented control needed
    more width than the profile menu has. */
+/* One definition only. There were two, and the later plain light/dark toggle
+   silently won — which is why Appearance never reached Auto despite offering it. */
 function cycleTheme(){ const o=['light','dark','auto']; setTheme(o[(o.indexOf(state.theme)+1)%3]); }
-function cycleTheme(){ applyTheme(document.body.classList.contains('dark')?'light':'dark'); if(state.page==='settings') renderSettingsInner(); }
 (function initTheme(){
   let t='auto'; try{ t=localStorage.getItem('tikiTheme')||'auto'; }catch(e){}
   applyTheme(t);
@@ -6059,9 +6081,11 @@ const FLOW_ACTIONS = {
       }).join('\n');
       const t=state.tasks.find(x=>x.brfAuto && x.briefId===b.id && x.assignee===ME);
       if(dry) return t ? `Update task → "${title}"` : `Create task → "${title}" (High, due today)`;
-      if(t){ t.title=title; t.notes=notes; if(t.status==='Completed') t.status='Not Started'; }
+      /* The board reads t.name — writing t.title produced a card with no title
+         at all, which is how this shipped untitled. */
+      if(t){ t.name=title; t.notes=notes; if(t.status==='Completed') t.status='Not Started'; }
       else{
-        state.tasks.unshift({ id:'t'+Date.now()%100000, title, brand:b.brand, briefId:b.id, brfAuto:true,
+        state.tasks.unshift({ id:'t'+Date.now()%100000, name:title, brand:b.brand, briefId:b.id, brfAuto:true,
           assignee:ME, priority:'High', due:TODAY_ISO, status:'Not Started',
           creator:'', product:'', campaign:'', notes, link:'', comments:[] });
         notify('warn','Comments waiting',title,'canvas');
@@ -6075,10 +6099,10 @@ const FLOW_ACTIONS = {
       const b=briefById(ctx.briefId); if(!b) return null;
       const t=state.tasks.find(x=>x.brfAuto && x.briefId===b.id && x.assignee===ME);
       if(!t || t.status==='Completed') return null;
-      if(dry) return `Move "${t.title}" to Completed`;
-      t.status='Completed'; t.title=`${b.name} — comments cleared`;
+      if(dry) return `Move "${t.name}" to Completed`;
+      t.status='Completed'; t.name=`${b.name} — comments cleared`;
       notify('good','Brief cleared',`Every comment on ${b.name} is answered`,'canvas');
-      return `Completed: ${t.title}`;
+      return `Completed: ${t.name}`;
     }
   },
   notify_waiting: {
@@ -10538,6 +10562,20 @@ function renderFlows(){
   $('page-flows').innerHTML=`
     <div class="page-head"><div><h1>Action Flows</h1>
       <p class="sub">Rules the app runs on its own. What you see here is what actually runs — editing a flow changes the behaviour.</p></div></div>
+    <div class="flw-compose">
+      <div class="flw-cbox">
+        <span class="sp">✦</span>
+        <input id="flwRule" placeholder="Describe a rule — “when a comment is left on a brief, put it on my board”"
+          onkeydown="if(event.key==='Enter')afBuild(this.value)">
+        <button class="btn btn-primary btn-sm" onclick="afBuild($('flwRule').value)">Build it</button>
+      </div>
+      <div class="flw-exs">${[
+          'When someone comments on a brief, create a task for me',
+          'When every comment on a brief is answered, close the task',
+          'When a brief is opened, tell me what changed'
+        ].map(x=>`<button class="flw-ex" onclick="afBuild('${esc(x).replace(/'/g,"\\'")}')">${x}</button>`).join('')}</div>
+      <div id="flwBuildOut"></div>
+    </div>
     <div class="flw-wrap">
       <div class="flw-rail">
         <div class="flw-rh">Flows</div>
@@ -10546,11 +10584,11 @@ function renderFlows(){
           <div class="d">${esc(x.desc||'')}</div></button>`).join('')}
       </div>
       <div class="flw-main">
-        ${f?flowChartHTML(f):'<div class="empty">No flows yet</div>'}
+        ${f?afChartHTML(f):'<div class="empty">No flows yet</div>'}
       </div>
     </div>`;
 }
-function flowChartHTML(f){
+function afChartHTML(f){
   const ev=FLOW_EVENTS[f.event]||{label:f.event,desc:''};
   const health=EVENT_LOG[f.event];
   const nodeHTML=(n)=>{
@@ -10574,9 +10612,10 @@ function flowChartHTML(f){
   return `
     <div class="flw-head">
       <div class="ft">${esc(f.name)}</div>
-      <div class="toggle ${f.on?'':'off'}" onclick="flowToggle('${f.id}')"></div>
+      <div class="toggle ${f.on?'':'off'}" onclick="afToggle('${f.id}')"></div>
       <span style="font-size:.75rem;color:var(--ink-3)">${f.on?'Live':'Paused'}</span>
-      <button class="btn btn-soft btn-sm" style="margin-left:auto" onclick="flowTest('${f.id}')">▶ Test run</button>
+      <button class="btn btn-soft btn-sm" style="margin-left:auto" onclick="afTest('${f.id}')">▶ Test run</button>
+      ${f.seeded?'':`<button class="btn btn-ghost btn-sm" style="color:var(--crit-ink)" onclick="afDelete('${f.id}')">Delete</button>`}
     </div>
     <div class="flw-sub">${esc(f.desc||'')} · ran ${f.runs||0} time${f.runs===1?'':'s'}${
       f.lastRun?` · last ${relTime({ts:f.lastRun})}`:''}</div>
@@ -10594,22 +10633,104 @@ function flowChartHTML(f){
       <div class="flw-arm"></div>
       ${(f.nodes||[]).map(nodeHTML).join('<div class="flw-arm"></div>')}
     </div>
-    ${FLOW_TEST&&FLOW_TEST.id===f.id?flowTraceHTML(FLOW_TEST):''}`;
+    ${FLOW_TEST&&FLOW_TEST.id===f.id?afTraceHTML(FLOW_TEST):''}`;
 }
-function flowToggle(id){
+function afToggle(id){
   const f=ACTION_FLOWS.find(x=>x.id===id); f.on=!f.on; tikiPush(); renderFlows();
   toast(f.on?'Flow is live':'Flow paused');
 }
+/* ---------------------------------------------------------------------------
+   English → flow.
+   Hard constraint: the model may only pick ids from the catalogues below, and
+   whatever comes back is validated before it is stored. That is the whole
+   design. A builder that accepted any sentence would cheerfully draw a chart
+   for a rule the app can never fire, and you would not find out until the day
+   it silently did nothing. If it does not map, it refuses and says why.
+   ------------------------------------------------------------------------- */
+function afCatalogue(){
+  return `EVENTS (pick exactly one):\n`+
+    Object.entries(FLOW_EVENTS).map(([k,v])=>`  ${k} — ${v.label}. ${v.desc}`).join('\n')+
+    `\n\nCONDITIONS (optional, these only):\n`+
+    Object.entries(FLOW_CONDS).map(([k,v])=>`  ${k} — ${v.label}`).join('\n')+
+    `\n\nACTIONS (these only):\n`+
+    Object.entries(FLOW_ACTIONS).map(([k,v])=>`  ${k} — ${v.label}`).join('\n');
+}
+function afValidate(p){
+  if(!FLOW_EVENTS[p.event]) return `"${p.event}" is not an event this app emits.`;
+  if(!(p.nodes||[]).length) return 'The flow has no steps.';
+  let bad=null;
+  const walk=ns=>(ns||[]).forEach(n=>{
+    if(n.kind==='cond'){
+      if(!FLOW_CONDS[n.cond]) bad=bad||`"${n.cond}" is not a condition I can evaluate.`;
+      walk(n.yes); walk(n.no);
+    } else if(n.kind==='act'){
+      if(!FLOW_ACTIONS[n.action]) bad=bad||`"${n.action}" is not an action I can perform.`;
+    } else bad=bad||`Unknown step type "${n.kind}".`;
+  });
+  walk(p.nodes);
+  return bad;
+}
+async function afBuild(sentence){
+  sentence=(sentence||'').trim(); if(!sentence) return;
+  const out=$('flwBuildOut'), inp=$('flwRule'); if(inp) inp.value='';
+  out.innerHTML=`<div class="flw-building"><span class="dot"></span><span class="dot"></span><span class="dot"></span> checking the rule against what the app can actually do…</div>`;
+  const prompt=`Turn this rule into an automation flow for our app.
+
+RULE: "${sentence}"
+
+${afCatalogue()}
+
+You may ONLY use the ids listed above. If the rule needs an event, condition or
+action that is not listed, do NOT invent one and do NOT approximate — refuse.
+
+Reply with STRICT JSON only, no prose and no code fences.
+If it maps:
+{"ok":true,"name":"short name","desc":"one line","event":"<event id>",
+ "nodes":[{"kind":"cond","cond":"<cond id>","yes":[{"kind":"act","action":"<action id>"}],"no":[]}]}
+A node may also be a bare action: {"kind":"act","action":"<action id>"}.
+If it does not map:
+{"ok":false,"why":"one sentence naming what is missing and why it could never fire"}`;
+  try{
+    const r=await tikiFetch('/functions/v1/assistant',{ method:'POST',
+      body:JSON.stringify({ snapshot:aiSnapshot(), history:[], question:prompt }) });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    const text=(j.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');
+    const m=text.match(/\{[\s\S]*\}/); if(!m) throw new Error('the assistant did not return a flow');
+    const p=JSON.parse(m[0]);
+    if(!p.ok){
+      out.innerHTML=`<div class="flw-reject"><b>Can't build that one.</b> ${esc(p.why||'It needs something the app does not emit.')}
+        <div class="sm">Triggers that exist today: ${Object.keys(FLOW_EVENTS).map(k=>`<code>${esc(k)}</code>`).join(', ')}</div></div>`;
+      return;
+    }
+    const bad=afValidate(p);
+    if(bad){ out.innerHTML=`<div class="flw-reject"><b>That came back unrunnable.</b> ${esc(bad)}</div>`; return; }
+    const f={ id:'fl-'+Date.now()%100000, name:p.name||'New flow', desc:p.desc||sentence,
+      on:false, event:p.event, nodes:p.nodes, runs:0 };
+    ACTION_FLOWS.push(f); FLOW_SEL=f.id; FLOW_TEST=null; tikiPush(); renderFlows();
+    $('flwBuildOut').innerHTML=`<div class="flw-built">Drafted and <b>switched off</b>. Test it, then flip it live.</div>`;
+    toast('Flow drafted');
+  }catch(e){
+    out.innerHTML=`<div class="flw-reject"><b>Couldn't build it.</b> ${esc(e.message||'assistant unavailable')}.</div>`;
+  }
+}
+function afDelete(id){
+  const f=ACTION_FLOWS.find(x=>x.id===id); if(!f) return;
+  if(f.seeded){ toast('Built-in flows can be paused but not deleted'); return; }
+  if(!confirm(`Delete "${f.name}"?`)) return;
+  ACTION_FLOWS=ACTION_FLOWS.filter(x=>x.id!==id); FLOW_SEL=null; FLOW_TEST=null;
+  tikiPush(); renderFlows(); toast('Flow deleted');
+}
 /* Dry run against a real brief — the only test worth trusting is one that uses
    the data the flow will actually see. */
-function flowTest(id){
+function afTest(id){
   const f=ACTION_FLOWS.find(x=>x.id===id);
   const b=BRIEFS.find(x=>(x.comments||[]).some(c=>(c.thread||[]).length)) || BRIEFS[0];
   if(!b){ toast('No briefs to test against'); return; }
   FLOW_TEST={ id, brief:b.name, trace:runFlow(f, {briefId:b.id}, true) };
   renderFlows();
 }
-function flowTraceHTML(t){
+function afTraceHTML(t){
   const ICO={pass:'✓',skip:'–',would:'!',stop:'✕'};
   return `<div class="flw-trace">
     <div class="tt-h">Dry run against “${esc(t.brief)}” <span class="safe">nothing was written</span></div>
@@ -11996,9 +12117,20 @@ function mig_mergeDuplicateFounder(){
   return true;
 }
 
+/* Auto-created brief tasks were written with a `title` field while the board
+   reads `name`, so they rendered as a card with no title. Carry the value over
+   for any that already exist. */
+function mig_taskTitleField(){
+  (state.tasks||[]).forEach(t=>{
+    if(!t.name && t.title){ t.name=t.title; delete t.title; }
+  });
+  return true;
+}
+
 const MIGRATIONS = [
   { id:'2026-08-comment-authors', fn:mig_commentAuthors },
-  { id:'2026-08-merge-founder',   fn:mig_mergeDuplicateFounder }
+  { id:'2026-08-merge-founder',   fn:mig_mergeDuplicateFounder },
+  { id:'2026-08-task-title-field',fn:mig_taskTitleField }
 ];
 function tikiMigrate(){
   if(!Array.isArray(state.migrations)) state.migrations=[];
