@@ -1585,6 +1585,14 @@ body:not(.dark) .asx-orb::before{opacity:.30}
 .bai-draft .da{display:flex;gap:6px;margin-top:10px}
 .bai-posted{font-size:.78rem;font-weight:650;color:var(--good-ink);background:var(--good-soft);
   border:1px solid var(--good-ink);border-radius:11px;padding:8px 11px;margin-bottom:9px}
+.mdl-btn.on{background:var(--accent-soft);border-color:var(--accent-ink);color:var(--accent-ink)}
+.mdl-btn #mdlBtnLbl:empty{display:none}
+.mdl-menu{top:auto !important;bottom:calc(100% + 8px);left:0;right:auto;min-width:266px;z-index:90;
+  background:var(--pop);border-color:var(--glass-brd);
+  backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%)}
+.mdl-menu .dd-item{align-items:flex-start}
+.mdl-foot{font-size:.71rem;color:var(--ink-3);line-height:1.5;padding:9px 11px 4px;
+  border-top:1px solid var(--line-2);margin-top:5px}
 /* ---- Projects ---- */
 /* The base .dd-menu pins itself with `top`, so a bottom offset alone left the
    panel stretched downward behind the suggestion pills. Clear top explicitly. */
@@ -2473,7 +2481,7 @@ function weeklyBuckets(){
 
 /* ============ STATE ============ */
 const state = {
-  page:'overview', brand: Object.keys(BRANDS).length>1 ? 'all' : Object.keys(BRANDS)[0], dateRange:'This Month',
+  aiModel:'', page:'overview', brand: Object.keys(BRANDS).length>1 ? 'all' : Object.keys(BRANDS)[0], dateRange:'This Month',
   taskView:'kanban', taskStatusFilter:'All', taskSearch:'',
   creatorFilter:'all', creatorStage:'All', creatorSearch:'', briefFolder:null,
   /* Videos. videoBasis is the toggle Lewis asked for:
@@ -10656,6 +10664,33 @@ function asxThreadHTML(){
     }).join('')}</div>`;
 }
 /* ============================================================================
+   MODEL PICKER
+   The edge function validates whatever it is sent against a claude-* shape and
+   falls back to the ASSISTANT_MODEL secret, so this only ever narrows the
+   choice — the browser cannot point the assistant somewhere unexpected.
+   ========================================================================== */
+const AI_MODELS = [
+  { id:'',                   name:'Default',   note:'Whatever the server is set to' },
+  { id:'claude-opus-5',      name:'Opus 5',    note:'Deepest reasoning · dearest' },
+  { id:'claude-sonnet-5',    name:'Sonnet 5',  note:'The everyday balance' },
+  { id:'claude-haiku-4-5-20251001', name:'Haiku 4.5', note:'Fast and cheap · quick lookups' }
+];
+const modelName = id => (AI_MODELS.find(m=>m.id===id)||AI_MODELS[0]).name;
+function aiSetModel(id){
+  state.aiModel=id; closeAllDD(); tikiPush();
+  if(state.page==='assistant') renderAssistant(); else aiRender();
+  toast(id?`Using ${modelName(id)}`:'Using the server default');
+}
+function aiModelMenuHTML(){
+  return `<div class="dd-label">Model</div>`+
+    AI_MODELS.map(m=>`<button class="dd-item ${(state.aiModel||'')===m.id?'sel':''}" onclick="aiSetModel('${m.id}')">
+      <span style="flex:1;min-width:0"><span class="pj-n">${m.name}</span><span class="pj-d">${m.note}</span></span>
+      <span class="check">✓</span></button>`).join('')+
+    `<div class="mdl-foot">Longer project documents cost more on every message. Haiku is fine for
+      "what did we sell yesterday"; Opus earns its price on angles and avatars.</div>`;
+}
+
+/* ============================================================================
    PROJECTS
    A project is what it is in Claude: a name, instructions, and knowledge. The
    instructions are prepended to every chat inside it; the knowledge is sent as
@@ -11878,6 +11913,10 @@ function renderAssistant(){
 }
 /* The folder button IS the state indicator — there is no banner. */
 function projPaintBtn(){
+  const mm=$('mdlMenu'); if(mm) mm.innerHTML=aiModelMenuHTML();
+  const mb=$('mdlBtn'), ml=$('mdlBtnLbl');
+  if(mb){ mb.classList.toggle('on', !!state.aiModel);
+    ml.textContent = state.aiModel ? modelName(state.aiModel) : ''; }
   const m=$('pjMenu'); if(m) m.innerHTML=projMenuHTML();
   const b=$('pjBtn'), l=$('pjBtnLbl'), x=$('pjBtnX'); if(!b) return;
   const p=activeProject();
@@ -11900,6 +11939,13 @@ function asxComposerHTML(){
           <div class="asx-mi" onclick="asxMenuPick('brief')"><span class="ico">📄</span>Add a brief<span class="s">Reference its content</span></div>
           <div class="asx-mi" onclick="asxMenuPick('deep')"><span class="ico">🔬</span>Deep analysis<span class="s">Segment and decompose fully</span></div>
         </div>
+      </div>
+      <div class="dd asx-proj">
+        <button class="asx-ib pj-btn mdl-btn" id="mdlBtn" onclick="toggleDD(event,'mdlMenu')" title="Which Claude model to use">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M4.2 7.2l2.1 2.1M17.7 17.7l2.1 2.1M3 12h3M18 12h3M4.2 16.8l2.1-2.1M17.7 6.3l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
+          <span id="mdlBtnLbl"></span>
+        </button>
+        <div class="dd-menu mdl-menu" id="mdlMenu"></div>
       </div>
       <div class="dd asx-proj">
         <button class="asx-ib pj-btn" id="pjBtn" onclick="toggleDD(event,'pjMenu')" title="Projects">
@@ -12176,7 +12222,10 @@ async function aiCloudRespond(q, toolResults, prior, work){
   try{
     const proj=activeProject();
     const body={ snapshot:aiSnapshot(), history:aiHistory().slice(0,-1),
-      question: proj ? `${projContext(proj)}\n\n---\n\n${q}` : q };
+      question: proj ? `${projContext(proj)}\n\n---\n\n${q}` : q,
+      model: state.aiModel || undefined,
+      /* Project work produces long answers; a bare lookup does not need the room. */
+      maxTokens: proj ? 12000 : 6000 };
     if(toolResults){ body.continue={ prior, toolResults }; }
     const r=await tikiFetch('/functions/v1/assistant',{ method:'POST', body:JSON.stringify(body) });
     if(r.status===404 || r.status===501){ AI.cloud=false; $('aiTy')?.remove(); aiRespond(q); if(r.status===501) aiPush('ai','<i>(Cloud brain is deployed but has no API key yet — running in basic mode. Add the ANTHROPIC_API_KEY secret in Supabase to switch me on.)</i>'); return; }
@@ -13111,7 +13160,7 @@ function collectTikiState(){
   /* v12 adds action flows — the automation rules, stored as data so the chart
      in the back office is the thing that actually runs. */
   /* v13 adds projects — instructions and knowledge the assistant works inside. */
-  return { v:13, projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  return { v:14, aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
@@ -13234,6 +13283,7 @@ function applyTikiState(d){
   replaceArr(BRIEFS,d.briefs); replaceArr(OUTREACH_FLOWS,d.flows); replaceArr(SAMPLE_REQS,d.samples);
   replaceArr(CHATS,d.chats); replaceArr(PROFIT_VENDORS,d.profitVendors);
   if(Array.isArray(d.personal)) PERSONAL_OUTREACH=d.personal;
+  if(typeof d.aiModel==='string') state.aiModel=d.aiModel;
   if(Array.isArray(d.projects)) PROJECTS=d.projects;
   if(Array.isArray(d.migrations)) state.migrations=d.migrations;
   /* Seeded flows are re-added if a saved state predates them, so upgrading never
