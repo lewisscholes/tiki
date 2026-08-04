@@ -376,6 +376,13 @@ body:not(.dark) .rtab.on{box-shadow:0 1px 3px rgba(0,0,0,.10)}
 /* The old chrome is retired, not deleted — hiding it keeps every call site alive. */
 .mob-menu,.sb-restore{display:none !important}
 body.brief-full .rdock,body.brief-full .rtop{display:none}
+/* Action Flows is a canvas, not a document. Like the brief editor it takes the
+   whole screen and hides the shell — cramming a node graph into a 1180px padded
+   column is what made it feel like an app inside an app. */
+body.flow-full .rdock,body.flow-full .rtop,body.flow-full .aura{display:none}
+body.flow-full{overflow:hidden}
+body.flow-full .content{padding:0;max-width:none;height:100vh;overflow:hidden}
+body.flow-full #page-flows{height:100%}
 @media(max-width:760px){
   .rtab{padding:9px 13px}.rtab .lb{display:none}
   .content{padding:66px 14px 128px}
@@ -1743,8 +1750,7 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
 .flw-health.ok{background:var(--good-soft);border-color:var(--good-ink)}
 .flw-health.bad{background:var(--warn-soft);border-color:var(--warn-ink)}
 /* node canvas */
-.af-stage{position:relative;height:min(560px,58vh);border:1px solid var(--line-2);border-radius:16px;
-  overflow:hidden;cursor:grab;background:var(--surface);
+.af-stage{position:absolute;inset:0;cursor:grab;background:var(--bg);
   background-image:radial-gradient(var(--line) 1.1px,transparent 1.1px);background-size:22px 22px}
 .af-stage.panning{cursor:grabbing}
 .af-world{position:absolute;left:0;top:0;transform-origin:0 0}
@@ -1796,6 +1802,73 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
   justify-content:center;font-size:.8rem;background:var(--glass-on)}
 .af-pali .pt{font-size:.84rem;font-weight:650;display:block}
 .af-pali .pd{font-size:.73rem;color:var(--ink-3);margin-top:2px;line-height:1.45;display:block}
+/* floating chrome over the canvas */
+.af-tl{position:fixed;left:22px;top:18px;z-index:30;display:flex;flex-direction:column;gap:13px;max-width:330px}
+.af-titlerow{display:flex;gap:11px;align-items:flex-start}
+.af-back{width:34px;height:34px;border-radius:50%;background:var(--surface);border:1px solid var(--line);
+  box-shadow:var(--shadow);color:var(--ink-2);flex:none;font-size:.95rem}
+.af-back:hover{background:var(--surface-2);color:var(--ink)}
+.af-title{font-size:1.3rem;font-weight:750;letter-spacing:-.03em;line-height:1.15}
+.af-tsub{font-size:.78rem;color:var(--ink-3);margin-top:2px}
+.af-tools{display:flex;gap:8px;align-items:center}
+.af-rb{width:34px;height:34px;border-radius:50%;background:var(--surface);border:1px solid var(--line);
+  box-shadow:var(--shadow);color:var(--ink-2);display:flex;align-items:center;justify-content:center}
+.af-rb:hover{background:var(--surface-2);color:var(--ink)}
+.af-add{height:34px;padding:0 16px;border-radius:99px;background:var(--accent);color:#fff;
+  font-size:.83rem;font-weight:700;box-shadow:var(--shadow)}
+.af-add:hover{filter:brightness(1.08)}
+.af-list{display:none;flex-direction:column;gap:2px;background:var(--surface);border:1px solid var(--line);
+  border-radius:14px;padding:6px;box-shadow:var(--shadow-lg);max-height:52vh;overflow-y:auto}
+.af-list.on{display:flex}
+.af-li{display:flex;gap:9px;align-items:flex-start;padding:9px 10px;border-radius:10px;text-align:left;
+  width:100%;color:var(--ink)}
+.af-li:hover{background:var(--surface-2)}
+.af-li.on{background:var(--accent-soft)}
+.af-li .n{font-size:.81rem;font-weight:650;display:block}
+.af-li .d{font-size:.71rem;color:var(--ink-3);display:block;margin-top:2px;line-height:1.4}
+.af-li .dotg{margin-top:5px}
+.af-lifoot{font-size:.68rem;color:var(--ink-3);padding:8px 10px 4px;border-top:1px solid var(--line-2);margin-top:4px}
+.af-tr{position:fixed;right:22px;top:18px;z-index:30;display:flex;flex-direction:column;
+  align-items:flex-end;gap:9px}
+.af-trow{display:flex;gap:9px;align-items:center}
+.af-saved{font-size:.8rem;color:var(--good-ink);font-weight:650}
+.af-pill{height:34px;padding:0 15px;border-radius:99px;background:var(--surface);border:1px solid var(--line);
+  box-shadow:var(--shadow);font-size:.82rem;font-weight:650;color:var(--ink-2)}
+.af-pill:hover{background:var(--surface-2);color:var(--ink)}
+.af-pill.pri{background:var(--accent);color:#fff;border-color:transparent}
+.af-pill.pri.off{background:var(--ink-3);color:#fff}
+.af-health{font-size:.73rem;color:var(--ink-3);background:var(--surface);border:1px solid var(--line);
+  border-radius:99px;padding:6px 13px;box-shadow:var(--shadow);display:flex;align-items:center;gap:7px}
+.af-health code{font-family:ui-monospace,monospace;font-size:.7rem;color:var(--ink-2)}
+.af-health .ok{color:var(--good-ink);font-weight:800}
+.af-health .bad{color:var(--warn-ink);font-weight:800}
+.af-agent{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:32;width:min(720px,92vw)}
+.af-chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px;justify-content:center}
+.af-chip{font-size:.74rem;padding:7px 12px;border-radius:99px;background:var(--surface);
+  border:1px solid var(--line);color:var(--ink-2);box-shadow:var(--shadow)}
+.af-chip:hover{background:var(--surface-2);color:var(--ink)}
+.af-abox{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);
+  border-radius:16px;padding:11px 11px 11px 17px;box-shadow:var(--shadow-lg)}
+.af-abox:focus-within{border-color:var(--accent)}
+.af-abox .sp{color:var(--ink-3)}
+.af-abox input{flex:1;border:none;outline:none;background:none;color:var(--ink);
+  font-family:inherit;font-size:.89rem}
+.af-send{width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;flex:none;
+  display:flex;align-items:center;justify-content:center}
+.af-areply:empty{display:none}
+.af-areply{margin-bottom:9px;background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  padding:11px 14px;font-size:.82rem;line-height:1.6;box-shadow:var(--shadow)}
+.af-trace{position:fixed;right:22px;bottom:20px;z-index:31;width:min(360px,44vw);max-height:52vh;
+  overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  box-shadow:var(--shadow-lg)}
+.af-trace:empty{display:none}
+.af-warn{position:fixed;left:50%;bottom:132px;transform:translateX(-50%);z-index:30;
+  background:var(--warn-soft);border:1px solid var(--warn-ink);color:var(--warn-ink);
+  padding:9px 17px;border-radius:11px;font-size:.79rem;font-weight:650;max-width:70vw;text-align:center;
+  box-shadow:var(--shadow)}
+.af-warn.ok{background:var(--good-soft);border-color:var(--good-ink);color:var(--good-ink)}
+@media(max-width:860px){.af-tl{max-width:210px}.af-chips{display:none}}
+
 .flw-chain{max-width:640px}
 .flw-node{border-radius:14px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line-2)}
 .flw-node.trigger{border-color:var(--accent);background:var(--accent-soft)}
@@ -2817,6 +2890,9 @@ function navTo(page, opts={}){
   /* The assistant is the only page that takes the whole viewport rather than
      living inside the padded content column. */
   document.body.classList.toggle('pg-assistant', page==='assistant');
+  /* The flow canvas is the other full-screen page; leaving it must put the
+     shell back or you are stranded with no navigation. */
+  if(page!=='flows') document.body.classList.remove('flow-full');
   if(opts.taskView) state.taskView=opts.taskView;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $('page-'+page).classList.add('active');
@@ -10669,65 +10745,83 @@ function afUndo(){ const f=curFlow(); if(!f||!AF_HIST.length) return; f.graph=JS
 function renderFlows(){
   ACTION_FLOWS.forEach(flowToGraph);
   if(!FLOW_SEL || !curFlow()) FLOW_SEL=(ACTION_FLOWS[0]||{}).id;
+  document.body.classList.add('flow-full');
   $('page-flows').innerHTML=`
-    <div class="page-head"><div><h1>Action Flows</h1>
-      <p class="sub">Rules the app runs on its own. This canvas is the rule &mdash; drag a wire and the behaviour changes.</p></div></div>
-    <div class="flw-compose">
-      <div class="flw-cbox">
-        <span class="sp">&#10022;</span>
-        <input id="flwRule" placeholder="Ask the agent to add, connect or revise nodes&hellip;"
-          onkeydown="if(event.key==='Enter')afBuild(this.value)">
-        <button class="btn btn-primary btn-sm" onclick="afBuild($('flwRule').value)">Build it</button>
-      </div>
-      <div id="flwBuildOut"></div>
-    </div>
-    <div class="flw-wrap">
-      <div class="flw-rail">
-        <div class="flw-rh">Flows</div>
-        ${ACTION_FLOWS.map(x=>`<button class="flw-item ${x.id===FLOW_SEL?'on':''}" onclick="FLOW_SEL='${x.id}';FLOW_TEST=null;AF_SEL=null;renderFlows()">
-          <div class="n"><span class="dotg ${x.on?'':'off'}"></span>${esc(x.name)}<span class="runs">${x.runs||''}</span></div>
-          <div class="d">${esc(x.desc||'')}</div></button>`).join('')}
-      </div>
-      <div class="flw-main" id="afMain"></div>
-    </div>`;
-  afPaint();
-}
-
-function afPaint(){
-  const f=curFlow(); const host=$('afMain'); if(!f||!host) return;
-  const ev=FLOW_EVENTS[f.event]||{label:f.event,desc:''};
-  const health=EVENT_LOG[f.event];
-  host.innerHTML=`
-    <div class="flw-head">
-      <div class="ft">${esc(f.name)}</div>
-      <div class="toggle ${f.on?'':'off'}" onclick="afToggle('${f.id}')"></div>
-      <span style="font-size:.75rem;color:var(--ink-3)">${f.on?'Live':'Paused'}</span>
-      <span style="margin-left:auto;display:flex;gap:8px">
-        <button class="btn btn-ghost btn-sm" onclick="afUndo()" title="Undo">&#8634;</button>
-        <button class="btn btn-ghost btn-sm" onclick="afFit()" title="Fit">&#10530;</button>
-        <button class="btn btn-soft btn-sm" onclick="afOpenPal()">&#65291; Add node</button>
-        <button class="btn btn-soft btn-sm" onclick="afTest('${f.id}')">&#9654; Test run</button>
-        ${f.seeded?'':`<button class="btn btn-ghost btn-sm" style="color:var(--crit-ink)" onclick="afDelete('${f.id}')">Delete</button>`}
-      </span>
-    </div>
-    <div class="flw-sub">${esc(f.desc||'')} &middot; ran ${f.runs||0} time${f.runs===1?'':'s'}${f.lastRun?` &middot; last ${relTime({ts:f.lastRun})}`:''}</div>
-    <div class="flw-health ${health&&health.n?'ok':'bad'}">
-      <b>${health&&health.n?'✓':'⚠'} <code>${esc(f.event)}</code></b>
-      ${health&&health.n
-        ? `fired ${health.n} time${health.n===1?'':'s'} this session &middot; last ${relTime({ts:health.last})}. ${esc(ev.desc)}`
-        : `has not fired yet this session. ${esc(ev.desc)} &mdash; if it never fires, nothing below runs.`}
-    </div>
     <div class="af-stage" id="afStage">
       <div class="af-world" id="afWorld">
         <svg class="af-wires" id="afWires"></svg>
         <div id="afNodes"></div>
       </div>
-      <div class="af-warn" id="afWarn"></div>
     </div>
-    ${FLOW_TEST&&FLOW_TEST.id===f.id?afTraceHTML(FLOW_TEST):''}`;
+    <div class="af-tl">
+      <div class="af-titlerow">
+        <button class="af-back" onclick="afLeave()" title="Back">&#8592;</button>
+        <div>
+          <div class="af-title" id="afTitle"></div>
+          <div class="af-tsub" id="afSub"></div>
+        </div>
+      </div>
+      <div class="af-tools">
+        <button class="af-rb" onclick="afUndo()" title="Undo">&#8634;</button>
+        <button class="af-rb" onclick="afFit()" title="Fit to view">&#10530;</button>
+        <button class="af-add" onclick="afOpenPal()">&#65291; Add node</button>
+        <button class="af-rb" onclick="afToggleList()" title="Switch flow">&#9776;</button>
+      </div>
+      <div class="af-list" id="afList"></div>
+    </div>
+    <div class="af-tr">
+      <div class="af-trow">
+        <span class="af-saved">&#10003; Saved</span>
+        <button class="af-pill" onclick="afTest(FLOW_SEL)">&#9654; Test run</button>
+        <button class="af-pill pri" id="afLive" onclick="afToggle(FLOW_SEL)"></button>
+      </div>
+      <div class="af-health" id="afHealth"></div>
+    </div>
+    <div class="af-warn" id="afWarn"></div>
+    <div class="af-agent">
+      <div class="af-areply" id="flwBuildOut"></div>
+      <div class="af-chips">
+        <button class="af-chip" onclick="afBuild('when a comment is left on a brief, create a task for me')">Comment &rarr; task</button>
+        <button class="af-chip" onclick="afBuild('when every comment is answered, close the task')">Close when cleared</button>
+        <button class="af-chip" onclick="afBuild('chase a creator who goes quiet for 10 days')">Chase quiet creators</button>
+      </div>
+      <div class="af-abox">
+        <span class="sp">&#10022;</span>
+        <input id="flwRule" placeholder="Ask the agent to add, connect or revise nodes"
+          onkeydown="if(event.key==='Enter')afBuild(this.value)">
+        <button class="af-send" onclick="afBuild($('flwRule').value)">&#8593;</button>
+      </div>
+    </div>
+    <div class="af-trace" id="afTrace"></div>`;
+  afPaint();
+  setTimeout(afFit,60);
+}
+/* Leaving has to put the shell back or you are stranded on a canvas with no nav. */
+function afLeave(){ document.body.classList.remove('flow-full'); navTo('overview'); }
+
+function afToggleList(){ $('afList')?.classList.toggle('on'); }
+
+function afPaint(){
+  const f=curFlow(); if(!f) return;
+  const ev=FLOW_EVENTS[f.event]||{label:f.event,desc:''};
+  const health=EVENT_LOG[f.event];
+  $('afTitle').textContent=f.name;
+  $('afSub').textContent=`${f.on?'Live':'Paused'} · ran ${f.runs||0} time${f.runs===1?'':'s'}`+
+    (f.lastRun?` · last ${relTime({ts:f.lastRun})}`:'');
+  const lb=$('afLive'); lb.textContent=f.on?'Live':'Paused'; lb.classList.toggle('off',!f.on);
+  $('afHealth').innerHTML=`<span class="${health&&health.n?'ok':'bad'}">${health&&health.n?'&#10003;':'&#9888;'}</span>
+    <code>${esc(f.event)}</code> ${health&&health.n
+      ? `fired ${health.n}&times; this session`
+      : `not fired yet this session`}`;
+  $('afList').innerHTML=ACTION_FLOWS.map(x=>`
+    <button class="af-li ${x.id===FLOW_SEL?'on':''}" onclick="FLOW_SEL='${x.id}';FLOW_TEST=null;AF_SEL=null;afToggleList();afPaint();afFit()">
+      <span class="dotg ${x.on?'':'off'}"></span>
+      <span><span class="n">${esc(x.name)}</span><span class="d">${esc(x.desc||'')}</span></span>
+    </button>`).join('')+
+    `<div class="af-lifoot">${Object.keys(FLOW_EVENTS).length} triggers · ${Object.keys(FLOW_ACTIONS).length} actions available</div>`;
+  $('afTrace').innerHTML = FLOW_TEST&&FLOW_TEST.id===f.id ? afTraceHTML(FLOW_TEST) : '';
   afDrawNodes(); afBind();
 }
-
 function afDrawNodes(){
   const f=curFlow(); const host=$('afNodes'); if(!host) return;
   host.innerHTML=(f.graph.nodes||[]).map(n=>{
