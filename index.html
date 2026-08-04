@@ -10733,16 +10733,118 @@ function projContext(p){
    The quality check at the end is what catches the last case.
    ========================================================================== */
 async function inflateBytes(bytes){
-  /* PDF FlateDecode is zlib-wrapped, which is what 'deflate' means here. Some
-     writers emit raw deflate, so fall back to that before giving up. */
+  /* PDF FlateDecode is zlib-wrapped, which is what 'deflate' means here.
+     Two things bite in a browser that do not bite in node:
+       · DecompressionStream THROWS on trailing bytes, and nearly every PDF has
+         a newline between the compressed data and `endstream`
+       · some writers emit raw deflate with no zlib header
+     So chunks are collected as they arrive and a terminal error is tolerated —
+     by then the real content has already been read. */
   for(const fmt of ['deflate','deflate-raw']){
     try{
       const ds=new DecompressionStream(fmt);
-      const buf=await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer();
-      if(buf.byteLength) return new Uint8Array(buf);
+      const w=ds.writable.getWriter();
+      w.write(bytes); w.close().catch(()=>{});
+      const rd=ds.readable.getReader();
+      const parts=[]; let total=0;
+      try{
+        for(;;){
+          const {value,done}=await rd.read();
+          if(done) break;
+          if(value){ parts.push(value); total+=value.length; }
+        }
+      }catch(e){ /* trailing rubbish — keep what already decoded */ }
+      if(total){
+        const out=new Uint8Array(total); let o=0;
+        for(const part of parts){ out.set(part,o); o+=part.length; }
+        return out;
+      }
     }catch(e){ /* try the next format */ }
   }
   return null;
+}
+/* ---- the other filters ----
+   A stream is often run through a CHAIN, most commonly ASCII85 then Flate.
+   Reading only the last filter name and inflating raw ASCII85 was why real
+   PDFs came back as "could not be decompressed". */
+function a85Decode(bytes){
+  const out=[]; let tuple=0, n=0, i=0;
+  if(bytes[0]===0x3C && bytes[1]===0x7E) i=2;                 /* optional <~ */
+  for(; i<bytes.length; i++){
+    const c=bytes[i];
+    if(c===0x7E) break;                                       /* ~> ends it */
+    if(c<=32) continue;
+    if(c===0x7A && n===0){ out.push(0,0,0,0); continue; }      /* z = four zero bytes */
+    if(c<33||c>117) continue;
+    tuple=tuple*85+(c-33); n++;
+    if(n===5){ out.push((tuple>>>24)&255,(tuple>>>16)&255,(tuple>>>8)&255,tuple&255); tuple=0; n=0; }
+  }
+  if(n){                                                      /* partial group pads with 'u' */
+    for(let k=n;k<5;k++) tuple=tuple*85+84;
+    const b=[(tuple>>>24)&255,(tuple>>>16)&255,(tuple>>>8)&255,tuple&255];
+    out.push(...b.slice(0,n-1));
+  }
+  return new Uint8Array(out);
+}
+function ahxDecode(bytes){
+  let h='', out=[];
+  for(const c of bytes){ if(c===0x3E) break;
+    const ch=String.fromCharCode(c); if(/[0-9a-fA-F]/.test(ch)) h+=ch; }
+  if(h.length%2) h+='0';
+  for(let k=0;k<h.length;k+=2) out.push(parseInt(h.substr(k,2),16));
+  return new Uint8Array(out);
+}
+function rleDecode(bytes){
+  const out=[]; let i=0;
+  while(i<bytes.length){
+    const l=bytes[i++];
+    if(l===128) break;
+    if(l<128){ for(let k=0;k<=l;k++) out.push(bytes[i++]); }
+    else { const b=bytes[i++]; for(let k=0;k<257-l;k++) out.push(b); }
+  }
+  return new Uint8Array(out);
+}
+function lzwDecode(bytes, early){
+  const out=[]; let dict=[], next=258, bits=9, buf=0, nbits=0, prev=null;
+  const reset=()=>{ dict=[]; for(let k=0;k<256;k++) dict[k]=[k]; next=258; bits=9; prev=null; };
+  reset();
+  for(let i=0;i<bytes.length;i++){
+    buf=(buf<<8)|bytes[i]; nbits+=8;
+    while(nbits>=bits){
+      const code=(buf>>(nbits-bits))&((1<<bits)-1); nbits-=bits;
+      if(code===256){ reset(); continue; }
+      if(code===257){ nbits=0; break; }
+      let entry;
+      if(dict[code]) entry=dict[code];
+      else if(prev) entry=prev.concat(prev[0]);
+      else continue;
+      out.push(...entry);
+      if(prev) dict[next++]=prev.concat(entry[0]);
+      prev=entry;
+      if(next+(early===0?0:1)>=(1<<bits) && bits<12) bits++;
+    }
+  }
+  return new Uint8Array(out);
+}
+/* Filters apply in the order written, so the chain is walked in order. */
+function pdfFilters(dict){
+  const m=dict.match(/\/Filter\s*(\[[^\]]*\]|\/[A-Za-z0-9]+)/);
+  if(!m) return [];
+  return (m[1].match(/\/([A-Za-z0-9]+)/g)||[]).map(x=>x.slice(1));
+}
+async function pdfDecodeChain(raw, filters, dict){
+  const early = /\/EarlyChange\s+0/.test(dict) ? 0 : 1;
+  let cur=raw;
+  for(const f of filters){
+    if(f==='FlateDecode')          cur=await inflateBytes(cur);
+    else if(f==='ASCII85Decode')   cur=a85Decode(cur);
+    else if(f==='ASCIIHexDecode')  cur=ahxDecode(cur);
+    else if(f==='RunLengthDecode') cur=rleDecode(cur);
+    else if(f==='LZWDecode')       cur=lzwDecode(cur, early);
+    else return null;                    /* image codecs and anything unknown */
+    if(!cur || !cur.length) return null;
+  }
+  return cur;
 }
 /* Pulls readable text out of one decompressed content stream. */
 function pdfTextFromContent(str){
@@ -10792,21 +10894,34 @@ async function pdfExtractText(arrayBuf){
     return { text:'', why:'the PDF is encrypted' };
   let i=0, chunks=[], found=0;
   while((i=latin.indexOf('stream', i))!==-1){
-    const dictStart=latin.lastIndexOf('<<', i);
-    const dict=dictStart>-1 ? latin.slice(dictStart, i) : '';
+    /* Read back to the start of the object, not to the nearest '<<' — a nested
+       dictionary would otherwise hide the /Filter entry from us. */
+    const objStart=latin.lastIndexOf(' obj', i);
+    const dict=objStart>-1 ? latin.slice(objStart, i) : latin.slice(Math.max(0,i-800), i);
     let s0=i+6;
     if(latin[s0]==='\r') s0++;
     if(latin[s0]==='\n') s0++;
     const end=latin.indexOf('endstream', s0);
     if(end===-1) break;
     /* Images and fonts are streams too — skip anything that is plainly not text. */
-    if(!/\/(Image|XObject\s*\/Image|FontFile|DCTDecode|JPXDecode|CCITTFaxDecode)/.test(dict)){
-      const raw=bytes.subarray(s0, end);
+    if(!/\/(Image|FontFile|DCTDecode|JPXDecode|CCITTFaxDecode|JBIG2Decode)/.test(dict)){
       found++;
-      let content=null;
-      if(/\/FlateDecode/.test(dict)) content=await inflateBytes(raw);
-      else if(!/\/[A-Za-z]*Decode/.test(dict)) content=raw;
-      if(content) chunks.push(new TextDecoder('latin1').decode(content));
+      /* Trust a literal /Length when there is one; it excludes the newline that
+         sits between the data and `endstream`. */
+      /* `/Length 8 0 R` is an indirect reference, not a byte count. Matching it
+         as a number truncated the stream to 8 bytes and lost the whole page. */
+      const lm=dict.match(/\/Length\s+(\d+)(?!\s+\d+\s+R)/);
+      let stop=end;
+      if(lm){ const n=parseInt(lm[1],10); if(n>0 && s0+n<=end) stop=s0+n; }
+      const content=await pdfDecodeChain(bytes.subarray(s0, stop), pdfFilters(dict), dict);
+      if(content){
+        const txt=new TextDecoder('latin1').decode(content);
+        /* Fonts, colour profiles and metadata are streams too, and they inflate
+           just as happily as a page does. A page content stream always contains
+           a BT text block with a show operator in it; binary rubbish does not.
+           Without this check their bytes get pasted in beside the real words. */
+        if(/BT[\s\S]{0,4000}?(Tj|TJ|'|")/.test(txt)) chunks.push(txt);
+      }
     }
     i=end+9;
   }
