@@ -1577,6 +1577,57 @@ body:not(.dark) .asx-orb::before{opacity:.30}
   backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
 .asx-sg:hover{background:var(--hover);color:var(--ink)}
 .asx-sg .s{display:none}
+/* ---- Projects ---- */
+.asx-proj{position:relative}
+.pj-btn{width:auto !important;padding:0 10px;gap:7px;font-size:.78rem;font-weight:650}
+.pj-btn #pjBtnLbl:empty{display:none}
+.pj-btn.on{background:var(--violet-soft);border-color:var(--violet-ink);color:var(--violet-ink)}
+.pj-btn .pj-x{opacity:.7;font-size:.68rem}
+.pj-btn .pj-x:hover{opacity:1}
+.pj-ic{width:28px;height:28px;border-radius:9px;flex:none;display:flex;align-items:center;
+  justify-content:center;font-size:.85rem;background:var(--violet-soft);color:var(--violet-ink)}
+.pj-ic.new{background:var(--accent-soft);color:var(--accent-ink)}
+.pj-n{font-size:.83rem;font-weight:650;display:block}
+.pj-d{font-size:.72rem;color:var(--ink-3);display:block;margin-top:2px;line-height:1.4}
+.pj-gear{margin-left:auto;width:24px;height:24px;border-radius:8px;color:var(--ink-3);opacity:0;
+  font-size:.74rem;flex:none;display:flex;align-items:center;justify-content:center}
+.dd-item:hover .pj-gear{opacity:1}
+.pj-gear:hover{background:var(--hover);color:var(--ink)}
+.pj-sep{height:1px;background:var(--line-2);margin:5px 9px}
+.pj-drop{border:1.6px dashed var(--line);border-radius:14px;padding:20px;text-align:center;cursor:pointer}
+.pj-drop:hover{border-color:var(--accent);background:var(--glass-on)}
+.pj-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:11px;margin-top:6px;
+  background:var(--glass-on);border:1px solid var(--line-2)}
+.pj-ext{width:28px;height:28px;border-radius:8px;background:var(--crit-soft);color:var(--crit-ink);
+  display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:800;flex:none}
+.pj-fn{font-size:.81rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pj-fs{font-size:.71rem;color:var(--ink-3);margin-top:1px}
+.pj-rm{width:24px;height:24px;border-radius:7px;color:var(--ink-3);font-size:.72rem;flex:none}
+.pj-rm:hover{background:var(--hover);color:var(--crit-ink)}
+.pj-cap{font-size:.72rem;color:var(--ink-3);margin-top:10px;line-height:1.55}
+/* rail folders */
+.pj-fold{margin-bottom:2px}
+.pj-fh{display:flex;align-items:center;gap:8px;width:100%;padding:8px 9px;border-radius:11px;
+  color:var(--ink-2);text-align:left;font-size:.81rem;font-weight:650;font-family:inherit;cursor:pointer}
+.pj-fh:hover{background:var(--hover);color:var(--ink)}
+.pj-fh.on{background:var(--glass-on);color:var(--ink)}
+.pj-fh .cv{width:12px;flex:none;font-size:.58rem;color:var(--ink-3);transition:transform .2s var(--spring)}
+.pj-fold.open .pj-fh .cv{transform:rotate(90deg)}
+.pj-fh .fi{width:22px;height:22px;border-radius:7px;flex:none;display:flex;align-items:center;
+  justify-content:center;font-size:.7rem;background:var(--violet-soft);color:var(--violet-ink)}
+.pj-fh .nme{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pj-fh .ct{font-size:.68rem;color:var(--ink-3);font-weight:600}
+.pj-fh .gear{width:22px;height:22px;border-radius:7px;color:var(--ink-3);opacity:0;font-size:.7rem;flex:none;
+  display:flex;align-items:center;justify-content:center}
+.pj-fh:hover .gear{opacity:1}
+.pj-fb{display:none;padding:2px 0 4px 12px;margin-left:10px;border-left:1px solid var(--line-2)}
+.pj-fold.open .pj-fb{display:block}
+.pj-none{font-size:.74rem;color:var(--ink-3);padding:6px 10px}
+.pj-newin{display:flex;align-items:center;gap:7px;width:100%;padding:6px 10px;border-radius:9px;
+  font-size:.75rem;color:var(--ink-3);text-align:left;font-family:inherit;cursor:pointer}
+.pj-newin:hover{background:var(--hover);color:var(--ink)}
+.asx-orb.proj{background:conic-gradient(from 210deg,#bf5af2,#7a5cff,#0a84ff,#bf5af2)}
+.asx-orb.proj::before{background:conic-gradient(from 210deg,#bf5af2,#7a5cff,#0a84ff,#bf5af2)}
 .asx-menu{background:var(--pop);border:1px solid var(--glass-brd);border-radius:18px;
   backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);
   box-shadow:var(--glass-shadow),var(--glass-hi)}
@@ -10535,20 +10586,216 @@ function asxThreadHTML(){
         <div class="body">${m.html}</div></div>`;
     }).join('')}</div>`;
 }
+/* ============================================================================
+   PROJECTS
+   A project is what it is in Claude: a name, instructions, and knowledge. The
+   instructions are prepended to every chat inside it; the knowledge is sent as
+   context. Chats carry projectId, which is what lets the rail file them.
+   ========================================================================== */
+let PROJECTS = [];
+const projectById = id => PROJECTS.find(p=>p.id===id) || null;
+function activeProject(){ const c=aiChat(); return c && c.projectId ? projectById(c.projectId) : null; }
+
+function projCreate(name, desc){
+  const p={ id:'pr-'+Math.random().toString(36).slice(2,9), name:name.trim(),
+    desc:(desc||'').trim(), instr:'', docs:[], created:Date.now() };
+  PROJECTS.unshift(p); tikiPush(); return p;
+}
+/* Switching is immediate: it retags the current chat if that chat is still
+   empty, otherwise it starts a fresh one inside the project. Retagging a chat
+   that already has messages would rewrite its history under new instructions. */
+function projSwitch(id){
+  const p=projectById(id); if(!p) return;
+  const c=aiChat();
+  if(c && !(c.msgs||[]).length){ c.projectId=id; c.title='New chat'; }
+  else { const n=aiChatNew(true); n.projectId=id; }
+  closeAllDD(); tikiPush(); renderAssistant(); toast(`Working in ${p.name}`);
+}
+function projClear(){
+  const c=aiChat(); if(c) c.projectId=null;
+  closeAllDD(); tikiPush(); renderAssistant();
+}
+function projDelete(id){
+  const p=projectById(id); if(!p) return;
+  const n=AI_CHATS.filter(c=>c.projectId===id).length;
+  if(!confirm(`Delete "${p.name}"? Its instructions and ${p.docs.length} file${p.docs.length===1?'':'s'} go too.`+
+    (n?` ${n} chat${n===1?'':'s'} will be moved out of the project.`:''))) return;
+  AI_CHATS.forEach(c=>{ if(c.projectId===id) c.projectId=null; });
+  PROJECTS=PROJECTS.filter(x=>x.id!==id);
+  closeModal(); tikiPush(); renderAssistant(); toast('Project deleted');
+}
+/* What actually reaches the model. Kept as plain text with clear headings so
+   the assistant treats it as reference rather than as instructions from the
+   user — and truncated, because a 50-page PDF in every message is wasteful. */
+const PROJ_DOC_BUDGET = 60000;
+function projContext(p){
+  if(!p) return '';
+  let out=`PROJECT: ${p.name}${p.desc?` — ${p.desc}`:''}\n`;
+  if(p.instr) out+=`\nPROJECT INSTRUCTIONS (follow these):\n${p.instr}\n`;
+  const ready=(p.docs||[]).filter(d=>d.text);
+  if(ready.length){
+    out+=`\nPROJECT KNOWLEDGE — ${ready.length} document${ready.length===1?'':'s'}. `+
+         `Answer from these. If something is not in them, say so rather than inventing it.\n`;
+    let budget=PROJ_DOC_BUDGET;
+    ready.forEach(d=>{
+      if(budget<=0) return;
+      const t=d.text.slice(0,budget);
+      budget-=t.length;
+      out+=`\n--- ${d.name} ---\n${t}${d.text.length>t.length?'\n[…truncated]':''}\n`;
+    });
+  }
+  const pending=(p.docs||[]).filter(d=>!d.text);
+  if(pending.length) out+=`\n(${pending.length} file${pending.length===1?'':'s'} in this project could not be read as text yet: `+
+    pending.map(d=>d.name).join(', ')+`. Say so if the answer depends on them.)\n`;
+  return out;
+}
+
+/* ---- reading uploads ----
+   Text formats are read straight in the browser. PDFs need a parser we do not
+   ship (no CDN, single file), so they are stored and flagged honestly rather
+   than shown as indexed when they are not. */
+const PROJ_TEXT_RE=/\.(txt|md|markdown|csv|tsv|json|html?)$/i;
+function projAddFiles(pid, files){
+  const p=projectById(pid); if(!p) return;
+  [...files].forEach(f=>{
+    const doc={ id:'d-'+Math.random().toString(36).slice(2,8), name:f.name,
+      size:f.size, text:'', state:'reading' };
+    p.docs.push(doc); projPaintDocs(pid);
+    if(!PROJ_TEXT_RE.test(f.name)){
+      doc.state='unreadable'; projPaintDocs(pid); tikiPush(); return;
+    }
+    const r=new FileReader();
+    r.onerror=()=>{ doc.state='error'; projPaintDocs(pid); };
+    r.onload=()=>{ doc.text=String(r.result||''); doc.state='ready'; projPaintDocs(pid); tikiPush(); };
+    r.readAsText(f);
+  });
+}
+function projRemoveDoc(pid,did){
+  const p=projectById(pid); if(!p) return;
+  p.docs=p.docs.filter(d=>d.id!==did); tikiPush(); projPaintDocs(pid);
+}
+const projSizeStr = n => n>1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(n/1024))+' KB';
+
+/* ---- UI ---- */
+function projMenuHTML(){
+  const cur=activeProject();
+  return `<div class="dd-label">Projects</div>
+    <button class="dd-item" onclick="projNewModal()"><span class="pj-ic new">＋</span>
+      <span><span class="pj-n">New project</span><span class="pj-d">Instructions plus files the assistant always reads</span></span></button>
+    ${PROJECTS.length?'<div class="pj-sep"></div>':''}
+    ${PROJECTS.map(p=>`<button class="dd-item ${cur&&cur.id===p.id?'sel':''}" onclick="projSwitch('${p.id}')">
+      <span class="pj-ic">📁</span>
+      <span style="flex:1;min-width:0"><span class="pj-n">${esc(p.name)}</span>
+      <span class="pj-d">${p.docs.length} file${p.docs.length===1?'':'s'} · ${p.instr?'instructions set':'no instructions yet'}</span></span>
+      <span class="pj-gear" onclick="event.stopPropagation();projOpen('${p.id}')" title="Instructions &amp; files">⚙</span>
+    </button>`).join('')}`;
+}
+function projNewModal(){
+  closeAllDD();
+  openModal(modalShell('New project',`
+    <div class="field" style="margin-bottom:13px"><label>What are you working on?</label>
+      <input class="fi" id="pjName" placeholder="e.g. Angle Generator"
+        oninput="$('pjGo').disabled=!this.value.trim()"></div>
+    <div class="field"><label>Short description — optional</label>
+      <input class="fi" id="pjDesc" placeholder="e.g. Turns desire research into testable ad angles"></div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" id="pjGo" disabled onclick="projCreateFromModal()">Create &amp; switch to it</button>`));
+  setTimeout(()=>$('pjName')?.focus(),60);
+}
+function projCreateFromModal(){
+  const p=projCreate($('pjName').value, $('pjDesc').value);
+  closeModal(); projSwitch(p.id); projOpen(p.id);
+}
+function projOpen(id){
+  const p=projectById(id); if(!p) return;
+  closeAllDD();
+  openModal(modalShell(
+    `<span style="display:flex;align-items:center;gap:10px"><span class="pj-ic">📁</span>
+     <span>${esc(p.name)}<div style="font-size:.74rem;font-weight:500;color:var(--ink-3)">${esc(p.desc||'No description')}</div></span></span>`,
+    `<div class="field" style="margin-bottom:15px"><label>Instructions</label>
+       <textarea class="fi" id="pjInstr" style="min-height:170px"
+         placeholder="How should the assistant behave in this project? Paste your Claude project instructions straight in."
+         oninput="const p=projectById('${p.id}');p.instr=this.value;tikiPush()">${esc(p.instr||'')}</textarea>
+       <div style="font-size:.73rem;color:var(--ink-3);margin-top:5px;line-height:1.5">
+         Prepended to every chat in this project — the same job the instructions box does in Claude.</div></div>
+     <div class="field"><label>Project knowledge</label>
+       <div class="pj-drop" onclick="$('pjFile').click()">
+         <div style="font-size:1.3rem;margin-bottom:6px">📄</div>
+         <div style="font-size:.84rem;font-weight:650">Click to add files</div>
+         <div style="font-size:.73rem;color:var(--ink-3);margin-top:4px">TXT, MD, CSV, JSON read straight away · PDF stored but not yet readable</div>
+       </div>
+       <input type="file" id="pjFile" multiple style="display:none"
+         onchange="projAddFiles('${p.id}',this.files);this.value=''">
+       <div id="pjDocs"></div></div>`,
+    `<button class="btn btn-ghost" style="margin-right:auto;color:var(--crit-ink)" onclick="projDelete('${p.id}')">Delete project</button>
+     <button class="btn btn-primary" onclick="closeModal();renderAssistant()">Done</button>`,'wide'));
+  projPaintDocs(id);
+}
+function projPaintDocs(id){
+  const p=projectById(id), host=$('pjDocs'); if(!p||!host) return;
+  const LBL={reading:['Reading…','warn'],ready:['Ready','good'],
+             unreadable:['Stored — text not readable yet','warn'],error:['Could not read','crit']};
+  host.innerHTML=(p.docs||[]).map(d=>{
+    const [txt,tone]=LBL[d.state]||LBL.ready;
+    return `<div class="pj-row"><span class="pj-ext">${esc((d.name.split('.').pop()||'').toUpperCase().slice(0,4))}</span>
+      <div style="min-width:0;flex:1"><div class="pj-fn">${esc(d.name)}</div>
+      <div class="pj-fs">${projSizeStr(d.size||0)} · <span style="color:var(--${tone}-ink)">${txt}</span></div></div>
+      <button class="pj-rm" onclick="projRemoveDoc('${p.id}','${d.id}')">✕</button></div>`;
+  }).join('');
+  const ready=(p.docs||[]).filter(d=>d.text).length, un=(p.docs||[]).filter(d=>d.state==='unreadable').length;
+  host.innerHTML += `<div class="pj-cap">${
+    p.docs.length
+      ? `${ready} of ${p.docs.length} readable and in use.${un?` ${un} PDF${un===1?'':'s'} stored but not yet searchable — extracting PDF text needs a server-side step I have not built.`:''}`
+      : 'No files yet. Instructions alone still work — files are what make it answer from your research rather than from nothing.'}</div>`;
+}
+
 function asxListHTML(){
   const chat=aiChat();
   const q=(state.asxSearch||'').toLowerCase();
   const list=AI_CHATS.filter(c=>!q||(c.title||'').toLowerCase().includes(q));
+  /* Project chats live in collapsible folders; everything else falls through to
+     the date groups below, so a chat is never in two places at once. */
+  let h='';
+  if(PROJECTS.length){
+    h+=`<div class="asx-grp">Projects</div>`;
+    h+=PROJECTS.map(p=>{
+      const mine=list.filter(c=>c.projectId===p.id).sort((a,b)=>b.updated-a.updated);
+      const open=state.pjOpen&&state.pjOpen[p.id];
+      return `<div class="pj-fold ${open?'open':''}">
+        <button class="pj-fh ${chat&&chat.projectId===p.id?'on':''}" onclick="projFold('${p.id}')">
+          <span class="cv">▶</span><span class="fi">📁</span>
+          <span class="nme">${esc(p.name)}</span>
+          <span class="ct">${mine.length||''}</span>
+          <span class="gear" onclick="event.stopPropagation();projOpen('${p.id}')" title="Instructions &amp; files">⚙</span>
+        </button>
+        <div class="pj-fb">
+          ${mine.map(c=>`<div class="asx-item ${c.id===chat.id?'on':''}" onclick="aiChatOpen('${c.id}')" title="${esc(c.title)}">
+            ${esc(c.title)}<button class="dots" onclick="aiChatMenu(event,'${c.id}')">⋯</button></div>`).join('')
+            || '<div class="pj-none">No chats yet</div>'}
+          <button class="pj-newin" onclick="projSwitch('${p.id}')">＋ New chat here</button>
+        </div></div>`;
+    }).join('');
+  }
+  const loose=list.filter(c=>!c.projectId);
+  return h + asxDateGroups(loose, chat, PROJECTS.length?'No project':null);
+}
+function projFold(id){
+  state.pjOpen=state.pjOpen||{};
+  state.pjOpen[id]=!state.pjOpen[id];
+  if(state.pjOpen[id]) projSwitch(id); else asxSoft();
+}
+function asxDateGroups(list, chat, heading){
   const day=86400000, now=Date.now();
   const grp=c=>c.pinned?'Pinned':(now-c.updated<day?'Today':(now-c.updated<2*day?'Yesterday':(now-c.updated<8*day?'Previous 7 days':'Older')));
   const order=['Pinned','Today','Yesterday','Previous 7 days','Older'];
   const groups={}; list.forEach(c=>{ (groups[grp(c)] ||= []).push(c); });
-  return order.filter(g=>groups[g]).map(g=>`<div class="asx-grp">${g}</div>`+
+  const head = heading?`<div class="asx-grp">${heading}</div>`:'';
+  return head + (order.filter(g=>groups[g]).map(g=>`<div class="asx-grp">${g}</div>`+
     groups[g].sort((a,b)=>b.updated-a.updated).map(c=>`
       <div class="asx-item ${c.id===chat.id?'on':''}" onclick="aiChatOpen('${c.id}')" title="${esc(c.title)}">
         ${c.pinned?'★ ':''}${esc(c.title)}
         <button class="dots" onclick="aiChatMenu(event,'${c.id}')">⋯</button>
-      </div>`).join('')).join('') || `<div class="asx-grp">No chats match</div>`;
+      </div>`).join('')).join('') || `<div class="asx-grp">No chats match</div>`);
 }
 /* Update only what changed. Rebuilding the whole page on every message threw
    away the composer and the search box mid-typing — the composer must survive
@@ -11159,9 +11406,11 @@ function renderAssistant(){
         </div>`
       : `
         <div class="asx-hero">
-          <div class="asx-orb"></div>
-          <h3>What are we working on?</h3>
-          <p class="hsub">I can read every dataset in the account — videos, creators, briefs,<br>retainers, settlements, costs — and act on it.</p>
+          <div class="asx-orb ${activeProject()?'proj':''}"></div>
+          <h3>${activeProject()?esc(activeProject().name):'What are we working on?'}</h3>
+          <p class="hsub">${activeProject()
+            ? esc(activeProject().desc||'Instructions and files are loaded for this chat.')
+            : 'I can read every dataset in the account — videos, creators, briefs,<br>retainers, settlements, costs — and act on it.'}</p>
           ${asxComposerHTML()}
           <div class="asx-sugg">
             ${[['📉','Why did gross profit move?','Decompose GMV, fees, COGS, ad spend'],
@@ -11176,7 +11425,17 @@ function renderAssistant(){
   </div>`;
 
   const th=$('asxThread'); if(th) th.scrollTop=th.scrollHeight;
+  projPaintBtn();
   setTimeout(()=>$('asxTa')?.focus(),40);
+}
+/* The folder button IS the state indicator — there is no banner. */
+function projPaintBtn(){
+  const m=$('pjMenu'); if(m) m.innerHTML=projMenuHTML();
+  const b=$('pjBtn'), l=$('pjBtnLbl'), x=$('pjBtnX'); if(!b) return;
+  const p=activeProject();
+  b.classList.toggle('on', !!p);
+  l.textContent = p ? p.name : '';
+  x.style.display = p ? '' : 'none';
 }
 
 function asxComposerHTML(){
@@ -11193,6 +11452,14 @@ function asxComposerHTML(){
           <div class="asx-mi" onclick="asxMenuPick('brief')"><span class="ico">📄</span>Add a brief<span class="s">Reference its content</span></div>
           <div class="asx-mi" onclick="asxMenuPick('deep')"><span class="ico">🔬</span>Deep analysis<span class="s">Segment and decompose fully</span></div>
         </div>
+      </div>
+      <div class="dd asx-proj">
+        <button class="asx-ib pj-btn" id="pjBtn" onclick="toggleDD(event,'pjMenu')" title="Projects">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span id="pjBtnLbl"></span>
+          <span class="pj-x" id="pjBtnX" style="display:none" onclick="event.stopPropagation();projClear()">✕</span>
+        </button>
+        <div class="dd-menu" id="pjMenu" style="bottom:calc(100% + 8px);left:0;min-width:322px"></div>
       </div>
       <button class="asx-send" onclick="asxSend()" title="Send (Enter)">↑</button>
     </div>
@@ -11459,7 +11726,9 @@ async function aiCloudRespond(q, toolResults, prior, work){
     if($('aiBody')){ $('aiBody').insertAdjacentHTML('beforeend','<div class="ai-typing" id="aiTy"><i></i><i></i><i></i></div>'); $('aiBody').scrollTop=$('aiBody').scrollHeight; }
   }
   try{
-    const body={ snapshot:aiSnapshot(), history:aiHistory().slice(0,-1), question:q };
+    const proj=activeProject();
+    const body={ snapshot:aiSnapshot(), history:aiHistory().slice(0,-1),
+      question: proj ? `${projContext(proj)}\n\n---\n\n${q}` : q };
     if(toolResults){ body.continue={ prior, toolResults }; }
     const r=await tikiFetch('/functions/v1/assistant',{ method:'POST', body:JSON.stringify(body) });
     if(r.status===404 || r.status===501){ AI.cloud=false; $('aiTy')?.remove(); aiRespond(q); if(r.status===501) aiPush('ai','<i>(Cloud brain is deployed but has no API key yet — running in basic mode. Add the ANTHROPIC_API_KEY secret in Supabase to switch me on.)</i>'); return; }
@@ -12393,7 +12662,8 @@ function collectTikiState(){
   /* v11 adds the migrations ledger so one-shot data repairs run exactly once. */
   /* v12 adds action flows — the automation rules, stored as data so the chart
      in the back office is the thing that actually runs. */
-  return { v:12, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  /* v13 adds projects — instructions and knowledge the assistant works inside. */
+  return { v:13, projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
@@ -12507,6 +12777,7 @@ function applyTikiState(d){
   replaceArr(BRIEFS,d.briefs); replaceArr(OUTREACH_FLOWS,d.flows); replaceArr(SAMPLE_REQS,d.samples);
   replaceArr(CHATS,d.chats); replaceArr(PROFIT_VENDORS,d.profitVendors);
   if(Array.isArray(d.personal)) PERSONAL_OUTREACH=d.personal;
+  if(Array.isArray(d.projects)) PROJECTS=d.projects;
   if(Array.isArray(d.migrations)) state.migrations=d.migrations;
   /* Seeded flows are re-added if a saved state predates them, so upgrading never
      leaves someone with an empty automation list and no idea why. */
