@@ -1694,6 +1694,68 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
   margin-top:4px;border-left:2px solid var(--line);padding-left:8px}
 @media(max-width:1200px){.brf-ai{width:310px}}
 
+/* ---- Action Flows ---- */
+.flw-wrap{display:flex;gap:18px;align-items:flex-start}
+.flw-rail{width:250px;flex:none}
+.flw-rh{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);margin-bottom:9px}
+.flw-item{display:block;width:100%;text-align:left;padding:10px 12px;border-radius:12px;margin-bottom:4px;
+  border:1px solid transparent;cursor:pointer;color:var(--ink)}
+.flw-item:hover{background:var(--hover)}
+.flw-item.on{background:var(--glass-on);border-color:var(--line-2)}
+.flw-item .n{font-size:.82rem;font-weight:650;display:flex;align-items:center;gap:7px}
+.flw-item .d{font-size:.71rem;color:var(--ink-3);margin-top:3px;line-height:1.45}
+.flw-item .runs{margin-left:auto;font-size:.65rem;color:var(--ink-3)}
+.dotg{width:7px;height:7px;border-radius:50%;background:var(--good-ink);flex:none}
+.dotg.off{background:var(--ink-3);opacity:.5}
+.flw-main{flex:1;min-width:0}
+.flw-head{display:flex;align-items:center;gap:11px;margin-bottom:3px}
+.flw-head .ft{font-size:1.15rem;font-weight:700;letter-spacing:-.02em}
+.toggle{width:38px;height:22px;border-radius:99px;background:var(--good-ink);position:relative;flex:none;cursor:pointer}
+.toggle.off{background:var(--ink-3);opacity:.45}
+.toggle::after{content:'';position:absolute;top:2.5px;left:2.5px;width:17px;height:17px;border-radius:50%;
+  background:#fff;transition:.22s var(--spring)}
+.toggle.off::after{left:18.5px}
+.flw-sub{font-size:.78rem;color:var(--ink-3);margin-bottom:14px}
+.flw-health{border-radius:12px;padding:10px 13px;font-size:.79rem;line-height:1.55;margin-bottom:16px;
+  border:1px solid var(--line-2)}
+.flw-health code{font-family:ui-monospace,monospace;font-size:.75rem}
+.flw-health.ok{background:var(--good-soft);border-color:var(--good-ink)}
+.flw-health.bad{background:var(--warn-soft);border-color:var(--warn-ink)}
+.flw-chain{max-width:640px}
+.flw-node{border-radius:14px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line-2)}
+.flw-node.trigger{border-color:var(--accent);background:var(--accent-soft)}
+.flw-node.cond{border-color:var(--warn-ink);background:var(--warn-soft)}
+.flw-node.act{border-color:var(--good-ink);background:var(--good-soft)}
+.flw-node.muted{opacity:.55}
+.flw-node .nh{margin-bottom:5px}
+.flw-node .nk{font-size:.61rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+  padding:2px 8px;border-radius:5px;background:var(--glass-on)}
+.flw-node .nt{font-size:.87rem;font-weight:650;line-height:1.45}
+.flw-node .nd{font-size:.75rem;color:var(--ink-3);margin-top:4px;line-height:1.5}
+.flw-arm{width:2px;height:20px;background:var(--line);margin-left:26px}
+.flw-arm.split{height:13px}
+.flw-branch{display:flex;gap:14px}
+.flw-branch .bcol{flex:1;min-width:0}
+.flw-branch .blab{font-size:.63rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--ink-3);padding:4px 0 7px;display:flex;align-items:center;gap:6px}
+.flw-branch .pip{width:6px;height:6px;border-radius:50%;background:var(--ink-3)}
+.flw-branch .pip.good{background:var(--good-ink)}
+.flw-trace{margin-top:20px;max-width:640px;border:1px solid var(--line-2);border-radius:14px;padding:13px 15px;
+  background:var(--surface)}
+.flw-trace .tt-h{font-size:.8rem;font-weight:700;margin-bottom:11px;display:flex;align-items:center;gap:9px}
+.flw-trace .safe{font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+  background:var(--violet-soft);color:var(--violet-ink);padding:2px 8px;border-radius:5px}
+.flw-trace .tt-r{display:flex;gap:10px;padding:7px 0;align-items:flex-start}
+.flw-trace .bul{width:18px;height:18px;border-radius:50%;flex:none;display:flex;align-items:center;
+  justify-content:center;font-size:.64rem;font-weight:800}
+.flw-trace .bul.pass{background:var(--good-soft);color:var(--good-ink)}
+.flw-trace .bul.skip{background:var(--neutral-soft);color:var(--ink-3)}
+.flw-trace .bul.would{background:var(--warn-soft);color:var(--warn-ink)}
+.flw-trace .bul.stop{background:var(--crit-soft);color:var(--crit-ink)}
+.flw-trace .t{font-size:.81rem;font-weight:650;line-height:1.45}
+.flw-trace .d{font-size:.75rem;color:var(--ink-3);margin-top:3px;line-height:1.5}
+@media(max-width:900px){.flw-wrap{flex-direction:column}.flw-rail{width:100%}}
+
 /* ---- Operations fly-out: tinted icon tiles, as designed ---- */
 .rfo .ic{background:var(--tint,var(--hover));color:var(--tint-ink,var(--ink))}
 .rfo.soon .ic{background:var(--hover);color:var(--ink-3)}
@@ -1808,6 +1870,7 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
       <div class="page" id="page-briefs"></div>
       <div class="page" id="page-courses"></div>
       <div class="page" id="page-profit"></div>
+      <div class="page" id="page-flows"></div>
       <div class="page" id="page-map"></div>
       <div class="page" id="page-settings"></div>
     </div>
@@ -2438,6 +2501,7 @@ const PAGES = [
   { id:'profit',    label:'Profit',    icon:'pound',  hidden:true },
   /* Map is a back-office tool — reachable from Settings, not the sidebar.
      hidden:true keeps it out of the nav and out of Spotlight results. */
+  { id:'flows',     label:'Action Flows', icon:'graph', hidden:true },
   { id:'map',       label:'Profit Cause Map', icon:'graph', hidden:true },
   { id:'settings',  label:'Settings',  icon:'gear' }
 ];
@@ -2540,6 +2604,7 @@ function renderProfileMenu(){
   const m=$('rMenu'); if(!m) return;
   const u=USERS[ME]||{};
   const back=[['memory','Assistant memory',AI.learnings.length?String(AI.learnings.length):''],
+              ['flows','Action flows',String(ACTION_FLOWS.filter(f=>f.on).length)],
               ['roadmap','Roadmap',ROADMAP.length?String(ROADMAP.length):''],
               ['profit','Profit',''],['courses','Courses',''],['map','Profit cause map','']];
   m.innerHTML=`
@@ -2688,7 +2753,8 @@ function navTo(page, opts={}){
 function renderPage(page){
   ({ overview:renderOverview, assistant:renderAssistant, tasks:renderTasks, creators:renderCreators, videos:renderVideos, outreach:renderOutreach,
      retainers:renderRetainers, briefs:renderBriefs, courses:renderCourses,
-     profit:renderProfit, map:renderMap, roadmap:renderRoadmap, memory:renderMemory, settings:renderSettings })[page]();
+     profit:renderProfit, map:renderMap, roadmap:renderRoadmap, memory:renderMemory,
+     flows:renderFlows, settings:renderSettings })[page]();
 }
 function rerenderAll(){ renderSidebar(); renderPage(state.page); renderBrandUI(); }
 
@@ -5952,6 +6018,151 @@ function renderBriefEditor(){
    all because it is waiting on another thread. That last case is the one that
    earns its keep — replying to a dependency achieves nothing.
    ========================================================================== */
+/* ============================================================================
+   ACTION FLOWS — the engine
+   Rules live as data so the back-office chart is the real thing, not a picture
+   of it. Three parts:
+     EVENTS   — a fixed catalogue of what the app actually emits. A rule can only
+                be built on one of these; anything else would draw a pretty chart
+                that never fires.
+     ACTIONS  — thin wrappers over functions the buttons already call.
+     runFlows — walks the nodes. In dry mode it records what it WOULD do instead
+                of doing it, which is what makes the test panel trustworthy.
+   ========================================================================== */
+const FLOW_EVENTS = {
+  'brief.comments.changed': { label:'A comment is left, replied to or resolved',
+    desc:'Fires on any brief when its comment threads change' },
+  'task.completed':         { label:'A task is completed', desc:'Any task on any board' },
+  'brief.opened':           { label:'A brief is opened', desc:'Fires once per visit' }
+};
+/* Rolling count of what has genuinely fired — this is what the health panel
+   reads, and the only honest way to tell a dead trigger from a quiet one. */
+let EVENT_LOG = {};
+function eventNote(name){
+  const e=EVENT_LOG[name]||(EVENT_LOG[name]={n:0,last:null,recent:[]});
+  e.n++; e.last=Date.now();
+  e.recent.unshift(Date.now()); e.recent=e.recent.slice(0,30);
+}
+
+const FLOW_ACTIONS = {
+  task_upsert: {
+    label:'Create or update a task',
+    run(ctx, dry){
+      const b=briefById(ctx.briefId); if(!b) return null;
+      const waiting=brfOpenFromOthers(b);
+      if(!waiting.length) return null;
+      const names=[...new Set(waiting.map(c=>whoName(c.thread[c.thread.length-1].who)))];
+      const title=`${names.join(' & ')} left ${waiting.length} comment${waiting.length===1?'':'s'} · ${b.name}`;
+      const notes=waiting.map(c=>{
+        const last=c.thread[c.thread.length-1];
+        return `Pin ${b.comments.indexOf(c)+1} · ${whoName(last.who)}: ${(last.text||'').slice(0,90)}`;
+      }).join('\n');
+      const t=state.tasks.find(x=>x.brfAuto && x.briefId===b.id && x.assignee===ME);
+      if(dry) return t ? `Update task → "${title}"` : `Create task → "${title}" (High, due today)`;
+      if(t){ t.title=title; t.notes=notes; if(t.status==='Completed') t.status='Not Started'; }
+      else{
+        state.tasks.unshift({ id:'t'+Date.now()%100000, title, brand:b.brand, briefId:b.id, brfAuto:true,
+          assignee:ME, priority:'High', due:TODAY_ISO, status:'Not Started',
+          creator:'', product:'', campaign:'', notes, link:'', comments:[] });
+        notify('warn','Comments waiting',title,'canvas');
+      }
+      return `Task: ${title}`;
+    }
+  },
+  task_complete: {
+    label:'Complete the task for this brief',
+    run(ctx, dry){
+      const b=briefById(ctx.briefId); if(!b) return null;
+      const t=state.tasks.find(x=>x.brfAuto && x.briefId===b.id && x.assignee===ME);
+      if(!t || t.status==='Completed') return null;
+      if(dry) return `Move "${t.title}" to Completed`;
+      t.status='Completed'; t.title=`${b.name} — comments cleared`;
+      notify('good','Brief cleared',`Every comment on ${b.name} is answered`,'canvas');
+      return `Completed: ${t.title}`;
+    }
+  },
+  notify_waiting: {
+    label:'Notify the person who was waiting',
+    run(ctx, dry){
+      const b=briefById(ctx.briefId); if(!b) return null;
+      const msg=`${whoName(ME)} cleared the comments on ${b.name}`;
+      if(dry) return `Notify → "${msg}"`;
+      notify('good','Comments answered',msg,'canvas'); return msg;
+    }
+  }
+};
+
+/* A condition is a named predicate, not free-form code — so the chart can never
+   contain a test the engine cannot actually evaluate. */
+const FLOW_CONDS = {
+  waiting_on_me: { label:'Someone other than me is waiting',
+    test:ctx=>{ const b=briefById(ctx.briefId); return !!(b && brfOpenFromOthers(b).length); },
+    describe:ctx=>{ const b=briefById(ctx.briefId); const n=b?brfOpenFromOthers(b).length:0;
+      return `${n} thread${n===1?'':'s'} whose last message is not mine`; } },
+  none_waiting: { label:'Nothing is waiting on me',
+    test:ctx=>{ const b=briefById(ctx.briefId); return !!(b && !brfOpenFromOthers(b).length); },
+    describe:ctx=>{ const b=briefById(ctx.briefId); const n=b?brfOpenFromOthers(b).length:0;
+      return n?`${n} still open`:'all threads answered'; } }
+};
+
+/* The two behaviours already shipped, expressed as flows. They are seeded once
+   and then editable — nothing about them stays hardcoded. */
+function defaultFlows(){
+  return [
+    { id:'fl-comment-task', name:'Comment → task', on:true, seeded:true,
+      desc:"Someone comments on a brief and it lands on my board",
+      event:'brief.comments.changed',
+      nodes:[ {kind:'cond', cond:'waiting_on_me',
+                yes:[{kind:'act', action:'task_upsert'}], no:[] } ] },
+    { id:'fl-comment-clear', name:'Comments cleared → close task', on:true, seeded:true,
+      desc:'The task closes itself once every thread is answered',
+      event:'brief.comments.changed',
+      nodes:[ {kind:'cond', cond:'none_waiting',
+                yes:[{kind:'act', action:'task_complete'},{kind:'act', action:'notify_waiting'}], no:[] } ] }
+  ];
+}
+let ACTION_FLOWS = defaultFlows();
+
+/* Walks one flow. dry=true records intentions instead of carrying them out. */
+function runFlow(f, ctx, dry){
+  const trace=[];
+  const walk=(nodes)=>{
+    (nodes||[]).forEach(n=>{
+      if(n.kind==='cond'){
+        const c=FLOW_CONDS[n.cond];
+        if(!c){ trace.push({k:'stop',t:'Unknown condition',d:n.cond}); return; }
+        const pass=!!c.test(ctx);
+        trace.push({ k:pass?'pass':'stop', t:'Condition: '+c.label,
+          d:`${c.describe?c.describe(ctx):''} → ${pass?'Yes':'No'} branch` });
+        const branch = pass ? n.yes : n.no;
+        if(!branch || !branch.length) trace.push({k:'skip',t:'Nothing on this branch',d:''});
+        else walk(branch);
+      } else if(n.kind==='act'){
+        const a=FLOW_ACTIONS[n.action];
+        if(!a){ trace.push({k:'stop',t:'Unknown action',d:n.action}); return; }
+        const out=a.run(ctx, dry);
+        if(out===null) trace.push({k:'skip',t:a.label,d:'Nothing to do for this brief'});
+        else trace.push({ k:dry?'would':'pass', t:(dry?'Would: ':'')+a.label, d:out });
+      }
+    });
+  };
+  walk(f.nodes);
+  return trace;
+}
+
+function fireEvent(name, ctx){
+  eventNote(name);
+  let ran=false;
+  (ACTION_FLOWS||[]).forEach(f=>{
+    if(!f.on || f.event!==name) return;
+    const trace=runFlow(f, ctx||{}, false);
+    f.runs=(f.runs||0)+1; f.lastRun=Date.now();
+    f.lastTrace=trace.slice(0,8);
+    ran=true;
+  });
+  return ran;
+}
+
 const BRF_AI = { digest:null, forBrief:null, loading:false, err:null, tab:'digest', chat:[], changes:null };
 
 /* ---------------------------------------------------------------------------
@@ -6028,39 +6239,10 @@ function brfOpenFromOthers(b){
    thread is answered or resolved. The task carries brfAuto so a card you made
    by hand is never touched.
    ------------------------------------------------------------------------- */
-function brfAutoTask(b){
-  if(!b) return;
-  const waiting=brfOpenFromOthers(b);
-  const idx=state.tasks.findIndex(t=>t.brfAuto && t.briefId===b.id && t.assignee===ME);
-  const t=idx>-1?state.tasks[idx]:null;
-
-  if(!waiting.length){
-    /* Nothing outstanding — close it rather than leaving a stale card behind. */
-    if(t && t.status!=='Completed'){
-      t.status='Completed'; t.title=`${b.name} — comments cleared`;
-      notify('good','Brief cleared',`Every comment on ${b.name} is answered`,'canvas');
-    }
-    return;
-  }
-  const names=[...new Set(waiting.map(c=>{ const th=c.thread; return whoName(th[th.length-1].who); }))];
-  const title=`${names.join(' & ')} left ${waiting.length} comment${waiting.length===1?'':'s'} · ${b.name}`;
-  const notes=waiting.map(c=>{
-    const th=c.thread, last=th[th.length-1];
-    return `Pin ${b.comments.indexOf(c)+1} · ${whoName(last.who)}: ${(last.text||'').slice(0,90)}`;
-  }).join('\n');
-
-  if(t){
-    t.title=title; t.notes=notes;
-    if(t.status==='Completed') t.status='Not Started';   /* reopened by a new comment */
-  } else {
-    state.tasks.unshift({ id:'t'+Date.now()%100000, title, brand:b.brand, briefId:b.id, brfAuto:true,
-      assignee:ME, priority:'High', due:TODAY_ISO, status:'Not Started',
-      creator:'', product:'', campaign:'', notes, link:'', comments:[] });
-    notify('warn','Comments waiting',title,'canvas');
-  }
-}
-/* Every brief, not just the open one — a comment left on a brief you have not
-   opened still needs to reach your board. */
+/* Kept as the single entry point everything already calls, but the behaviour now
+   comes from the flow engine rather than from this function — so what you see in
+   Action Flows is genuinely what runs, and editing it genuinely changes things. */
+function brfAutoTask(b){ if(b) fireEvent('brief.comments.changed', { briefId:b.id }); }
 function brfAutoTaskSweep(){ (BRIEFS||[]).forEach(brfAutoTask); }
 
 function brfAiToggle(){
@@ -10346,6 +10528,97 @@ function rmMove(id,dir){
   const n=Math.max(0,Math.min(RM_COLS.length-1,i+dir));
   it.status=RM_COLS[n][0]; it.updated=Date.now(); tikiPush(); renderRoadmap();
 }
+/* ============================================================================
+   ACTION FLOWS — back office page
+   ========================================================================== */
+let FLOW_SEL=null, FLOW_TEST=null;
+function renderFlows(){
+  if(!FLOW_SEL || !ACTION_FLOWS.find(f=>f.id===FLOW_SEL)) FLOW_SEL=(ACTION_FLOWS[0]||{}).id;
+  const f=ACTION_FLOWS.find(x=>x.id===FLOW_SEL);
+  $('page-flows').innerHTML=`
+    <div class="page-head"><div><h1>Action Flows</h1>
+      <p class="sub">Rules the app runs on its own. What you see here is what actually runs — editing a flow changes the behaviour.</p></div></div>
+    <div class="flw-wrap">
+      <div class="flw-rail">
+        <div class="flw-rh">Flows</div>
+        ${ACTION_FLOWS.map(x=>`<button class="flw-item ${x.id===FLOW_SEL?'on':''}" onclick="FLOW_SEL='${x.id}';FLOW_TEST=null;renderFlows()">
+          <div class="n"><span class="dotg ${x.on?'':'off'}"></span>${esc(x.name)}<span class="runs">${x.runs||''}</span></div>
+          <div class="d">${esc(x.desc||'')}</div></button>`).join('')}
+      </div>
+      <div class="flw-main">
+        ${f?flowChartHTML(f):'<div class="empty">No flows yet</div>'}
+      </div>
+    </div>`;
+}
+function flowChartHTML(f){
+  const ev=FLOW_EVENTS[f.event]||{label:f.event,desc:''};
+  const health=EVENT_LOG[f.event];
+  const nodeHTML=(n)=>{
+    if(n.kind==='cond'){
+      const c=FLOW_CONDS[n.cond]||{label:n.cond};
+      return `<div class="flw-node cond"><div class="nh"><span class="nk">If</span></div>
+          <div class="nt">${esc(c.label)}</div></div>
+        <div class="flw-arm split"></div>
+        <div class="flw-branch">
+          ${[['yes','Yes','good'],['no','No','ink']].map(([k,lab,tone])=>`
+            <div class="bcol"><div class="blab"><span class="pip ${tone}"></span>${lab}</div>
+              ${(n[k]||[]).length?(n[k]).map(nodeHTML).join('<div class="flw-arm"></div>')
+                :'<div class="flw-node muted"><div class="nt">Do nothing</div></div>'}
+            </div>`).join('')}
+        </div>`;
+    }
+    const a=FLOW_ACTIONS[n.action]||{label:n.action};
+    return `<div class="flw-node act"><div class="nh"><span class="nk">Then</span></div>
+      <div class="nt">${esc(a.label)}</div></div>`;
+  };
+  return `
+    <div class="flw-head">
+      <div class="ft">${esc(f.name)}</div>
+      <div class="toggle ${f.on?'':'off'}" onclick="flowToggle('${f.id}')"></div>
+      <span style="font-size:.75rem;color:var(--ink-3)">${f.on?'Live':'Paused'}</span>
+      <button class="btn btn-soft btn-sm" style="margin-left:auto" onclick="flowTest('${f.id}')">▶ Test run</button>
+    </div>
+    <div class="flw-sub">${esc(f.desc||'')} · ran ${f.runs||0} time${f.runs===1?'':'s'}${
+      f.lastRun?` · last ${relTime({ts:f.lastRun})}`:''}</div>
+
+    <div class="flw-health ${health&&health.n?'ok':'bad'}">
+      <b>${health&&health.n?'✓':'⚠'} <code>${esc(f.event)}</code></b>
+      ${health&&health.n
+        ? `fired ${health.n} time${health.n===1?'':'s'} this session · last ${relTime({ts:health.last})}. ${esc(ev.desc)}`
+        : `has not fired yet this session. ${esc(ev.desc)} — if it never fires, nothing below will ever run.`}
+    </div>
+
+    <div class="flw-chain">
+      <div class="flw-node trigger"><div class="nh"><span class="nk">When</span></div>
+        <div class="nt">${esc(ev.label)}</div><div class="nd">${esc(ev.desc)}</div></div>
+      <div class="flw-arm"></div>
+      ${(f.nodes||[]).map(nodeHTML).join('<div class="flw-arm"></div>')}
+    </div>
+    ${FLOW_TEST&&FLOW_TEST.id===f.id?flowTraceHTML(FLOW_TEST):''}`;
+}
+function flowToggle(id){
+  const f=ACTION_FLOWS.find(x=>x.id===id); f.on=!f.on; tikiPush(); renderFlows();
+  toast(f.on?'Flow is live':'Flow paused');
+}
+/* Dry run against a real brief — the only test worth trusting is one that uses
+   the data the flow will actually see. */
+function flowTest(id){
+  const f=ACTION_FLOWS.find(x=>x.id===id);
+  const b=BRIEFS.find(x=>(x.comments||[]).some(c=>(c.thread||[]).length)) || BRIEFS[0];
+  if(!b){ toast('No briefs to test against'); return; }
+  FLOW_TEST={ id, brief:b.name, trace:runFlow(f, {briefId:b.id}, true) };
+  renderFlows();
+}
+function flowTraceHTML(t){
+  const ICO={pass:'✓',skip:'–',would:'!',stop:'✕'};
+  return `<div class="flw-trace">
+    <div class="tt-h">Dry run against “${esc(t.brief)}” <span class="safe">nothing was written</span></div>
+    ${t.trace.map(s=>`<div class="tt-r"><span class="bul ${s.k}">${ICO[s.k]}</span>
+      <div><div class="t">${esc(s.t)}</div>${s.d?`<div class="d">${esc(s.d)}</div>`:''}</div></div>`).join('')
+      || '<div class="tt-r"><div><div class="d">Nothing ran — the condition sent it down an empty branch.</div></div></div>'}
+  </div>`;
+}
+
 function renderRoadmap(){
   const q=(state.rmSearch||'').toLowerCase();
   const list=ROADMAP.filter(x=>!q||(x.title+' '+x.note+' '+x.area).toLowerCase().includes(q));
@@ -11647,7 +11920,9 @@ function collectTikiState(){
      single thread) is kept so an older client doesn't lose its history. */
   /* v10 adds the roadmap — ideas for the app itself. */
   /* v11 adds the migrations ledger so one-shot data repairs run exactly once. */
-  return { v:11, migrations:(state.migrations||[]), roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  /* v12 adds action flows — the automation rules, stored as data so the chart
+     in the back office is the thing that actually runs. */
+  return { v:12, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
@@ -11751,6 +12026,12 @@ function applyTikiState(d){
   replaceArr(CHATS,d.chats); replaceArr(PROFIT_VENDORS,d.profitVendors);
   if(Array.isArray(d.personal)) PERSONAL_OUTREACH=d.personal;
   if(Array.isArray(d.migrations)) state.migrations=d.migrations;
+  /* Seeded flows are re-added if a saved state predates them, so upgrading never
+     leaves someone with an empty automation list and no idea why. */
+  if(Array.isArray(d.flows2)&&d.flows2.length){
+    ACTION_FLOWS=d.flows2;
+    defaultFlows().forEach(def=>{ if(!ACTION_FLOWS.some(f=>f.id===def.id)) ACTION_FLOWS.push(def); });
+  }
   if(Array.isArray(d.notifs)) state.notifs=d.notifs;
   if(Array.isArray(d.learnings)) replaceArr(AI.learnings,d.learnings);
   if(d.calcLev) Object.assign(CALC_LEV,d.calcLev);
