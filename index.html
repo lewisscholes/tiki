@@ -1742,6 +1742,60 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
 .flw-health code{font-family:ui-monospace,monospace;font-size:.75rem}
 .flw-health.ok{background:var(--good-soft);border-color:var(--good-ink)}
 .flw-health.bad{background:var(--warn-soft);border-color:var(--warn-ink)}
+/* node canvas */
+.af-stage{position:relative;height:min(560px,58vh);border:1px solid var(--line-2);border-radius:16px;
+  overflow:hidden;cursor:grab;background:var(--surface);
+  background-image:radial-gradient(var(--line) 1.1px,transparent 1.1px);background-size:22px 22px}
+.af-stage.panning{cursor:grabbing}
+.af-world{position:absolute;left:0;top:0;transform-origin:0 0}
+.af-wires{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+.af-wire{fill:none;stroke:var(--ink-3);stroke-width:2.2}
+.af-wire.yes{stroke:var(--good-ink)}
+.af-wire.no{stroke:var(--ink-3);stroke-dasharray:5 5}
+.af-wire.live{stroke:var(--accent);stroke-dasharray:6 6;animation:afmarch .7s linear infinite}
+@keyframes afmarch{to{stroke-dashoffset:-22}}
+.af-wl{font-size:10px;font-weight:800;fill:var(--ink-3);letter-spacing:.04em}
+.af-node{position:absolute;width:280px;user-select:none}
+.af-nh{display:flex;align-items:center;gap:7px;padding:0 4px 5px;font-size:.71rem;font-weight:700;color:var(--ink-2)}
+.af-nh .ic{color:var(--ink-3)}
+.af-nh .tools{margin-left:auto;opacity:0;transition:.15s}
+.af-node:hover .tools{opacity:1}
+.af-nh .tools button{width:20px;height:20px;border-radius:6px;color:var(--ink-3);font-size:.66rem}
+.af-nh .tools button:hover{background:var(--surface-2);color:var(--crit-ink)}
+.af-nb{position:relative;border:1.6px solid var(--line);border-radius:14px;padding:12px 13px;
+  box-shadow:var(--shadow);cursor:grab;background:var(--surface-2)}
+.af-node.sel .af-nb{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.af-node.trigger .af-nb{border-color:var(--accent)}
+.af-node.cond .af-nb{border-color:var(--warn-ink)}
+.af-node.act .af-nb{border-color:var(--good-ink)}
+.af-node.bad .af-nb{border-color:var(--crit-ink);background:var(--crit-soft)}
+.af-tag{display:inline-block;font-size:.59rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+  padding:2px 8px;border-radius:5px;margin-bottom:6px;background:var(--glass-on);color:var(--ink-3)}
+.af-node.trigger .af-tag{background:var(--accent-soft);color:var(--accent-ink)}
+.af-node.cond .af-tag{background:var(--warn-soft);color:var(--warn-ink)}
+.af-node.act .af-tag{background:var(--good-soft);color:var(--good-ink)}
+.af-nt{font-size:.85rem;font-weight:650;line-height:1.4}
+.af-nd{font-size:.74rem;color:var(--ink-3);margin-top:4px;line-height:1.5}
+.af-port{position:absolute;width:13px;height:13px;border-radius:50%;background:var(--surface);
+  border:2.4px solid var(--ink-3);cursor:crosshair;z-index:3;transition:.14s var(--spring)}
+.af-port:hover,.af-port.hot{transform:scale(1.35);border-color:var(--accent);background:var(--accent)}
+.af-port.in{left:-7px;top:50%;margin-top:-6px}
+.af-port.out{right:-7px;top:50%;margin-top:-6px;border-color:var(--good-ink)}
+.af-port.out.yes{top:36%} .af-port.out.no{top:64%}
+.af-pl{position:absolute;right:12px;font-size:.57rem;font-weight:800;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--ink-3)}
+.af-pl.yes{top:calc(36% - 7px)} .af-pl.no{top:calc(64% - 7px)}
+.af-warn{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;
+  background:var(--warn-soft);border:1px solid var(--warn-ink);color:var(--warn-ink);
+  padding:9px 17px;border-radius:11px;font-size:.8rem;font-weight:650;max-width:88%;text-align:center}
+.af-warn.ok{background:var(--good-soft);border-color:var(--good-ink);color:var(--good-ink)}
+.af-pali{display:flex;gap:11px;align-items:flex-start;padding:10px 12px;border-radius:11px;cursor:pointer;
+  border:1px solid transparent;width:100%;text-align:left;color:var(--ink)}
+.af-pali:hover{background:var(--surface-2);border-color:var(--line-2)}
+.af-pali .pic{width:27px;height:27px;border-radius:8px;flex:none;display:flex;align-items:center;
+  justify-content:center;font-size:.8rem;background:var(--glass-on)}
+.af-pali .pt{font-size:.84rem;font-weight:650;display:block}
+.af-pali .pd{font-size:.73rem;color:var(--ink-3);margin-top:2px;line-height:1.45;display:block}
 .flw-chain{max-width:640px}
 .flw-node{border-radius:14px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line-2)}
 .flw-node.trigger{border-color:var(--accent);background:var(--accent-soft)}
@@ -6131,47 +6185,92 @@ const FLOW_CONDS = {
 
 /* The two behaviours already shipped, expressed as flows. They are seeded once
    and then editable — nothing about them stays hardcoded. */
+/* A flow is a graph: nodes with positions, edges with ports. Storing it this way
+   rather than as nested branches is what lets the canvas be the editor — what
+   you drag is the thing that runs. */
 function defaultFlows(){
   return [
     { id:'fl-comment-task', name:'Comment → task', on:true, seeded:true,
-      desc:"Someone comments on a brief and it lands on my board",
+      desc:'Someone comments on a brief and it lands on my board',
       event:'brief.comments.changed',
-      nodes:[ {kind:'cond', cond:'waiting_on_me',
-                yes:[{kind:'act', action:'task_upsert'}], no:[] } ] },
+      graph:{ nodes:[
+          {id:'t1',kind:'trigger',type:'brief.comments.changed',x:120,y:200},
+          {id:'c1',kind:'cond',   type:'waiting_on_me',         x:520,y:190},
+          {id:'a1',kind:'act',    type:'task_upsert',           x:920,y:110}],
+        edges:[{from:'t1',port:'out',to:'c1'},{from:'c1',port:'yes',to:'a1'}] } },
     { id:'fl-comment-clear', name:'Comments cleared → close task', on:true, seeded:true,
       desc:'The task closes itself once every thread is answered',
       event:'brief.comments.changed',
-      nodes:[ {kind:'cond', cond:'none_waiting',
-                yes:[{kind:'act', action:'task_complete'},{kind:'act', action:'notify_waiting'}], no:[] } ] }
+      graph:{ nodes:[
+          {id:'t1',kind:'trigger',type:'brief.comments.changed',x:120,y:200},
+          {id:'c1',kind:'cond',   type:'none_waiting',          x:520,y:190},
+          {id:'a1',kind:'act',    type:'task_complete',         x:920,y:110},
+          {id:'a2',kind:'act',    type:'notify_waiting',        x:920,y:310}],
+        edges:[{from:'t1',port:'out',to:'c1'},{from:'c1',port:'yes',to:'a1'},{from:'a1',port:'out',to:'a2'}] } }
   ];
 }
 let ACTION_FLOWS = defaultFlows();
 
-/* Walks one flow. dry=true records intentions instead of carrying them out. */
+/* Walks the graph from its trigger. dry=true records intentions instead of
+   carrying them out — same walk either way, so the test cannot drift from the
+   real behaviour. */
 function runFlow(f, ctx, dry){
-  const trace=[];
-  const walk=(nodes)=>{
-    (nodes||[]).forEach(n=>{
+  const trace=[], g=f.graph;
+  if(!g||!g.nodes) return [{k:'stop',t:'This flow has no steps',d:''}];
+  const byId=id=>g.nodes.find(n=>n.id===id);
+  const next=(id,port)=>g.edges.filter(e=>e.from===id&&e.port===port).map(e=>e.to);
+  const seen=new Set();
+  const walk=(id)=>{
+    if(!id||seen.has(id)) return;      /* a cycle must not hang the app */
+    seen.add(id);
+    const n=byId(id); if(!n) return;
+    if(n.kind==='trigger'){ next(id,'out').forEach(walk); return; }
+    if(n.kind==='cond'){
+      const c=FLOW_CONDS[n.type];
+      if(!c){ trace.push({k:'stop',t:'Unknown condition',d:n.type}); return; }
+      const pass=!!c.test(ctx);
+      trace.push({ k:pass?'pass':'stop', t:'Condition: '+c.label,
+        d:`${c.describe?c.describe(ctx):''} → ${pass?'Yes':'No'} branch` });
+      const outs=next(id, pass?'yes':'no');
+      if(!outs.length) trace.push({k:'skip',t:'Nothing on this branch',d:''});
+      outs.forEach(walk);
+      return;
+    }
+    const a=FLOW_ACTIONS[n.type];
+    if(!a){ trace.push({k:'stop',t:'Unknown action',d:n.type}); return; }
+    const out=a.run(ctx, dry);
+    if(out===null) trace.push({k:'skip',t:a.label,d:'Nothing to do for this brief'});
+    else trace.push({ k:dry?'would':'pass', t:(dry?'Would: ':'')+a.label, d:out });
+    next(id,'out').forEach(walk);
+  };
+  const trig=g.nodes.find(n=>n.kind==='trigger');
+  if(!trig) return [{k:'stop',t:'No trigger — nothing can start this flow',d:''}];
+  walk(trig.id);
+  return trace;
+}
+/* Old flows were stored as nested branches. Convert once, keep them working. */
+function flowToGraph(f){
+  if(f.graph) return f;
+  const nodes=[{id:'t1',kind:'trigger',type:f.event,x:120,y:200}], edges=[];
+  let i=0, x=520, y=190;
+  const add=(list, fromId, port)=>{
+    let prev=null;
+    (list||[]).forEach(n=>{
+      const id='n'+(++i);
       if(n.kind==='cond'){
-        const c=FLOW_CONDS[n.cond];
-        if(!c){ trace.push({k:'stop',t:'Unknown condition',d:n.cond}); return; }
-        const pass=!!c.test(ctx);
-        trace.push({ k:pass?'pass':'stop', t:'Condition: '+c.label,
-          d:`${c.describe?c.describe(ctx):''} → ${pass?'Yes':'No'} branch` });
-        const branch = pass ? n.yes : n.no;
-        if(!branch || !branch.length) trace.push({k:'skip',t:'Nothing on this branch',d:''});
-        else walk(branch);
-      } else if(n.kind==='act'){
-        const a=FLOW_ACTIONS[n.action];
-        if(!a){ trace.push({k:'stop',t:'Unknown action',d:n.action}); return; }
-        const out=a.run(ctx, dry);
-        if(out===null) trace.push({k:'skip',t:a.label,d:'Nothing to do for this brief'});
-        else trace.push({ k:dry?'would':'pass', t:(dry?'Would: ':'')+a.label, d:out });
+        nodes.push({id,kind:'cond',type:n.cond,x,y});
+        edges.push({from:prev||fromId,port:prev?'out':port,to:id});
+        add(n.yes, id, 'yes'); add(n.no, id, 'no');
+      } else {
+        nodes.push({id,kind:'act',type:n.action,x:x+400,y:y+(i-1)*200});
+        edges.push({from:prev||fromId,port:prev?'out':port,to:id});
       }
+      prev=id;
     });
   };
-  walk(f.nodes);
-  return trace;
+  add(f.nodes,'t1','out');
+  f.graph={nodes,edges}; delete f.nodes;
+  return f;
 }
 
 function fireEvent(name, ctx){
@@ -10556,84 +10655,241 @@ function rmMove(id,dir){
    ACTION FLOWS — back office page
    ========================================================================== */
 let FLOW_SEL=null, FLOW_TEST=null;
+let AF_VIEW={x:0,y:0,z:1}, AF_SEL=null, AF_HIST=[], AF_DRAG=null, AF_WIRE=null, AF_PAN=null;
+const AF_META={trigger:{tag:'When',ico:'⚡'},cond:{tag:'If',ico:'⑂'},act:{tag:'Then',ico:'▸'}};
+function afCatOf(n){
+  if(n.kind==='trigger'){ const e=FLOW_EVENTS[n.type]; return e?{t:e.label,d:e.desc,ok:true}:{t:n.type,d:'',ok:false}; }
+  if(n.kind==='cond'){ const c=FLOW_CONDS[n.type]; return c?{t:c.label,d:'',ok:true}:{t:n.type,d:'',ok:false}; }
+  const a=FLOW_ACTIONS[n.type]; return a?{t:a.label,d:'',ok:true}:{t:n.type,d:'',ok:false};
+}
+function curFlow(){ return ACTION_FLOWS.find(f=>f.id===FLOW_SEL); }
+function afSnap(){ const f=curFlow(); if(f){ AF_HIST.push(JSON.stringify(f.graph)); if(AF_HIST.length>50)AF_HIST.shift(); } }
+function afUndo(){ const f=curFlow(); if(!f||!AF_HIST.length) return; f.graph=JSON.parse(AF_HIST.pop()); AF_SEL=null; tikiPush(); afPaint(); }
+
 function renderFlows(){
-  if(!FLOW_SEL || !ACTION_FLOWS.find(f=>f.id===FLOW_SEL)) FLOW_SEL=(ACTION_FLOWS[0]||{}).id;
-  const f=ACTION_FLOWS.find(x=>x.id===FLOW_SEL);
+  ACTION_FLOWS.forEach(flowToGraph);
+  if(!FLOW_SEL || !curFlow()) FLOW_SEL=(ACTION_FLOWS[0]||{}).id;
   $('page-flows').innerHTML=`
     <div class="page-head"><div><h1>Action Flows</h1>
-      <p class="sub">Rules the app runs on its own. What you see here is what actually runs — editing a flow changes the behaviour.</p></div></div>
+      <p class="sub">Rules the app runs on its own. This canvas is the rule &mdash; drag a wire and the behaviour changes.</p></div></div>
     <div class="flw-compose">
       <div class="flw-cbox">
-        <span class="sp">✦</span>
-        <input id="flwRule" placeholder="Describe a rule — “when a comment is left on a brief, put it on my board”"
+        <span class="sp">&#10022;</span>
+        <input id="flwRule" placeholder="Ask the agent to add, connect or revise nodes&hellip;"
           onkeydown="if(event.key==='Enter')afBuild(this.value)">
         <button class="btn btn-primary btn-sm" onclick="afBuild($('flwRule').value)">Build it</button>
       </div>
-      <div class="flw-exs">${[
-          'When someone comments on a brief, create a task for me',
-          'When every comment on a brief is answered, close the task',
-          'When a brief is opened, tell me what changed'
-        ].map(x=>`<button class="flw-ex" onclick="afBuild('${esc(x).replace(/'/g,"\\'")}')">${x}</button>`).join('')}</div>
       <div id="flwBuildOut"></div>
     </div>
     <div class="flw-wrap">
       <div class="flw-rail">
         <div class="flw-rh">Flows</div>
-        ${ACTION_FLOWS.map(x=>`<button class="flw-item ${x.id===FLOW_SEL?'on':''}" onclick="FLOW_SEL='${x.id}';FLOW_TEST=null;renderFlows()">
+        ${ACTION_FLOWS.map(x=>`<button class="flw-item ${x.id===FLOW_SEL?'on':''}" onclick="FLOW_SEL='${x.id}';FLOW_TEST=null;AF_SEL=null;renderFlows()">
           <div class="n"><span class="dotg ${x.on?'':'off'}"></span>${esc(x.name)}<span class="runs">${x.runs||''}</span></div>
           <div class="d">${esc(x.desc||'')}</div></button>`).join('')}
       </div>
-      <div class="flw-main">
-        ${f?afChartHTML(f):'<div class="empty">No flows yet</div>'}
-      </div>
+      <div class="flw-main" id="afMain"></div>
     </div>`;
+  afPaint();
 }
-function afChartHTML(f){
+
+function afPaint(){
+  const f=curFlow(); const host=$('afMain'); if(!f||!host) return;
   const ev=FLOW_EVENTS[f.event]||{label:f.event,desc:''};
   const health=EVENT_LOG[f.event];
-  const nodeHTML=(n)=>{
-    if(n.kind==='cond'){
-      const c=FLOW_CONDS[n.cond]||{label:n.cond};
-      return `<div class="flw-node cond"><div class="nh"><span class="nk">If</span></div>
-          <div class="nt">${esc(c.label)}</div></div>
-        <div class="flw-arm split"></div>
-        <div class="flw-branch">
-          ${[['yes','Yes','good'],['no','No','ink']].map(([k,lab,tone])=>`
-            <div class="bcol"><div class="blab"><span class="pip ${tone}"></span>${lab}</div>
-              ${(n[k]||[]).length?(n[k]).map(nodeHTML).join('<div class="flw-arm"></div>')
-                :'<div class="flw-node muted"><div class="nt">Do nothing</div></div>'}
-            </div>`).join('')}
-        </div>`;
-    }
-    const a=FLOW_ACTIONS[n.action]||{label:n.action};
-    return `<div class="flw-node act"><div class="nh"><span class="nk">Then</span></div>
-      <div class="nt">${esc(a.label)}</div></div>`;
-  };
-  return `
+  host.innerHTML=`
     <div class="flw-head">
       <div class="ft">${esc(f.name)}</div>
       <div class="toggle ${f.on?'':'off'}" onclick="afToggle('${f.id}')"></div>
       <span style="font-size:.75rem;color:var(--ink-3)">${f.on?'Live':'Paused'}</span>
-      <button class="btn btn-soft btn-sm" style="margin-left:auto" onclick="afTest('${f.id}')">▶ Test run</button>
-      ${f.seeded?'':`<button class="btn btn-ghost btn-sm" style="color:var(--crit-ink)" onclick="afDelete('${f.id}')">Delete</button>`}
+      <span style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="afUndo()" title="Undo">&#8634;</button>
+        <button class="btn btn-ghost btn-sm" onclick="afFit()" title="Fit">&#10530;</button>
+        <button class="btn btn-soft btn-sm" onclick="afOpenPal()">&#65291; Add node</button>
+        <button class="btn btn-soft btn-sm" onclick="afTest('${f.id}')">&#9654; Test run</button>
+        ${f.seeded?'':`<button class="btn btn-ghost btn-sm" style="color:var(--crit-ink)" onclick="afDelete('${f.id}')">Delete</button>`}
+      </span>
     </div>
-    <div class="flw-sub">${esc(f.desc||'')} · ran ${f.runs||0} time${f.runs===1?'':'s'}${
-      f.lastRun?` · last ${relTime({ts:f.lastRun})}`:''}</div>
-
+    <div class="flw-sub">${esc(f.desc||'')} &middot; ran ${f.runs||0} time${f.runs===1?'':'s'}${f.lastRun?` &middot; last ${relTime({ts:f.lastRun})}`:''}</div>
     <div class="flw-health ${health&&health.n?'ok':'bad'}">
       <b>${health&&health.n?'✓':'⚠'} <code>${esc(f.event)}</code></b>
       ${health&&health.n
-        ? `fired ${health.n} time${health.n===1?'':'s'} this session · last ${relTime({ts:health.last})}. ${esc(ev.desc)}`
-        : `has not fired yet this session. ${esc(ev.desc)} — if it never fires, nothing below will ever run.`}
+        ? `fired ${health.n} time${health.n===1?'':'s'} this session &middot; last ${relTime({ts:health.last})}. ${esc(ev.desc)}`
+        : `has not fired yet this session. ${esc(ev.desc)} &mdash; if it never fires, nothing below runs.`}
     </div>
-
-    <div class="flw-chain">
-      <div class="flw-node trigger"><div class="nh"><span class="nk">When</span></div>
-        <div class="nt">${esc(ev.label)}</div><div class="nd">${esc(ev.desc)}</div></div>
-      <div class="flw-arm"></div>
-      ${(f.nodes||[]).map(nodeHTML).join('<div class="flw-arm"></div>')}
+    <div class="af-stage" id="afStage">
+      <div class="af-world" id="afWorld">
+        <svg class="af-wires" id="afWires"></svg>
+        <div id="afNodes"></div>
+      </div>
+      <div class="af-warn" id="afWarn"></div>
     </div>
     ${FLOW_TEST&&FLOW_TEST.id===f.id?afTraceHTML(FLOW_TEST):''}`;
+  afDrawNodes(); afBind();
+}
+
+function afDrawNodes(){
+  const f=curFlow(); const host=$('afNodes'); if(!host) return;
+  host.innerHTML=(f.graph.nodes||[]).map(n=>{
+    const c=afCatOf(n), m=AF_META[n.kind];
+    const outs = n.kind==='cond'
+      ? `<span class="af-pl yes">Yes</span><span class="af-port out yes" data-port="yes" data-n="${n.id}"></span>
+         <span class="af-pl no">No</span><span class="af-port out no" data-port="no" data-n="${n.id}"></span>`
+      : `<span class="af-port out" data-port="out" data-n="${n.id}"></span>`;
+    return `<div class="af-node ${n.kind} ${AF_SEL===n.id?'sel':''} ${c.ok?'':'bad'}"
+        style="left:${n.x}px;top:${n.y}px" data-n="${n.id}">
+      <div class="af-nh"><span class="ic">${m.ico}</span>${m.tag}
+        <span class="tools"><button title="Delete" onclick="event.stopPropagation();afDel('${n.id}')">&#128465;</button></span></div>
+      <div class="af-nb">
+        <span class="af-tag">${m.tag}</span>
+        <div class="af-nt">${esc(c.t)}</div>${c.d?`<div class="af-nd">${esc(c.d)}</div>`:''}
+        ${n.kind!=='trigger'?`<span class="af-port in" data-port="in" data-n="${n.id}"></span>`:''}
+        ${outs}
+      </div></div>`;
+  }).join('');
+  afWires(); afCheckGraph(); afApplyView();
+}
+function afPortPos(id,port){
+  const f=curFlow(); const n=f.graph.nodes.find(x=>x.id===id); if(!n) return {x:0,y:0};
+  const el=document.querySelector(`.af-node[data-n="${id}"] .af-nb`);
+  const h=el?el.offsetHeight:92, w=280;
+  if(port==='in')  return {x:n.x,   y:n.y+21+h/2};
+  if(port==='yes') return {x:n.x+w, y:n.y+21+h*0.36};
+  if(port==='no')  return {x:n.x+w, y:n.y+21+h*0.64};
+  return {x:n.x+w, y:n.y+21+h/2};
+}
+function afWires(tmp){
+  const f=curFlow(); const svg=$('afWires'); if(!svg) return;
+  const path=(a,b)=>{ const dx=Math.max(46,Math.abs(b.x-a.x)*0.5);
+    return `M ${a.x} ${a.y} C ${a.x+dx} ${a.y}, ${b.x-dx} ${b.y}, ${b.x} ${b.y}`; };
+  let h='';
+  (f.graph.edges||[]).forEach(e=>{
+    const a=afPortPos(e.from,e.port), b=afPortPos(e.to,'in');
+    h+=`<path class="af-wire ${e.port==='yes'?'yes':e.port==='no'?'no':''} ${f.on?'live':''}" d="${path(a,b)}"/>`;
+    if(e.port==='yes'||e.port==='no')
+      h+=`<text class="af-wl" x="${a.x+13}" y="${a.y-7}">${e.port.toUpperCase()}</text>`;
+  });
+  if(tmp) h+=`<path class="af-wire" style="stroke-dasharray:5 5;opacity:.6" d="${path(tmp.a,tmp.b)}"/>`;
+  svg.innerHTML=h; svg.setAttribute('width','5000'); svg.setAttribute('height','3000');
+}
+/* Checked continuously rather than on run: an action the trigger cannot reach is
+   the failure that looks healthy and silently does nothing. */
+function afCheckGraph(){
+  const f=curFlow(); const w=$('afWarn'); if(!w) return;
+  const g=f.graph, trig=g.nodes.find(n=>n.kind==='trigger');
+  const acts=g.nodes.filter(n=>n.kind==='act');
+  const seen=new Set();
+  (function walk(id){ if(!id||seen.has(id))return; seen.add(id);
+    g.edges.filter(e=>e.from===id).forEach(e=>walk(e.to)); })(trig&&trig.id);
+  const orphan=acts.find(a=>!seen.has(a.id));
+  const bad=g.nodes.find(n=>!afCatOf(n).ok);
+  if(!trig){ w.className='af-warn'; w.textContent='Add a trigger — nothing can start this flow.'; return; }
+  if(bad){ w.className='af-warn'; w.textContent=`"${bad.type}" is not something this app can do — that node will never run.`; return; }
+  if(!acts.length){ w.className='af-warn'; w.textContent='Add an action. A flow that decides nothing does nothing.'; return; }
+  if(orphan){ w.className='af-warn'; w.textContent=`"${afCatOf(orphan).t}" is not connected to the trigger — it will never run.`; return; }
+  w.className='af-warn ok';
+  w.textContent=`Valid · ${acts.length} action${acts.length===1?'':'s'} reachable. ${f.on?'Running live.':'Paused.'}`;
+}
+function afApplyView(){ const wl=$('afWorld'); if(wl) wl.style.transform=`translate(${AF_VIEW.x}px,${AF_VIEW.y}px) scale(${AF_VIEW.z})`; }
+function afFit(){
+  const f=curFlow(); const ns=f.graph.nodes; if(!ns.length) return;
+  const st=$('afStage'); if(!st) return;
+  const r=st.getBoundingClientRect();
+  const minX=Math.min(...ns.map(n=>n.x)), minY=Math.min(...ns.map(n=>n.y));
+  const w=Math.max(...ns.map(n=>n.x))+280-minX, h=Math.max(...ns.map(n=>n.y))+170-minY;
+  AF_VIEW.z=Math.min(1,Math.min((r.width-60)/w,(r.height-60)/h));
+  AF_VIEW.x=(r.width-w*AF_VIEW.z)/2-minX*AF_VIEW.z;
+  AF_VIEW.y=(r.height-h*AF_VIEW.z)/2-minY*AF_VIEW.z;
+  afApplyView();
+}
+function afToWorld(e){ const r=$('afStage').getBoundingClientRect();
+  return { x:(e.clientX-r.left-AF_VIEW.x)/AF_VIEW.z, y:(e.clientY-r.top-AF_VIEW.y)/AF_VIEW.z }; }
+function afBind(){
+  const st=$('afStage'); if(!st || st._bound) return; st._bound=true;
+  st.addEventListener('mousedown', e=>{
+    const f=curFlow();
+    const port=e.target.closest('.af-port');
+    if(port && !port.classList.contains('in')){
+      afSnap(); AF_WIRE={from:port.dataset.n,port:port.dataset.port,b:afToWorld(e)}; e.preventDefault(); return;
+    }
+    const nd=e.target.closest('.af-node');
+    if(nd){
+      if(e.target.closest('.tools')) return;
+      const n=f.graph.nodes.find(x=>x.id===nd.dataset.n);
+      afSnap(); AF_SEL=n.id; AF_DRAG={n, ox:afToWorld(e).x-n.x, oy:afToWorld(e).y-n.y};
+      afDrawNodes(); e.preventDefault(); return;
+    }
+    AF_SEL=null; afDrawNodes();
+    AF_PAN={sx:e.clientX,sy:e.clientY,vx:AF_VIEW.x,vy:AF_VIEW.y}; st.classList.add('panning');
+  });
+  st.addEventListener('wheel', e=>{
+    e.preventDefault();
+    const r=st.getBoundingClientRect();
+    const fz=e.deltaY<0?1.08:0.926, nz=Math.min(1.6,Math.max(.35,AF_VIEW.z*fz));
+    AF_VIEW.x=(e.clientX-r.left)-((e.clientX-r.left)-AF_VIEW.x)*(nz/AF_VIEW.z);
+    AF_VIEW.y=(e.clientY-r.top)-((e.clientY-r.top)-AF_VIEW.y)*(nz/AF_VIEW.z);
+    AF_VIEW.z=nz; afApplyView();
+  },{passive:false});
+  if(!document._afMove){
+    document._afMove=true;
+    addEventListener('mousemove', e=>{
+      if(AF_DRAG){ const w=afToWorld(e); AF_DRAG.n.x=Math.round(w.x-AF_DRAG.ox); AF_DRAG.n.y=Math.round(w.y-AF_DRAG.oy);
+        const el=document.querySelector(`.af-node[data-n="${AF_DRAG.n.id}"]`);
+        if(el){ el.style.left=AF_DRAG.n.x+'px'; el.style.top=AF_DRAG.n.y+'px'; } afWires(); return; }
+      if(AF_WIRE){ AF_WIRE.b=afToWorld(e); afWires({a:afPortPos(AF_WIRE.from,AF_WIRE.port),b:AF_WIRE.b});
+        document.querySelectorAll('.af-port.in').forEach(p=>{ const r=p.getBoundingClientRect();
+          p.classList.toggle('hot', Math.hypot(e.clientX-(r.left+r.width/2),e.clientY-(r.top+r.height/2))<26); }); return; }
+      if(AF_PAN){ AF_VIEW.x=AF_PAN.vx+(e.clientX-AF_PAN.sx); AF_VIEW.y=AF_PAN.vy+(e.clientY-AF_PAN.sy); afApplyView(); }
+    });
+    addEventListener('mouseup', ()=>{
+      const f=curFlow();
+      if(AF_DRAG){ AF_DRAG=null; tikiPush(); }
+      if(AF_WIRE && f){
+        const hot=document.querySelector('.af-port.in.hot');
+        if(hot && hot.dataset.n!==AF_WIRE.from){
+          f.graph.edges=f.graph.edges.filter(x=>!(x.from===AF_WIRE.from&&x.port===AF_WIRE.port));
+          f.graph.edges=f.graph.edges.filter(x=>x.to!==hot.dataset.n);
+          f.graph.edges.push({from:AF_WIRE.from,port:AF_WIRE.port,to:hot.dataset.n});
+          toast('Connected'); tikiPush();
+        }
+        document.querySelectorAll('.af-port').forEach(p=>p.classList.remove('hot'));
+        AF_WIRE=null; afDrawNodes();
+      }
+      if(AF_PAN){ AF_PAN=null; $('afStage')?.classList.remove('panning'); }
+    });
+  }
+}
+function afDel(id){
+  const f=curFlow(); afSnap();
+  f.graph.nodes=f.graph.nodes.filter(n=>n.id!==id);
+  f.graph.edges=f.graph.edges.filter(e=>e.from!==id&&e.to!==id);
+  AF_SEL=null; tikiPush(); afDrawNodes(); toast('Node removed');
+}
+function afOpenPal(){
+  const groups=[['trigger','Triggers','when something happens',FLOW_EVENTS],
+                ['cond','Conditions','split the path',FLOW_CONDS],
+                ['act','Actions','do something',FLOW_ACTIONS]];
+  openModal(modalShell('Add a node',
+    `<p style="font-size:.82rem;color:var(--ink-3);line-height:1.55;margin-bottom:12px">
+       Only steps the app can actually perform. A node that cannot fire is worse than no node.</p>`+
+    groups.map(([k,label,sub,src])=>`
+      <div style="font-size:.63rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+        color:var(--ink-3);margin:14px 0 7px">${label} &middot; ${sub}</div>
+      ${Object.entries(src).map(([id,v])=>`
+        <button class="af-pali" onclick="afAddNode('${k}','${id}')">
+          <span class="pic">${AF_META[k].ico}</span>
+          <span><span class="pt">${esc(v.label)}</span>${v.desc?`<span class="pd">${esc(v.desc)}</span>`:''}</span>
+        </button>`).join('')}`).join(''),
+    `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>`,'wide'));
+}
+function afAddNode(kind,type){
+  const f=curFlow(); afSnap(); closeModal();
+  const ns=f.graph.nodes, last=ns[ns.length-1]||{x:120,y:200};
+  const n={id:'n'+Date.now()%100000, kind, type, x:last.x+380, y:last.y+130};
+  ns.push(n);
+  if(kind==='trigger') f.event=type;
+  AF_SEL=n.id; tikiPush(); afDrawNodes();
+  toast('Added — drag a wire into its left port to connect it');
 }
 function afToggle(id){
   const f=ACTION_FLOWS.find(x=>x.id===id); f.on=!f.on; tikiPush(); renderFlows();
