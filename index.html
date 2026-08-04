@@ -1603,6 +1603,30 @@ body:not(.dark) .asx-orb::before{opacity:.30}
 .seg button.active{background:var(--accent);color:#fff;box-shadow:none}
 body.dark .seg button.active{background:var(--accent);color:#fff}
 
+/* ---- Brief canvas: visible resize grips + rotation ----
+   The eight grips were always rendered and always worked, but the only rules
+   that turned them visible targeted `.brf-el.selected` — and the grips live in
+   the overlay layer, not inside `.brf-el`. So on a photo they sat at opacity 0
+   and the whole feature was invisible. */
+.brf-ovl.sel-box .el-rs,.brf-ovl:hover .el-rs{opacity:1}
+.brf-ovl:not(.txt-box) .el-rs{border-radius:50%;width:11px;height:11px;
+  box-shadow:0 1px 4px rgba(16,24,40,.28)}
+.brf-ovl:not(.txt-box).sel-box::before{content:'';position:absolute;inset:0;
+  border:1.5px solid var(--accent);border-radius:2px;pointer-events:none}
+/* Rotation grip: below the box, clear of the resize corners. */
+.el-rot{position:absolute;left:50%;bottom:-34px;margin-left:-12px;width:24px;height:24px;
+  border-radius:50%;background:#fff;border:2px solid var(--accent);color:var(--accent);
+  display:none;align-items:center;justify-content:center;cursor:grab;z-index:8;
+  box-shadow:0 1px 5px rgba(16,24,40,.28)}
+.brf-ovl.sel-box .el-rot{display:flex}
+.el-rot:active{cursor:grabbing}
+.el-rot svg{width:13px;height:13px;pointer-events:none}
+.el-rot::before{content:'';position:absolute;left:50%;top:-12px;width:1.5px;height:12px;
+  margin-left:-.75px;background:var(--accent);opacity:.55}
+.el-rot-tag{position:absolute;left:50%;bottom:-62px;transform:translateX(-50%);background:var(--ink);
+  color:#fff;font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap;z-index:9}
+.brf-el,.brf-ovl{transform-origin:center center}
+
 /* ---- Operations fly-out: tinted icon tiles, as designed ---- */
 .rfo .ic{background:var(--tint,var(--hover));color:var(--tint-ink,var(--ink))}
 .rfo.soon .ic{background:var(--hover);color:var(--ink-3)}
@@ -6248,6 +6272,19 @@ const BRF_HANDLES=['nw','n','ne','w','e','sw','s','se'];
    what they do — corners and sides only, exactly like Canva. */
 const BRF_TEXT_HANDLES=['nw','ne','w','e','sw','se'];
 const brfHandlesFor = t => t==='text' ? BRF_TEXT_HANDLES : BRF_HANDLES;
+/* Rotation lives on the element as plain degrees. The body and the handle
+   overlay are separate layers at the same box, so both take the same transform
+   about their centre — otherwise the grips drift off the photo as it spins. */
+const brfRotCss = e => e.rot ? `transform:rotate(${e.rot}deg);` : '';
+/* Quarter turns are the common case (a portrait shot that needs to be a
+   landscape background), so the grip doubles as a 90° stepper. */
+function brfRotStep(id){
+  const b=briefById(state.briefId); const el=b.elements.find(x=>x.id===id);
+  if(!el||el.locked) return;
+  brfSnapshot();
+  el.rot=(((el.rot||0)+90)%360+360)%360;
+  tikiPush(); renderBriefEditor(); toast(`Rotated to ${el.rot}°`);
+}
 
 /* Which page does this element belong to? Its centre decides, so dragging a
    photo mostly off a page hands it to whatever page now holds its middle —
@@ -6306,14 +6343,18 @@ function brfWorldHTML(b){
         const inner = e.type==='image'
           ? `<img class="brf-img" src="${e.src}" alt="${esc(e.alt||'')}" draggable="false">`
           : brfVideoHTML(e,{live:false});
-        body=`<div class="brf-el el-img" data-el="${e.id}" ${e.type==='video'?`ondblclick="brfEditVideo('${e.id}')" title="Double-click to paste a TikTok link"`:''} style="left:${ix}px;top:${iy}px;width:${e.w}px;height:${e.h}px">
+        body=`<div class="brf-el el-img" data-el="${e.id}" ${e.type==='video'?`ondblclick="brfEditVideo('${e.id}')" title="Double-click to paste a TikTok link"`:''} style="left:${ix}px;top:${iy}px;width:${e.w}px;height:${e.h}px;${brfRotCss(e)}">
           ${inner}</div>`;
       }
       if(host) clips[host.id]=(clips[host.id]||'')+body; else h+=body;
       /* Handles and the delete button ride above the clip so they never vanish. */
-      overlay+=`<div class="brf-ovl ${e.type==='text'?'txt-box':''} ${sel?'sel-box':''}" data-ovl="${e.id}" style="left:${e.x}px;top:${e.y}px;width:${e.w}px;height:${e.type==='text'?(e.h||28):e.h}px">
+      overlay+=`<div class="brf-ovl ${e.type==='text'?'txt-box':''} ${sel?'sel-box':''}" data-ovl="${e.id}" style="left:${e.x}px;top:${e.y}px;width:${e.w}px;height:${e.type==='text'?(e.h||28):e.h}px;${brfRotCss(e)}">
         ${brfHandlesFor(e.type).map(g=>`<span class="el-rs el-rs-${g}" data-ers="${e.id}:${g}" title="${
           e.type==='text'?'Drag to set the text width':g.length===2?'Drag to resize · Shift keeps proportions':'Drag to stretch'}"></span>`).join('')}
+        ${e.type!=='text'?`<span class="el-rot" data-erot="${e.id}" title="Drag to spin · Shift snaps to 15° · double-click for 90°"
+          ondblclick="event.stopPropagation();brfRotStep('${e.id}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3.2-6.9"/><path d="M21 3v5h-5"/></svg>
+        </span>`:''}
         ${sel?`<span class="del-h" style="display:flex" onmousedown="event.stopPropagation()" onclick="brfDelete('${e.id}')">✕</span>`:''}
       </div>`;
     }
@@ -6398,6 +6439,20 @@ function brfBind(b){
     const rsNode=e.target.closest('[data-rs]');
     const ersNode=e.target.closest('[data-ers]');
     if(e.target.closest('.brf-thread')||e.target.closest('[data-pin]')||e.target.closest('.del-h')) return;
+    const erotNode=e.target.closest('[data-erot]');
+    if(erotNode){
+      const el=b.elements.find(x=>x.id===erotNode.dataset.erot);
+      if(el&&!el.locked){
+        brfSnapshot();
+        mode='elrot'; moved=false;
+        /* Angle is measured in world space from the element's centre, so it is
+           immune to zoom and pan without any extra maths. */
+        const w0=brfScreenToWorld(e), cx=el.x+el.w/2, cy=el.y+el.h/2;
+        start={el,cx,cy,rot0:el.rot||0,a0:Math.atan2(w0.y-cy,w0.x-cx)*180/Math.PI};
+        s.sel=el.id;
+      }
+      e.preventDefault(); return;
+    }
     if(ersNode){
       const [eid,edge]=ersNode.dataset.ers.split(':');
       const el=b.elements.find(x=>x.id===eid);
@@ -6485,8 +6540,34 @@ function brfBind(b){
         const w=$('brfWorld'); if(w) w.innerHTML=brfWorldHTML(b);
       }
     }
+    else if(mode==='elrot'&&start){
+      const w=brfScreenToWorld(e);
+      const a=Math.atan2(w.y-start.cy, w.x-start.cx)*180/Math.PI;
+      let r=start.rot0+(a-start.a0);
+      if(e.shiftKey) r=Math.round(r/15)*15;          /* Shift snaps to 15° */
+      r=(((Math.round(r))%360)+360)%360;
+      start.el.rot=r; moved=true;
+      const wl=$('brfWorld');
+      const n=wl?.querySelector(`[data-el="${start.el.id}"]`);
+      const ov=wl?.querySelector(`[data-ovl="${start.el.id}"]`);
+      if(n)  n.style.transform=`rotate(${r}deg)`;
+      if(ov){ ov.style.transform=`rotate(${r}deg)`;
+        let tag=ov.querySelector('.el-rot-tag');
+        if(!tag){ tag=document.createElement('div'); tag.className='el-rot-tag'; ov.appendChild(tag); }
+        tag.textContent=r+'°'+(e.shiftKey?' · snapped':'');
+      }
+    }
     else if(mode==='elresize'&&start){
-      const dx=(e.clientX-start.mx)/s.zoom, dy=(e.clientY-start.my)/s.zoom;
+      let dx=(e.clientX-start.mx)/s.zoom, dy=(e.clientY-start.my)/s.zoom;
+      /* On a rotated element the pointer moves in screen space but the grips
+         belong to the element's own axes. Rotating the delta back by -rot is
+         what makes dragging the "east" grip widen the photo along its own
+         width rather than along the screen's. */
+      const rot=start.el.rot||0;
+      if(rot){
+        const rad=-rot*Math.PI/180, cs=Math.cos(rad), sn=Math.sin(rad);
+        const rx=dx*cs-dy*sn, ry=dx*sn+dy*cs; dx=rx; dy=ry;
+      }
       if(Math.abs(dx)+Math.abs(dy)>=2) moved=true;
       const el=start.el, edge=start.edge;
       const isVid=el.type==='video', isTxt=el.type==='text';
@@ -6510,6 +6591,19 @@ function brfBind(b){
       }
       /* Text height is whatever the words need, so we set width only and let
          the box grow or shrink as it rewraps. */
+      if(rot){
+        /* Rotation happens about the centre, so the naive "move the left edge"
+           reposition would swing the whole photo around. Instead hold the grip's
+           OPPOSITE edge still in world space and let the centre move to suit. */
+        const rad=rot*Math.PI/180, cs=Math.cos(rad), sn=Math.sin(rad);
+        const ax = east?-1 : west?1 : 0, ay = south?-1 : north?1 : 0;
+        const ox0=ax*start.w/2, oy0=ay*start.h/2;
+        const ox1=ax*w/2,       oy1=ay*(isTxt?start.h:hgt)/2;
+        const cx0=start.x+start.w/2, cy0=start.y+start.h/2;
+        const anchorX=cx0+(ox0*cs-oy0*sn), anchorY=cy0+(ox0*sn+oy0*cs);
+        const cx1=anchorX-(ox1*cs-oy1*sn), cy1=anchorY-(ox1*sn+oy1*cs);
+        nx=Math.round(cx1-w/2); ny=Math.round(cy1-(isTxt?start.h:hgt)/2);
+      }
       el.w=w; el.x=nx;
       if(!isTxt){ el.h=hgt; el.y=ny; }
       const wl=$('brfWorld');
@@ -6547,7 +6641,7 @@ function brfBind(b){
   }
   function onUp(){
     if(mode){
-      const wasStructural = (mode==='resize'||mode==='elresize'||mode==='drag') && moved;
+      const wasStructural = (mode==='resize'||mode==='elresize'||mode==='elrot'||mode==='drag') && moved;
       /* A click on a page title with no movement selects that page. */
       const pickedFrame = mode==='drag' && !moved && start && start.frameId ? start.frameId : null;
       mode=null; start=null; moved=false;
@@ -7245,7 +7339,7 @@ function renderBriefPresent(b){
     const body=ordered.map(e=>{
       const x=e.x-fr.x, y=e.y-fr.y;
       if(e.type==='image')
-        return `<img class="brf-img" src="${e.src}" alt="${esc(e.alt||'')}" style="position:absolute;left:${x}px;top:${y}px;width:${e.w}px;height:${e.h}px">`;
+        return `<img class="brf-img" src="${e.src}" alt="${esc(e.alt||'')}" style="position:absolute;left:${x}px;top:${y}px;width:${e.w}px;height:${e.h}px;transform-origin:center center;${brfRotCss(e)}">`;
       if(e.type==='text')
         return `<div class="brf-text" style="position:absolute;left:${x}px;top:${y}px;width:${e.w}px;${
           e.h?`min-height:${e.h}px;`:''}${brfTextStyle(e)}${
