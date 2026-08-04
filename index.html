@@ -1487,6 +1487,15 @@ body.sb-hidden .main{margin-left:0}
    it overrides so source order does the work, not !important.
    ========================================================================== */
 
+/* ---- Silk: the assistant's moving background ----
+   Sits above the static aura and below everything else. It only fades in on the
+   assistant page, and the draw loop only runs while it is visible, so the rest
+   of the app pays nothing for it. */
+#silkBg{position:fixed;inset:0;z-index:0;pointer-events:none;width:100%;height:100%;
+  display:block;opacity:0;transition:opacity .55s ease}
+body.pg-assistant #silkBg{opacity:1}
+@media(prefers-reduced-motion:reduce){#silkBg{display:none}}
+
 /* ---- Assistant: the page IS the stage ----
    Every other page is a document inside a padded column. The assistant is not —
    it owns the whole viewport between the top bar and the dock, exactly like the
@@ -1610,6 +1619,7 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
 <div class="app">
   <div class="sidebar-overlay" id="sbOverlay" onclick="toggleSidebar(false)"></div>
   <div class="aura"></div>
+  <canvas id="silkBg"></canvas>
 
   <div class="rtop">
     <div class="rbrand" onclick="navTo('assistant')">
@@ -1840,6 +1850,14 @@ function resolveMe(){
   const em=(tikiSession?.email||'').toLowerCase();
   const hit=Object.values(USERS).find(u=>(u.email||'').toLowerCase()===em);
   if(hit){ ME=hit.id; return; }
+  /* Before minting anything: an account with no email at all can never be
+     signed into, so it is almost certainly this person's own seeded account
+     that lost its address. Claim it rather than creating a twin — that is how
+     the duplicate "Lewis Scholes" appeared in the first place. */
+  if(em){
+    const orphan=Object.values(USERS).filter(u=>!u.email);
+    if(orphan.length===1){ orphan[0].email=em; ME=orphan[0].id; return; }
+  }
   if(em){
     /* Signed in but not on the team list (edge case: invite record lost) — create a bare entry. */
     const id=em.split('@')[0].replace(/[^a-z0-9]/g,'')||('u'+Date.now());
@@ -1894,12 +1912,16 @@ const BRAND_KPIS = {
 };
 /* Real ranges — every metric is computed from the synced orders inside the
    window, and the delta compares against the previous window of equal length. */
-const DATE_RANGES = ['Today','Last 3 Days','Last 7 Days','Last 14 Days','Last 30 Days','Last 90 Days','All Time'];
-const RANGE_DAYS  = { 'Today':1, 'Last 3 Days':3, 'Last 7 Days':7, 'Last 14 Days':14, 'Last 30 Days':30, 'Last 90 Days':90, 'All Time':0 };
+const DATE_RANGES = ['Today','Yesterday','Last 3 Days','Last 7 Days','Last 14 Days','Last 30 Days','Last 90 Days','All Time'];
+const RANGE_DAYS  = { 'Today':1, 'Yesterday':1, 'Last 3 Days':3, 'Last 7 Days':7, 'Last 14 Days':14, 'Last 30 Days':30, 'Last 90 Days':90, 'All Time':0 };
+/* Every other range ends at "tomorrow 00:00" — i.e. it runs up to now. Yesterday
+   is the one that ends a day earlier, so it needs the end pulled back rather
+   than a special case threaded through metrics, buckets and comparisons. */
+const RANGE_END_OFFSET = { 'Yesterday':1 };
 function rangeWindow(range){
   const days=RANGE_DAYS[range]??30;
   if(!days) return { from:null, to:null, prevFrom:null, prevTo:null, days:0 };
-  const to=new Date(TODAY); to.setDate(to.getDate()+1);            // exclusive end: tomorrow 00:00
+  const to=new Date(TODAY); to.setDate(to.getDate()+1-(RANGE_END_OFFSET[range]||0));
   const from=new Date(to); from.setDate(from.getDate()-days);
   const prevTo=from, prevFrom=new Date(from); prevFrom.setDate(prevFrom.getDate()-days);
   return { from, to, prevFrom, prevTo, days };
@@ -1954,6 +1976,7 @@ function rangeBuckets(range){
   if(!orders.length) return { labels:[], gmv:[], net:[], margin:[], unit:'day' };
 
   let start, end=new Date(TODAY); end.setDate(end.getDate()+1);
+  if(w.to) end=new Date(w.to);        /* Yesterday stops at today 00:00, not tomorrow */
   if(w.days) start=new Date(w.from); else start=new Date(orders[0]);
   if(isNaN(start)) start=new Date(orders[0]);
 
@@ -2171,6 +2194,28 @@ const userChip = uid => { const u=USERS[uid]; return u?`<span class="cell-user">
 /* Comments outlive the people who wrote them — someone can be removed, or not
    invited yet. An unknown author must show a name, not crash the thread. */
 const whoName = uid => (USERS[uid] && USERS[uid].short) || (uid ? String(uid).charAt(0).toUpperCase()+String(uid).slice(1) : 'Someone');
+/* ---------------------------------------------------------------------------
+   Comment authorship and time.
+   Comments used to be written as {who:'lewis', time:'Just now'} — a hardcoded
+   author and a frozen string. That meant every comment Rod left was filed under
+   Lewis's name and stayed "Just now" forever. Authorship now comes from ME and
+   the time is a real epoch stamp rendered on read.
+   ------------------------------------------------------------------------- */
+const stampMsg = text => ({ who: ME, text, ts: Date.now() });
+function relTime(m){
+  /* Legacy rows have no ts, only the frozen string — show it rather than lie
+     about a time we never recorded. */
+  if(!m || !m.ts) return (m && m.time) || '';
+  const s=Math.floor((Date.now()-m.ts)/1000);
+  if(s<45) return 'Just now';
+  if(s<5400) { const n=Math.round(s/60); return n+' min ago'; }
+  const d=new Date(m.ts), now=new Date();
+  const sameDay = d.toDateString()===now.toDateString();
+  if(sameDay) return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  const y=new Date(now); y.setDate(y.getDate()-1);
+  if(d.toDateString()===y.toDateString()) return 'Yesterday '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+}
 const creatorById = id => CREATORS.find(c=>c.id===id);
 const productById = id => PRODUCTS.find(p=>p.id===id);
 const campaignById = id => CAMPAIGNS.find(c=>c.id===id);
@@ -2434,6 +2479,92 @@ document.addEventListener('click',e=>{
   const m=$('rMenu');
   if(m&&m.classList.contains('on')&&!m.contains(e.target)) m.classList.remove('on');
 });
+
+/* ============================================================================
+   SILK BACKGROUND (assistant page)
+   Ribbons of stacked sine waves. Three things layered make it read as moving
+   rather than as a texture: crests travelling sideways, the whole ribbon rising
+   and falling, and the wave swelling taller and shorter. The ribbons run at
+   deliberately mismatched speeds — identical ones slide as a single sheet, and
+   the eye reads that as a static image being dragged.
+   K is the single intensity knob (Lewis picked 1.8 from the ladder mockup).
+   ========================================================================== */
+const SILK_K = 1.8;
+const SILK_BASE = [
+  {y:.20,hue:[255, 59, 48]}, {y:.29,hue:[255,138,  0]},
+  {y:.38,hue:[ 10,132,255]}, {y:.47,hue:[122, 92,255]},
+  {y:.56,hue:[255, 59, 48]}, {y:.65,hue:[ 10,132,255]},
+  {y:.74,hue:[255,138,  0]}, {y:.83,hue:[122, 92,255]}
+];
+const SILK_JITTER = [1.00,-0.78,1.34,-1.12,0.88,-1.46,1.18,-0.94];
+let SILK = { ctx:null, w:0, h:0, rib:[], last:0, on:false };
+
+function silkBuild(){
+  const k=SILK_K, count=Math.max(3, Math.round(3 + k*1.1));
+  SILK.rib = SILK_BASE.slice(0,count).map((b,i)=>({
+    y: b.y + (count<8 ? i*0.02 : 0), hue:b.hue,
+    amp: 26 + k*24,
+    len: 0.0022 - k*0.00022,
+    spd: (0.00009 + k*0.00011) * SILK_JITTER[i],
+    bob: 6 + k*11,
+    bobSpd: (0.00013 + k*0.00009) * (i%2?1:-1),
+    breath: 0.16 + k*0.10,
+    breathSpd: 0.00007 + k*0.00005,
+    phase: i*1.37
+  }));
+}
+function silkFit(){
+  const c=$('silkBg'); if(!c) return;
+  /* Capping the pixel ratio at 1.5 halves the fill cost on a Retina display and
+     is invisible on something this soft. */
+  const dpr=Math.min(window.devicePixelRatio||1, 1.5);
+  SILK.w=innerWidth; SILK.h=innerHeight;
+  c.width=Math.floor(SILK.w*dpr); c.height=Math.floor(SILK.h*dpr);
+  SILK.ctx=c.getContext('2d'); SILK.ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+function silkDraw(t){
+  const ctx=SILK.ctx; if(!ctx) return;
+  const k=SILK_K, W=SILK.w, H=SILK.h;
+  const light=!document.body.classList.contains('dark');
+  ctx.clearRect(0,0,W,H);
+  ctx.globalCompositeOperation = light ? 'source-over' : 'lighter';
+  const strands=Math.round(4+k*1.4), spread=7+k*1.6, step=8;
+  const alpha = light ? .040+k*.006 : .050+k*.009;
+  const lw = 1.6+k*0.22;
+  for(const r of SILK.rib){
+    const amp = r.amp * (1 + Math.sin(t*r.breathSpd + r.phase)*r.breath);
+    const bob = Math.sin(t*r.bobSpd + r.phase)*r.bob;
+    for(let s=-strands;s<=strands;s++){
+      const a=(1-Math.abs(s)/(strands+1))*alpha;
+      ctx.beginPath();
+      ctx.strokeStyle=`rgba(${r.hue[0]},${r.hue[1]},${r.hue[2]},${a.toFixed(4)})`;
+      ctx.lineWidth=lw;
+      for(let x=0;x<=W;x+=step){
+        const y = H*r.y + bob + s*spread
+          + Math.sin(x*r.len      + t*r.spd       + r.phase) * amp
+          + Math.sin(x*r.len*2.30 + t*r.spd*1.73  + r.phase) * amp*0.34
+          + Math.sin(x*r.len*0.61 - t*r.spd*0.87  + r.phase) * amp*0.22;
+        x===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+  }
+  ctx.globalCompositeOperation='source-over';
+}
+function silkLoop(t){
+  requestAnimationFrame(silkLoop);
+  /* Nothing is drawn unless the assistant is actually on screen. */
+  if(document.hidden || !document.body.classList.contains('pg-assistant')) return;
+  if(t - SILK.last < 33) return;      /* 30fps — silk this soft gains nothing from 60 */
+  SILK.last=t; silkDraw(t);
+}
+function silkStart(){
+  if(SILK.on) return;
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  SILK.on=true; silkBuild(); silkFit();
+  addEventListener('resize', silkFit);
+  requestAnimationFrame(silkLoop);
+}
 
 function goNeedsLewis(){
   state.taskStatusFilter='Waiting on Lewis';
@@ -3264,7 +3395,7 @@ function openTaskDetail(id){
     </div>
     <div style="border-top:1px solid var(--line-2);padding-top:12px">
       <div style="font-size:.8rem;font-weight:700;margin-bottom:6px">Comments (${t.comments.length})</div>
-      ${t.comments.map(c=>`<div class="comment">${userAv(c.who,'sm')}<div class="c-body"><div class="c-who">${USERS[c.who].short}</div>${esc(c.text)}<div class="c-time">${c.time}</div></div></div>`).join('')||'<div style="font-size:.78rem;color:var(--ink-3);padding:4px 0 8px">No comments yet</div>'}
+      ${t.comments.map(c=>`<div class="comment">${userAv(c.who,'sm')}<div class="c-body"><div class="c-who">${esc(whoName(c.who))}</div>${esc(c.text)}<div class="c-time">${esc(relTime(c))}</div></div></div>`).join('')||'<div style="font-size:.78rem;color:var(--ink-3);padding:4px 0 8px">No comments yet</div>'}
       <div style="display:flex;gap:8px;margin-top:6px">
         <input id="tdComment" placeholder="Add a comment…" style="flex:1;padding:8px 11px;border:1px solid var(--line);border-radius:8px;outline:none">
         <button class="btn btn-primary btn-sm" onclick="addTaskComment('${t.id}')">${ICONS.send}</button>
@@ -3280,7 +3411,7 @@ function openTaskDetail(id){
 function addTaskComment(id){
   const inp=$('tdComment'); const v=inp.value.trim(); if(!v) return;
   const t=state.tasks.find(x=>x.id===id);
-  t.comments.push({who:'lewis',text:v,time:'Just now'});
+  t.comments.push(stampMsg(v));
   openTaskDetail(id); toast('Comment added');
 }
 function reassignTask(id,who){
@@ -3674,7 +3805,7 @@ const STOCK_SYNC = { last:'—', next:'—', discrepancy:null };
    ===================================================================== */
 const API_CONNS = [
   { id:'tt-shop', provider:'TikTok',  icon:'🎵', name:'TikTok Shop', desc:'Orders, stock, settlement and shop analytics',
-    status:'off', last:null, freq:'Hourly', auth:'Partner Center OAuth', webhook:null,
+    status:'off', last:null, freq:'On open + manual', auth:'Partner Center OAuth', webhook:null,
     scopes:['order.info','finance.info','product.basic','inventory.read','shop_analytics.read'],
     feeds:'Profit → Orders & Bank · Products stock · Overview KPIs' },
   { id:'tt-ads',  provider:'TikTok',  icon:'🎵', name:'TikTok Ads — Reporting', desc:'Not set up — GMV Max spend is entered by hand for now',
@@ -3825,6 +3956,27 @@ async function tiktokSync(days){
   }catch(e){ toast(e.message||'Sync failed'); }
   btns.forEach(b=>{ b.textContent=b.dataset.label||'Sync now'; b.disabled=false; });
   TIKTOK_SYNCING=false;
+}
+/* ---------------------------------------------------------------------------
+   Sync on open.
+   There is no scheduler anywhere — no pg_cron, no scheduled edge function — so
+   nothing was ever going to pull an overnight sale on its own. Until a real
+   scheduler exists, opening the app is the trigger: if the newest row we hold
+   is over an hour old, pull quietly in the background. 14 days is enough to
+   catch late-settling orders without the cost of a full backfill.
+   ------------------------------------------------------------------------- */
+const SYNC_STALE_HOURS = 1;
+async function tiktokAutoSync(){
+  if(!TIKTOK_STATUS || !TIKTOK_STATUS.shop_id) return;
+  try{
+    const r=await tikiFetch('/rest/v1/tiktok_orders?select=synced_at&order=synced_at.desc&limit=1');
+    if(!r.ok) return;
+    const j=await r.json(), last=j[0]?.synced_at;
+    const hrs = last ? (Date.now()-new Date(last).getTime())/36e5 : 999;
+    if(hrs < SYNC_STALE_HOURS) return;
+    syncStatus('saving','Catching up with TikTok…');
+    await tiktokSync(14);
+  }catch(e){ /* a failed catch-up must never block the app opening */ }
 }
 function tiktokShowNotes(notes){
   openModal(modalShell('TikTok returned nothing',`
@@ -4214,15 +4366,51 @@ function apiManage(id){
       <span class="k">Sync</span><span class="v">${c.freq}${c.last?` · last ${c.last}`:''}</span>
       ${c.webhook?`<span class="k">Webhook</span><span class="v" style="font-weight:500">${c.webhook}</span>`:''}
     </div>
-    <div class="field" style="margin-bottom:12px"><label>Sync frequency</label>
-      <select onchange="toast('Frequency updated (prototype)')"><option>${c.freq}</option><option>Every 15 min</option><option>Every 30 min</option><option>Hourly</option><option>Daily</option><option>Manual only</option></select></div>
-    <div style="font-size:.78rem;font-weight:700;margin-bottom:5px">Recent syncs</div>
-    <div style="font-family:monospace;font-size:.7rem;color:var(--ink-2);background:var(--surface-2);border-radius:8px;padding:9px 12px;line-height:1.7">
-      ${c.status==='connected'?`✓ ${c.last} — ok<br>✓ Earlier today — ok<br>✓ Yesterday — ok (2 retries)`:'— no syncs yet —'}
-    </div>`,
+    ${c.id==='tt-shop'?`
+    <div style="font-size:.78rem;font-weight:700;margin-bottom:5px">How this syncs</div>
+    <div style="font-size:.79rem;color:var(--ink-2);line-height:1.6;background:var(--surface-2);
+      border-radius:10px;padding:11px 13px;margin-bottom:14px">
+      There is no server-side scheduler. Data is pulled when you open the app (if the last pull
+      was over an hour ago) and whenever you press <b>Sync now</b>. Nothing arrives while the app
+      is closed, so a sale made overnight lands the next time you open Rarri.
+    </div>
+    <div style="font-size:.78rem;font-weight:700;margin-bottom:5px">Last successful pull</div>
+    <div style="font-family:monospace;font-size:.72rem;color:var(--ink-2);background:var(--surface-2);
+      border-radius:8px;padding:9px 12px;line-height:1.7" id="ttLastSync">checking…</div>`
+    :`<div style="font-size:.78rem;font-weight:700;margin-bottom:5px">Sync</div>
+    <div style="font-size:.79rem;color:var(--ink-3);line-height:1.6;background:var(--surface-2);
+      border-radius:10px;padding:11px 13px">${esc(c.freq)} — not scheduled server-side.</div>`}`,
     `<button class="btn btn-ghost btn-sm" style="margin-right:auto" onclick="toast('Test ping: 200 OK · 184ms')">⚡ Test connection</button>
      <button class="btn btn-ghost" onclick="toast('Paused (prototype)')">Pause</button>
      <button class="btn btn-danger-soft" onclick="apiDisconnect('${c.id}')">Disconnect</button>`,'wide'));
+  if(c.id==='tt-shop') ttFillLastSync();
+}
+/* Reads the real high-water mark out of the synced tables rather than printing
+   a reassuring sentence. If it says two days ago, it is two days ago. */
+async function ttFillLastSync(){
+  const el=$('ttLastSync'); if(!el) return;
+  const one = async (tbl,col) => {
+    try{
+      const r=await tikiFetch(`/rest/v1/${tbl}?select=${col}&order=${col}.desc&limit=1`);
+      if(!r.ok) return null;
+      const j=await r.json(); return j[0]?.[col]||null;
+    }catch(e){ return null; }
+  };
+  const [ord,set,prod,vid] = await Promise.all([
+    one('tiktok_orders','synced_at'), one('tiktok_settlements','synced_at'),
+    one('tiktok_products','synced_at'), one('tiktok_video_daily','stat_date')
+  ]);
+  const ago = iso => {
+    if(!iso) return 'never';
+    const h=(Date.now()-new Date(iso).getTime())/36e5;
+    const when=new Date(iso).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    return `${when}  (${h<1?'under an hour':h<48?Math.round(h)+' hours':Math.round(h/24)+' days'} ago)`;
+  };
+  const stale = ord && (Date.now()-new Date(ord).getTime())/36e5 > 24;
+  el.innerHTML =
+    `Orders       ${ago(ord)}<br>Settlements  ${ago(set)}<br>Products     ${ago(prod)}<br>`+
+    `Video stats  ${vid?vid+' (newest day held)':'never'}`+
+    (stale?`<br><span style="color:var(--crit-ink)">⚠ over a day old — press Sync now</span>`:'');
 }
 function apiDisconnect(id){
   const c=API_CONNS.find(x=>x.id===id);
@@ -6147,12 +6335,13 @@ function brfWorldHTML(b){
   if(s.openThread){
     const c=b.comments.find(x=>x.id===s.openThread);
     if(c) h+=`<div class="brf-thread" style="left:${c.x+22}px;top:${c.y-8}px" onmousedown="event.stopPropagation()">
-      <div class="th-h">Comment ${b.comments.indexOf(c)+1}
+      <div class="th-h">Pin ${b.comments.indexOf(c)+1} of ${b.comments.length}
+        <span style="font-weight:500;color:var(--ink-3);font-size:.7rem">${c.thread.length} message${c.thread.length===1?'':'s'}</span>
         <span style="margin-left:auto;display:flex;gap:6px">
           <button class="btn btn-ghost btn-xs" onclick="brfResolve('${c.id}')">${c.resolved?'Reopen':'✓ Resolve'}</button>
-          <button class="btn btn-ghost btn-xs" onclick="state.brf.openThread=null;renderBriefEditor()">✕</button></span></div>
+          <button class="btn btn-ghost btn-xs" onclick="brfCloseThread()">✕</button></span></div>
       <div class="th-msgs">
-        ${c.thread.map(m=>`<div class="comment">${userAv(m.who,'sm')}<div class="c-body"><div class="c-who">${esc(whoName(m.who))}</div>${esc(m.text)}<div class="c-time">${m.time}</div></div></div>`).join('')||'<div style="font-size:.74rem;color:var(--ink-3);padding:8px 0">New comment — write the first message</div>'}
+        ${c.thread.map(m=>`<div class="comment">${userAv(m.who,'sm')}<div class="c-body"><div class="c-who">${esc(whoName(m.who))}</div>${esc(m.text)}<div class="c-time">${esc(relTime(m))}</div></div></div>`).join('')||'<div style="font-size:.74rem;color:var(--ink-3);padding:8px 0">New comment — write the first message</div>'}
       </div>
       <div style="display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--line-2)">
         <input id="brfReply" placeholder="Reply…" style="flex:1;padding:7px 10px;border:1px solid var(--line);border-radius:8px;outline:none;font-size:.78rem"
@@ -7006,13 +7195,28 @@ function brfEditLink(id){
   const url=prompt('URL', el.url); if(url===null) return;
   el.label=label; el.url=url; renderBriefEditor();
 }
-function brfOpenThread(id){ state.brf.openThread = state.brf.openThread===id?null:id; renderBriefEditor();
-  setTimeout(()=>{ const i=$('brfReply'); if(i) i.focus(); },30); }
+function brfOpenThread(id){
+  if(state.brf.openThread===id){ brfCloseThread(); return; }
+  state.brf.openThread=id; renderBriefEditor();
+  setTimeout(()=>{ const i=$('brfReply'); if(i) i.focus(); },30);
+}
+/* Dropping a pin creates it immediately, so walking away without typing used to
+   leave an empty pin behind that still counted as an open comment. Closing a
+   thread with nothing in it removes the pin. */
+function brfCloseThread(){
+  const id=state.brf.openThread; state.brf.openThread=null;
+  const b=briefById(state.briefId);
+  if(b && id){
+    const i=b.comments.findIndex(x=>x.id===id);
+    if(i>-1 && !(b.comments[i].thread||[]).length){ b.comments.splice(i,1); tikiPush(); }
+  }
+  renderBriefEditor();
+}
 function brfReply(cid){
   const b=briefById(state.briefId); const c=b.comments.find(x=>x.id===cid);
   const inp=$('brfReply'); const v=inp&&inp.value.trim(); if(!v) return;
-  c.thread.push({who:'lewis',text:v,time:'Just now'});
-  renderBriefEditor(); toast('Comment posted');
+  c.thread.push(stampMsg(v));
+  tikiPush(); renderBriefEditor(); toast('Comment posted');
   setTimeout(()=>{ const i=$('brfReply'); if(i) i.focus(); },30);
 }
 function brfResolve(cid){
@@ -7273,7 +7477,7 @@ function openCourseDetail(id){
     <p style="font-size:.84rem;color:var(--ink-2);line-height:1.6;margin-bottom:16px">${esc(c.learn)}</p>
     <div style="border-top:1px solid var(--line-2);padding-top:12px">
       <div style="font-size:.8rem;font-weight:700;margin-bottom:6px">Notes (${c.notes.length})</div>
-      ${c.notes.map(n=>`<div class="comment">${userAv(n.who,'sm')}<div class="c-body"><div class="c-who">${USERS[n.who].short}</div>${esc(n.text)}<div class="c-time">${n.time}</div></div></div>`).join('')||'<div style="font-size:.78rem;color:var(--ink-3);padding:4px 0 8px">No notes yet — leave the team some pointers</div>'}
+      ${c.notes.map(n=>`<div class="comment">${userAv(n.who,'sm')}<div class="c-body"><div class="c-who">${esc(whoName(n.who))}</div>${esc(n.text)}<div class="c-time">${esc(relTime(n))}</div></div></div>`).join('')||'<div style="font-size:.78rem;color:var(--ink-3);padding:4px 0 8px">No notes yet — leave the team some pointers</div>'}
       <div style="display:flex;gap:8px;margin-top:6px">
         <input id="courseNote" placeholder="Add a note…" style="flex:1;padding:8px 11px;border:1px solid var(--line);border-radius:8px;outline:none" onkeydown="if(event.key==='Enter')addCourseNote('${c.id}')">
         <button class="btn btn-primary btn-sm" onclick="addCourseNote('${c.id}')">${ICONS.send}</button>
@@ -7284,7 +7488,7 @@ function openCourseDetail(id){
 function addCourseNote(id){
   const inp=$('courseNote'); const v=inp.value.trim(); if(!v) return;
   const c=COURSES.find(x=>x.id===id);
-  c.notes.push({who:'lewis', text:v, time:'Just now'});
+  c.notes.push(stampMsg(v));
   openCourseDetail(id); toast('Note added');
   if(state.page==='courses') renderCourses();
 }
@@ -10901,13 +11105,95 @@ function collectTikiState(){
   /* v9 adds saved assistant chats. aiChat (legacy, last 60 messages of the old
      single thread) is kept so an older client doesn't lose its history. */
   /* v10 adds the roadmap — ideas for the app itself. */
-  return { v:10, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  /* v11 adds the migrations ledger so one-shot data repairs run exactly once. */
+  return { v:11, migrations:(state.migrations||[]), roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
     overheadManual:OVERHEAD_MANUAL, overheadRules:OVERHEAD_RULES, adManual:AD_MANUAL,
     briefFolders:BRIEF_FOLDERS,
     vaultBlob:TIKI_VAULT.blob };
+}
+/* ============================================================================
+   ONE-SHOT MIGRATIONS
+   These run after the cloud pull and before the first push, so the client that
+   loads the data is the one that repairs it. Doing it that way — rather than
+   editing the row in the database — is what stops another open tab pushing the
+   old copy back over the fix, which is exactly what happened before.
+   Each migration records its id in state.migrations so it only ever runs once.
+   ========================================================================== */
+const USER_REF_KEYS = new Set(['who','assignee','owner','by','user','uid','createdBy','author']);
+/* Rewrites every reference to a user id across the workspace. Deliberately does
+   NOT touch USERS itself — that map is keyed by id and is handled by hand. */
+function reassignUser(from, to){
+  const walk = o => {
+    if(!o || typeof o!=='object') return;
+    if(Array.isArray(o)) return o.forEach(walk);
+    for(const k of Object.keys(o)){
+      const v=o[k];
+      if(typeof v==='string'){ if(USER_REF_KEYS.has(k) && v===from) o[k]=to; }
+      else walk(v);
+    }
+  };
+  [state.tasks,BRIEFS,CREATORS,COURSES,RETAINERS,ROADMAP,SAMPLE_REQS,CHATS,
+   AI_CHATS,state.notifs,CAMPAIGNS,OUTREACH_FLOWS,BRIEF_SHELF].forEach(walk);
+}
+
+/* Rod's comments on brief b11 were written while brfReply hardcoded the author
+   as 'lewis', so they were filed under the wrong name with a frozen "Just now".
+   The pin ids are the only durable handle on them. Timestamps are the moment we
+   know the comments already existed — the real authoring time was never stored. */
+function mig_commentAuthors(){
+  const FIX = { c70204:1785796629000, c94486:1785796749000, c64801:1785796869000 };
+  const b=(BRIEFS||[]).find(x=>x.id==='b11');
+  if(b && Array.isArray(b.comments)){
+    b.comments.forEach(c=>{
+      const ts=FIX[c.id]; if(!ts) return;
+      (c.thread||[]).forEach(m=>{
+        if(m.who==='lewis'||m.who==='lewisscholes2'){ m.who='rodrkelsey'; m.ts=ts; delete m.time; }
+      });
+    });
+  }
+  return true;
+}
+
+/* The seeded founder account 'lewis' lost its email address in an old save.
+   resolveMe matches on email, found nothing, and minted a second account from
+   the sign-in address — so the founder ended up as a "Team member" sitting next
+   to an admin account nobody could log into. Fold the two into one. */
+function mig_mergeDuplicateFounder(){
+  const legacy=USERS.lewis;
+  if(!legacy) return true;                                   /* already merged */
+  const target=Object.values(USERS).find(u=>u.id!=='lewis' &&
+    (u.email||'').toLowerCase()==='lewisscholes2@gmail.com');
+  if(!target) return false;                                  /* retry next load */
+  /* Founder identity moves across; the avatar and onboarding the real account
+     already has are kept, because that is the one being used day to day. */
+  target.name  = legacy.name  || target.name;
+  target.short = legacy.short || target.short;
+  target.role  = legacy.role  || target.role;
+  target.admin = true;
+  target.initials = target.initials || legacy.initials;
+  reassignUser('lewis', target.id);
+  delete USERS.lewis;
+  if(ME==='lewis') ME=target.id;
+  return true;
+}
+
+const MIGRATIONS = [
+  { id:'2026-08-comment-authors', fn:mig_commentAuthors },
+  { id:'2026-08-merge-founder',   fn:mig_mergeDuplicateFounder }
+];
+function tikiMigrate(){
+  if(!Array.isArray(state.migrations)) state.migrations=[];
+  const ran=[];
+  for(const m of MIGRATIONS){
+    if(state.migrations.includes(m.id)) continue;
+    try{
+      if(m.fn()!==false){ state.migrations.push(m.id); ran.push(m.id); }
+    }catch(e){ console.warn('migration failed:', m.id, e); }
+  }
+  return ran;
 }
 function replaceArr(target, src){ if(Array.isArray(src)){ target.length=0; src.forEach(x=>target.push(x)); } }
 function applyTikiState(d){
@@ -10923,6 +11209,7 @@ function applyTikiState(d){
   replaceArr(BRIEFS,d.briefs); replaceArr(OUTREACH_FLOWS,d.flows); replaceArr(SAMPLE_REQS,d.samples);
   replaceArr(CHATS,d.chats); replaceArr(PROFIT_VENDORS,d.profitVendors);
   if(Array.isArray(d.personal)) PERSONAL_OUTREACH=d.personal;
+  if(Array.isArray(d.migrations)) state.migrations=d.migrations;
   if(Array.isArray(d.notifs)) state.notifs=d.notifs;
   if(Array.isArray(d.learnings)) replaceArr(AI.learnings,d.learnings);
   if(d.calcLev) Object.assign(CALC_LEV,d.calcLev);
@@ -10973,7 +11260,15 @@ async function tikiEnter(inviteType){
      in-memory defaults, and the 4-second autosave then wrote that emptiness
      straight over the good server copy — silently destroying work. Saving is
      now gated on having actually loaded first. */
-  try{ await tikiPull(); TIKI_LOADED=true; syncStatus('', 'Synced · '+tikiSession.email.split('@')[0]); }
+  try{
+    await tikiPull(); TIKI_LOADED=true;
+    /* Repairs run here — after the load, before the autosave starts — so the
+       corrected state is what gets written back. */
+    resolveMe();
+    const ran=tikiMigrate();
+    if(ran.length){ tikiPush(); console.info('Applied migrations:', ran.join(', ')); }
+    syncStatus('', 'Synced · '+tikiSession.email.split('@')[0]);
+  }
   catch(e){
     TIKI_LOADED=false;
     syncStatus('error','Could not load — not saving');
@@ -10992,6 +11287,7 @@ async function tikiEnter(inviteType){
   if(XERO_STATUS&&XERO_STATUS.tenant_id) await xeroLoadData();
   rerenderAll(); renderNotifs();
   navTo('assistant');
+  tiktokAutoSync();          /* fire and forget — the app is already usable */
   setInterval(tikiPush, 4000);
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') tikiPush(); });
   /* Profile completion is mandatory for everyone — invited users also set a password. */
@@ -11001,6 +11297,7 @@ async function tikiEnter(inviteType){
 /* ============ INIT ============ */
 async function init(){
   renderBrandUI(); renderNewMenu(); renderSidebar(); renderNotifs();
+  silkStart();
   navTo('assistant');
   /* A shared brief is a public page: no session, no gate, nothing loaded from
      the workspace. Handled before auth so a creator is never asked to sign in. */
