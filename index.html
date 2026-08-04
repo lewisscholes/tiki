@@ -1577,7 +1577,23 @@ body:not(.dark) .asx-orb::before{opacity:.30}
   backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
 .asx-sg:hover{background:var(--hover);color:var(--ink)}
 .asx-sg .s{display:none}
+.bai-draft{border:1px solid var(--accent);background:var(--accent-soft);border-radius:13px;
+  padding:11px 12px;margin-bottom:9px}
+.bai-draft .dh{font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--accent-ink);margin-bottom:6px}
+.bai-draft .dt{font-size:.82rem;line-height:1.6;color:var(--ink);white-space:pre-wrap}
+.bai-draft .da{display:flex;gap:6px;margin-top:10px}
+.bai-posted{font-size:.78rem;font-weight:650;color:var(--good-ink);background:var(--good-soft);
+  border:1px solid var(--good-ink);border-radius:11px;padding:8px 11px;margin-bottom:9px}
 /* ---- Projects ---- */
+/* The base .dd-menu pins itself with `top`, so a bottom offset alone left the
+   panel stretched downward behind the suggestion pills. Clear top explicitly. */
+.pj-menu{top:auto !important;bottom:calc(100% + 8px);left:0;right:auto;min-width:322px;
+  max-height:min(420px,52vh);overflow-y:auto;z-index:90;
+  background:var(--pop);border-color:var(--glass-brd);
+  backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%)}
+.pj-menu .dd-item{align-items:flex-start}
+
 .asx-proj{position:relative}
 .pj-btn{width:auto !important;padding:0 10px;gap:7px;font-size:.78rem;font-weight:650}
 .pj-btn #pjBtnLbl:empty{display:none}
@@ -6669,6 +6685,29 @@ function brfAiInner(b){
   </div>`;
 }
 
+let BRF_DRAFTS={};
+/* Posts the approved draft into the real thread, as you, with a real timestamp
+   — the same path brfReply uses, so it is indistinguishable from typing it. */
+function brfPostDraft(id){
+  const d=BRF_DRAFTS[id]; if(!d) return;
+  const b=briefById(state.briefId); if(!b) return;
+  const c=(b.comments||[])[(d.pin||1)-1];
+  if(!c){ toast(`There is no pin ${d.pin} on this brief`); return; }
+  c.thread=c.thread||[];
+  c.thread.push(stampMsg(d.text));
+  brfLog(b,'comment', d.text.length>60?d.text.slice(0,60)+'…':d.text);
+  brfAutoTask(b); tikiPush();
+  delete BRF_DRAFTS[id];
+  const el=$(id); if(el) el.outerHTML=`<div class="bai-posted">✓ Posted to pin ${d.pin}</div>`;
+  BRF_AI.chat=BRF_AI.chat.map(x=>x.includes(`id="${id}"`)?`<div class="bai-posted">✓ Posted to pin ${d.pin}</div>`:x);
+  renderBriefEditor(); brfAiEnsure(true);
+  toast('Reply posted');
+}
+function brfDropDraft(id){
+  delete BRF_DRAFTS[id];
+  BRF_AI.chat=BRF_AI.chat.filter(x=>!x.includes(`id="${id}"`));
+  brfAiPaint();
+}
 function brfAiGoto(pin){
   const b=briefById(state.briefId); const c=(b.comments||[])[pin-1]; if(!c) return;
   state.brf.openThread=c.id;
@@ -6715,14 +6754,41 @@ async function brfAiAsk(q){
   brfAiPaint();
   try{
     const ctx=`You are the creative strategist inside this brief, talking to ${whoName(ME)}. Be short and blunt. `+
-      `Answer from the brief below; if something is not in it, say so.\n\n${brfContextText(b)}\n\nQuestion: ${q}`;
+      `Answer from the brief below; if something is not in it, say so.\n\n`+
+      `YOU CAN POST REPLIES. If ${whoName(ME)} is telling you what to say back to someone, write the reply `+
+      `in their voice — first person, plain, no preamble, no sign-off — and end your message with a block `+
+      `exactly like this on its own lines:\n`+
+      `<<<REPLY {"pin":2,"text":"the reply"}>>>\n`+
+      `Use one block per comment. If they mean several pins, emit several blocks. Do not emit a block `+
+      `unless they are clearly asking you to say something back to someone.\n\n`+
+      `${brfContextText(b)}\n\nQuestion: ${q}`;
     const r=await tikiFetch('/functions/v1/assistant',{ method:'POST',
       body:JSON.stringify({ snapshot:aiSnapshot(), history:[], question:ctx }) });
     if(!r.ok) throw new Error('HTTP '+r.status);
     const j=await r.json();
     const text=(j.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n').trim();
     BRF_AI.chat=BRF_AI.chat.filter(x=>!x.includes('id="baiTy"'));
-    BRF_AI.chat.push(`<div class="bai-msg">${aiMd(text||'(no reply)')}</div>`);
+    /* Drafts are shown for approval rather than posted straight away. A message
+       to a teammate is not something to send on a model's say-so — and one click
+       is a small price for never posting the wrong thing to Rod. */
+    const drafts=[]; 
+    const clean=(text||'').replace(/<<<REPLY\s*(\{[\s\S]*?\})>>>/g,(m,j)=>{
+      try{ const d=JSON.parse(j); if(d&&d.text) drafts.push(d); }catch(e){}
+      return '';
+    }).trim();
+    BRF_AI.chat.push(`<div class="bai-msg">${aiMd(clean||'(no reply)')}</div>`);
+    drafts.forEach(d=>{
+      const c=(b.comments||[])[(d.pin||1)-1];
+      const id='dr'+Math.random().toString(36).slice(2,8);
+      BRF_DRAFTS[id]={pin:d.pin, text:d.text};
+      BRF_AI.chat.push(`<div class="bai-draft" id="${id}">
+        <div class="dh">Reply to pin ${d.pin}${c&&c.thread&&c.thread.length?` · ${esc(whoName(c.thread[c.thread.length-1].who))}`:''}</div>
+        <div class="dt">${esc(d.text)}</div>
+        <div class="da">
+          <button class="bai-act" onclick="brfPostDraft('${id}')">Post it</button>
+          <button class="bai-act ghost" onclick="brfDropDraft('${id}')">Discard</button>
+        </div></div>`);
+    });
   }catch(e){
     BRF_AI.chat=BRF_AI.chat.filter(x=>!x.includes('id="baiTy"'));
     BRF_AI.chat.push(`<div class="bai-msg">Couldn't reach the assistant — ${esc(e.message||'unavailable')}.</div>`);
@@ -10650,6 +10716,110 @@ function projContext(p){
   return out;
 }
 
+/* ============================================================================
+   PDF TEXT EXTRACTION — no library, no CDN
+   A PDF's content lives in streams that are almost always zlib-compressed, and
+   browsers ship a zlib decompressor: DecompressionStream('deflate'). So the
+   whole job is: find the streams, inflate them, and pull the strings out of the
+   text-showing operators (Tj / TJ / ' / ").
+
+   What this will NOT do, and says so rather than pretending:
+     · scanned PDFs — there is no text in them, only pixels
+     · encrypted PDFs
+     · fonts with custom encodings, which decode to gibberish
+   The quality check at the end is what catches the last case.
+   ========================================================================== */
+async function inflateBytes(bytes){
+  /* PDF FlateDecode is zlib-wrapped, which is what 'deflate' means here. Some
+     writers emit raw deflate, so fall back to that before giving up. */
+  for(const fmt of ['deflate','deflate-raw']){
+    try{
+      const ds=new DecompressionStream(fmt);
+      const buf=await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer();
+      if(buf.byteLength) return new Uint8Array(buf);
+    }catch(e){ /* try the next format */ }
+  }
+  return null;
+}
+/* Pulls readable text out of one decompressed content stream. */
+function pdfTextFromContent(str){
+  let out='', i=0;
+  const unescape_=t=>t
+    .replace(/\\([nrtbf])/g, (m,c)=>({n:'\n',r:'\n',t:'\t',b:'',f:''}[c]))
+    .replace(/\\([0-7]{1,3})/g, (m,o)=>String.fromCharCode(parseInt(o,8)))
+    .replace(/\\(.)/g,'$1');
+  const readParen=()=>{             /* strings can nest brackets, so count depth */
+    let depth=1, t=''; i++;
+    while(i<str.length && depth>0){
+      const c=str[i];
+      if(c==='\\'){ t+=c+(str[i+1]||''); i+=2; continue; }
+      if(c==='('){ depth++; }
+      else if(c===')'){ depth--; if(!depth){ i++; break; } }
+      t+=c; i++;
+    }
+    return unescape_(t);
+  };
+  const readHex=()=>{
+    const e=str.indexOf('>',i); if(e<0){ i=str.length; return ''; }
+    const h=str.slice(i+1,e).replace(/[^0-9a-fA-F]/g,''); i=e+1;
+    let t=''; for(let k=0;k+1<h.length;k+=2) t+=String.fromCharCode(parseInt(h.substr(k,2),16));
+    return t;
+  };
+  while(i<str.length){
+    const c=str[i];
+    if(c==='('){ out+=readParen(); continue; }
+    if(c==='<' && str[i+1]!=='<'){ out+=readHex(); continue; }
+    /* Line-positioning operators are where the line breaks actually are. */
+    if(c==='T'&&(str[i+1]==='d'||str[i+1]==='D'||str[i+1]==='*')){ out+='\n'; i+=2; continue; }
+    if(c==='E'&&str[i+1]==='T'){ out+='\n'; i+=2; continue; }
+    /* A big negative kern inside a TJ array is a space in disguise. */
+    if(c==='-'||(c>='0'&&c<='9')){
+      let j=i, num=''; while(j<str.length && /[-0-9.]/.test(str[j])){ num+=str[j]; j++; }
+      if(parseFloat(num)<-180) out+=' ';
+      i=j; continue;
+    }
+    i++;
+  }
+  return out;
+}
+async function pdfExtractText(arrayBuf){
+  const bytes=new Uint8Array(arrayBuf);
+  const latin=new TextDecoder('latin1').decode(bytes);
+  if(/\/Encrypt\b/.test(latin.slice(0,4096)) || /\/Encrypt\s+\d+\s+\d+\s+R/.test(latin))
+    return { text:'', why:'the PDF is encrypted' };
+  let i=0, chunks=[], found=0;
+  while((i=latin.indexOf('stream', i))!==-1){
+    const dictStart=latin.lastIndexOf('<<', i);
+    const dict=dictStart>-1 ? latin.slice(dictStart, i) : '';
+    let s0=i+6;
+    if(latin[s0]==='\r') s0++;
+    if(latin[s0]==='\n') s0++;
+    const end=latin.indexOf('endstream', s0);
+    if(end===-1) break;
+    /* Images and fonts are streams too — skip anything that is plainly not text. */
+    if(!/\/(Image|XObject\s*\/Image|FontFile|DCTDecode|JPXDecode|CCITTFaxDecode)/.test(dict)){
+      const raw=bytes.subarray(s0, end);
+      found++;
+      let content=null;
+      if(/\/FlateDecode/.test(dict)) content=await inflateBytes(raw);
+      else if(!/\/[A-Za-z]*Decode/.test(dict)) content=raw;
+      if(content) chunks.push(new TextDecoder('latin1').decode(content));
+    }
+    i=end+9;
+  }
+  if(!chunks.length) return { text:'', why: found?'its streams could not be decompressed':'no text streams were found — it is most likely a scan' };
+  let text=chunks.map(pdfTextFromContent).join('\n');
+  text=text.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').replace(/[ ]{2,}/g,' ').trim();
+  /* Quality gate: custom font encodings decode to noise. Better to reject it
+     than to feed the assistant gibberish it will confidently quote. */
+  const letters=(text.match(/[A-Za-z]/g)||[]).length;
+  const printable=(text.match(/[\x20-\x7E\n£€–—’‘“”]/g)||[]).length;
+  if(text.length<40) return { text:'', why:'almost no text came out — it is most likely a scan' };
+  if(letters/text.length < 0.45 || printable/text.length < 0.8)
+    return { text:'', why:'the text decoded as gibberish, which usually means a custom font encoding' };
+  return { text, why:null };
+}
+
 /* ---- reading uploads ----
    Text formats are read straight in the browser. PDFs need a parser we do not
    ship (no CDN, single file), so they are stored and flagged honestly rather
@@ -10661,12 +10831,22 @@ function projAddFiles(pid, files){
     const doc={ id:'d-'+Math.random().toString(36).slice(2,8), name:f.name,
       size:f.size, text:'', state:'reading' };
     p.docs.push(doc); projPaintDocs(pid);
+    if(/\.pdf$/i.test(f.name)){
+      f.arrayBuffer().then(pdfExtractText).then(res=>{
+        if(res.text){ doc.text=res.text; doc.state='ready'; doc.chars=res.text.length; }
+        else { doc.state='unreadable'; doc.why=res.why; }
+        projPaintDocs(pid); tikiPush();
+      }).catch(e=>{ doc.state='unreadable'; doc.why=e.message||'it could not be parsed';
+        projPaintDocs(pid); });
+      return;
+    }
     if(!PROJ_TEXT_RE.test(f.name)){
-      doc.state='unreadable'; projPaintDocs(pid); tikiPush(); return;
+      doc.state='unreadable'; doc.why='that file type cannot be read as text'; projPaintDocs(pid); tikiPush(); return;
     }
     const r=new FileReader();
     r.onerror=()=>{ doc.state='error'; projPaintDocs(pid); };
-    r.onload=()=>{ doc.text=String(r.result||''); doc.state='ready'; projPaintDocs(pid); tikiPush(); };
+    r.onload=()=>{ doc.text=String(r.result||''); doc.chars=doc.text.length; doc.state='ready';
+      projPaintDocs(pid); tikiPush(); };
     r.readAsText(f);
   });
 }
@@ -10722,7 +10902,7 @@ function projOpen(id){
        <div class="pj-drop" onclick="$('pjFile').click()">
          <div style="font-size:1.3rem;margin-bottom:6px">📄</div>
          <div style="font-size:.84rem;font-weight:650">Click to add files</div>
-         <div style="font-size:.73rem;color:var(--ink-3);margin-top:4px">TXT, MD, CSV, JSON read straight away · PDF stored but not yet readable</div>
+         <div style="font-size:.73rem;color:var(--ink-3);margin-top:4px">PDF, TXT, MD, CSV, JSON — text is read on upload</div>
        </div>
        <input type="file" id="pjFile" multiple style="display:none"
          onchange="projAddFiles('${p.id}',this.files);this.value=''">
@@ -10733,19 +10913,21 @@ function projOpen(id){
 }
 function projPaintDocs(id){
   const p=projectById(id), host=$('pjDocs'); if(!p||!host) return;
-  const LBL={reading:['Reading…','warn'],ready:['Ready','good'],
-             unreadable:['Stored — text not readable yet','warn'],error:['Could not read','crit']};
   host.innerHTML=(p.docs||[]).map(d=>{
-    const [txt,tone]=LBL[d.state]||LBL.ready;
+    let txt,tone;
+    if(d.state==='reading'){ txt='Reading…'; tone='warn'; }
+    else if(d.state==='ready'){ txt=`Ready · ${(d.chars||d.text.length).toLocaleString()} characters`; tone='good'; }
+    else if(d.state==='unreadable'){ txt=`Not usable — ${d.why||'no text could be read'}`; tone='warn'; }
+    else { txt='Could not read'; tone='crit'; }
     return `<div class="pj-row"><span class="pj-ext">${esc((d.name.split('.').pop()||'').toUpperCase().slice(0,4))}</span>
       <div style="min-width:0;flex:1"><div class="pj-fn">${esc(d.name)}</div>
-      <div class="pj-fs">${projSizeStr(d.size||0)} · <span style="color:var(--${tone}-ink)">${txt}</span></div></div>
+      <div class="pj-fs">${projSizeStr(d.size||0)} · <span style="color:var(--${tone}-ink)">${esc(txt)}</span></div></div>
       <button class="pj-rm" onclick="projRemoveDoc('${p.id}','${d.id}')">✕</button></div>`;
   }).join('');
   const ready=(p.docs||[]).filter(d=>d.text).length, un=(p.docs||[]).filter(d=>d.state==='unreadable').length;
   host.innerHTML += `<div class="pj-cap">${
     p.docs.length
-      ? `${ready} of ${p.docs.length} readable and in use.${un?` ${un} PDF${un===1?'':'s'} stored but not yet searchable — extracting PDF text needs a server-side step I have not built.`:''}`
+      ? `${ready} of ${p.docs.length} readable and in use.${un?` ${un} could not be read — the reason is on each row. A scanned PDF has no text in it to find.`:''}`
       : 'No files yet. Instructions alone still work — files are what make it answer from your research rather than from nothing.'}</div>`;
 }
 
@@ -11459,7 +11641,7 @@ function asxComposerHTML(){
           <span id="pjBtnLbl"></span>
           <span class="pj-x" id="pjBtnX" style="display:none" onclick="event.stopPropagation();projClear()">✕</span>
         </button>
-        <div class="dd-menu" id="pjMenu" style="bottom:calc(100% + 8px);left:0;min-width:322px"></div>
+        <div class="dd-menu pj-menu" id="pjMenu"></div>
       </div>
       <button class="asx-send" onclick="asxSend()" title="Send (Enter)">↑</button>
     </div>
