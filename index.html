@@ -1182,6 +1182,11 @@ body.public-view .brf-editor{height:100vh;border:0;border-radius:0;box-shadow:no
 .brf-ovl>*{pointer-events:auto}
 .brf-ovl.sel-box{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
 .brf-el{position:absolute;cursor:move;user-select:none}
+/* Something another person is holding — visible, but not grabbable. */
+.brf-el.rt-locked{outline:2px dashed var(--warn-ink);outline-offset:3px;cursor:not-allowed}
+.brf-el.rt-locked::after{content:attr(data-locked-by)' is editing';position:absolute;left:0;top:-19px;
+  background:var(--warn-ink);color:#fff;font-size:.6rem;font-weight:800;padding:2px 7px;
+  border-radius:5px;white-space:nowrap;pointer-events:none;z-index:8}
 .brf-el.selected{outline:2px solid var(--accent);outline-offset:3px}
 .brf-el .del-h{position:absolute;top:-12px;right:-12px;width:22px;height:22px;border-radius:50%;background:var(--crit);color:#fff;display:none;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;cursor:pointer;z-index:5}
 .brf-el.selected .del-h{display:flex}
@@ -6966,7 +6971,7 @@ function rtConnect(briefId){
   ws.onopen=()=>{
     RT.retry=0;
     rtSend({ topic, event:'phx_join', ref:rtRef(), payload:{
-      config:{ broadcast:{ self:false, ack:false }, presence:{ key:ME }, private:false },
+      config:{ broadcast:{ self:false, ack:false }, presence:{ key:TIKI_TAB }, private:false },
       access_token: tikiSession.at } });
     RT.hb=setInterval(()=>rtSend({topic:'phoenix',event:'heartbeat',ref:rtRef(),payload:{}}), 25000);
   };
@@ -6978,17 +6983,28 @@ function rtConnect(briefId){
     }
     if(m.event!=='broadcast'||!m.payload) return;
     const inner=m.payload.payload||{};
-    if(!inner.id||inner.id===ME) return;
+    /* Filter on the TAB, not the user. Your MacBook and your Mac Mini are the
+       same person, and ignoring your own user id meant they hid each other. */
+    if(!inner.tab||inner.tab===TIKI_TAB) return;
+
+    /* Live movement: applied straight to the elements and repainted in place,
+       with nothing written to the database until the drag ends. This is what
+       makes another machine follow you frame by frame rather than a few
+       seconds later. */
+    if(m.payload.event==='move'){ rtApplyMove(inner); return; }
+    if(m.payload.event==='text'){ rtApplyText(inner); return; }
+    if(m.payload.event==='lock'){ rtApplyLock(inner); return; }
+
     if(m.payload.event==='cursor'){
-      const isNew=!RT.peers[inner.id];
-      RT.peers[inner.id]={ id:inner.id, name:inner.name||whoName(inner.id),
+      const isNew=!RT.peers[inner.tab];
+      RT.peers[inner.tab]={ id:inner.tab, name:inner.name||whoName(inner.id),
         x:inner.x, y:inner.y, at:Date.now() };
       rtPaint();
       /* Only redraw the "who's here" line when the roster actually changes —
          doing it on every cursor frame would thrash the DOM 20 times a second. */
       if(isNew) rtRenderPeers();
     } else if(m.payload.event==='bye'){
-      delete RT.peers[inner.id]; rtPaint(); rtRenderPeers();
+      delete RT.peers[inner.tab]; rtPaint(); rtRenderPeers();
     }
   };
   ws.onclose=()=>{
@@ -7034,8 +7050,143 @@ function rtSendCursor(wx,wy){
   RT.lastSent=now;
   rtSend({ topic:RT.topic, event:'broadcast', ref:rtRef(), payload:{
     type:'broadcast', event:'cursor',
-    payload:{ id:ME, name:(USERS[ME]&&USERS[ME].short)||'Someone', x:Math.round(wx), y:Math.round(wy) } } });
+    payload:{ id:ME, tab:TIKI_TAB, name:(USERS[ME]&&USERS[ME].short)||'Someone',
+      x:Math.round(wx), y:Math.round(wy) } } });
 }
+/* ---------------------------------------------------------------------------
+   LIVE MOVEMENT
+   Positions go over the same socket as the cursors, ~25 times a second, and are
+   applied by writing straight to the DOM node rather than re-rendering. A full
+   render on every frame would be far too slow, and would also tear the drag out
+   from under whoever is doing it.
+   Nothing is saved while a drag is running — the ordinary save on mouseup does
+   that, so the database is not hammered 25 times a second.
+   ------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+   LIVE TEXT
+   Typing is streamed the same way movement is, and applied by writing into the
+   node rather than re-rendering — a re-render would destroy the caret of anyone
+   editing elsewhere on the page.
+   Never applied to a box the local user is currently inside; their own keys win.
+   ------------------------------------------------------------------------- */
+let RT_TEXT_LAST=0;
+function rtSendText(id, html){
+  if(!RT.joined) return;
+  const now=Date.now();
+  if(now-RT_TEXT_LAST<90) return;          /* a little slower than movement — plenty for typing */
+  RT_TEXT_LAST=now;
+  rtSend({ topic:RT.topic, event:'broadcast', ref:rtRef(), payload:{
+    type:'broadcast', event:'text',
+    payload:{ id:ME, tab:TIKI_TAB, brief:state.briefId, el:id, html } } });
+}
+function rtApplyText(p){
+  if(!p.brief || p.brief!==state.briefId) return;
+  const b=briefById(state.briefId); if(!b) return;
+  const el=b.elements.find(x=>x.id===p.el); if(!el) return;
+  el.html=p.html; delete el.text;
+  const node=$('brfWorld')?.querySelector(`[data-el="${p.el}"]`);
+  /* If this is the box you are typing in, your keystrokes win — replacing the
+     contents would jump your caret to the start on every character they type. */
+  if(node && document.activeElement!==node) node.innerHTML=el.html;
+}
+
+/* ---------------------------------------------------------------------------
+   LOCKS
+   While somebody is dragging or typing into an element, everyone else is kept
+   off it. Without this the last mouse to move simply wins and one person's work
+   silently reverts.
+   Locks expire on their own, so a closed laptop cannot leave something stuck.
+   ------------------------------------------------------------------------- */
+const RT_LOCKS={};
+const RT_LOCK_TTL=6000;
+function rtLock(id){
+  if(!RT.joined||!id) return;
+  rtSend({ topic:RT.topic, event:'broadcast', ref:rtRef(), payload:{
+    type:'broadcast', event:'lock',
+    payload:{ id:ME, tab:TIKI_TAB, brief:state.briefId, el:id, who:ME } } });
+}
+function rtUnlock(id){
+  if(!RT.joined||!id) return;
+  rtSend({ topic:RT.topic, event:'broadcast', ref:rtRef(), payload:{
+    type:'broadcast', event:'lock',
+    payload:{ id:ME, tab:TIKI_TAB, brief:state.briefId, el:id, who:ME, release:true } } });
+}
+function rtApplyLock(p){
+  if(!p.brief || p.brief!==state.briefId) return;
+  if(p.release) delete RT_LOCKS[p.el];
+  else RT_LOCKS[p.el]={ tab:p.tab, who:p.who, at:Date.now() };
+  rtPaintLocks();
+}
+/* True when somebody ELSE currently holds it. */
+function rtLocked(id){
+  const l=RT_LOCKS[id];
+  if(!l) return null;
+  if(Date.now()-l.at>RT_LOCK_TTL){ delete RT_LOCKS[id]; return null; }
+  return l.tab===TIKI_TAB ? null : l;
+}
+function rtPaintLocks(){
+  const world=$('brfWorld'); if(!world) return;
+  world.querySelectorAll('.brf-el').forEach(n=>{
+    const l=rtLocked(n.dataset.el);
+    n.classList.toggle('rt-locked', !!l);
+    if(l) n.dataset.lockedBy=whoName(l.who); else delete n.dataset.lockedBy;
+  });
+}
+setInterval(()=>{                       /* expire stale locks from a closed tab */
+  let changed=false;
+  Object.keys(RT_LOCKS).forEach(k=>{
+    if(Date.now()-RT_LOCKS[k].at>RT_LOCK_TTL){ delete RT_LOCKS[k]; changed=true; }
+  });
+  if(changed) rtPaintLocks();
+}, 2000);
+
+let RT_MOVE_LAST=0;
+function rtSendMove(els){
+  if(!RT.joined || !els.length) return;
+  const now=Date.now();
+  if(now-RT_MOVE_LAST<40) return;
+  RT_MOVE_LAST=now;
+  rtSend({ topic:RT.topic, event:'broadcast', ref:rtRef(), payload:{
+    type:'broadcast', event:'move',
+    payload:{ id:ME, tab:TIKI_TAB, brief:state.briefId, els } } });
+}
+function rtApplyMove(p){
+  if(!p.brief || p.brief!==state.briefId) return;
+  const b=briefById(state.briefId); if(!b) return;
+  const world=$('brfWorld'); if(!world) return;
+  (p.els||[]).forEach(u=>{
+    const el=b.elements.find(x=>x.id===u.id); if(!el) return;
+    if(u.x!=null) el.x=u.x;
+    if(u.y!=null) el.y=u.y;
+    if(u.w!=null) el.w=u.w;
+    if(u.h!=null) el.h=u.h;
+    if(u.rot!=null) el.rot=u.rot;
+    const host=brfHostFrame(b,el);
+    const node=world.querySelector(`[data-el="${u.id}"]`);
+    if(node){
+      node.style.left=(host?el.x-host.x:el.x)+'px';
+      node.style.top =(host?el.y-host.y:el.y)+'px';
+      if(u.w!=null) node.style.width=el.w+'px';
+      if(u.h!=null && el.type!=='text') node.style.height=el.h+'px';
+      if(u.rot!=null) node.style.transform=`rotate(${el.rot}deg)`;
+    }
+    /* The handle overlay is a separate layer — move it in step or the grips
+       drift away from the thing they belong to. */
+    const ov=world.querySelector(`[data-ovl="${u.id}"]`);
+    if(ov){
+      ov.style.left=el.x+'px'; ov.style.top=el.y+'px';
+      if(u.w!=null) ov.style.width=el.w+'px';
+      if(u.h!=null) ov.style.height=el.h+'px';
+      if(u.rot!=null) ov.style.transform=`rotate(${el.rot}deg)`;
+    }
+    /* A whole page moving takes its contents with it. */
+    if(el.type==='frame'){
+      const fn=world.querySelector(`[data-frame="${el.id}"]`);
+      if(fn){ fn.style.left=el.x+'px'; fn.style.top=el.y+'px'; }
+    }
+  });
+}
+
 function rtPaint(){
   const box=$('brfCursors'); if(!box) return;
   const inv=1/(state.brf.zoom||1);
@@ -7258,6 +7409,8 @@ function brfTextInput(ev,id){
   el.html=brfSanitize(ev.currentTarget.innerHTML);
   delete el.text;                    // the migrated field is no longer the truth
   state.brf.dirtyText=true;
+  rtSendText(id, el.html);
+  rtLock(id);                        // holding the box while it is being typed in
 }
 function brfEditText(ev,id){
   const node=ev.currentTarget;
@@ -7275,6 +7428,7 @@ function brfEditText(ev,id){
   }catch(err){} },0);
 }
 function brfSaveText(ev,id){
+  rtUnlock(id);
   const node=ev.currentTarget;
   node.contentEditable='false';
   node.classList.remove('editing');
@@ -7653,6 +7807,7 @@ function brfBind(b){
         /* Angle is measured in world space from the element's centre, so it is
            immune to zoom and pan without any extra maths. */
         const w0=brfScreenToWorld(e), cx=el.x+el.w/2, cy=el.y+el.h/2;
+        rtLock(el.id);
         start={el,cx,cy,rot0:el.rot||0,a0:Math.atan2(w0.y-cy,w0.x-cx)*180/Math.PI};
         s.sel=el.id;
       }
@@ -7664,6 +7819,7 @@ function brfBind(b){
       if(el&&!el.locked){
         brfSnapshot();
         mode='elresize'; moved=false;
+        rtLock(el.id);
         start={mx:e.clientX,my:e.clientY,el,edge,w:el.w,h:el.h,x:el.x,y:el.y,
           ratio: el.type==='video' ? VID_RATIO
                : (el.natural&&el.natural.w) ? el.natural.h/el.natural.w
@@ -7692,9 +7848,12 @@ function brfBind(b){
     } else if(elNode){
       const el=b.elements.find(x=>x.id===elNode.dataset.el);
       if(el&&el.locked){ e.preventDefault(); return; }   // locked layers ignore the canvas
+      const held=el&&rtLocked(el.id);
+      if(held){ toast(`${whoName(held.who)} is editing this`); e.preventDefault(); return; }
       if(el&&el.type!=='frame'){
         brfSnapshot();   // taken before the move so undo returns it to where it was
         mode='drag'; moved=false; start={mx:e.clientX,my:e.clientY,pos:[{k:el,x:el.x,y:el.y}]};
+        rtLock(el.id);
         if(s.sel!==el.id){ s.sel=el.id;
           world.querySelectorAll('.brf-el.selected').forEach(n=>n.classList.remove('selected'));
           elNode.classList.add('selected');
@@ -7734,6 +7893,8 @@ function brfBind(b){
       if(Math.abs(dx)+Math.abs(dy)<2 && !moved) return;   // ignore jitter — keeps double-click intact
       moved=true;
       start.pos.forEach(p=>{ p.k.x=Math.round(p.x+dx); p.k.y=Math.round(p.y+dy); });
+      /* Stream the new positions to anyone else in this brief. */
+      rtSendMove(start.pos.map(p=>({id:p.k.id, x:p.k.x, y:p.k.y})));
       /* Never rebuild the world while a text box is being edited — the node
          under the caret would be replaced mid-keystroke. */
       if(state.brf.editing){
@@ -7752,6 +7913,7 @@ function brfBind(b){
       if(e.shiftKey) r=Math.round(r/15)*15;          /* Shift snaps to 15° */
       r=(((Math.round(r))%360)+360)%360;
       start.el.rot=r; moved=true;
+      rtSendMove([{id:start.el.id,rot:r}]);
       const wl=$('brfWorld');
       const n=wl?.querySelector(`[data-el="${start.el.id}"]`);
       const ov=wl?.querySelector(`[data-ovl="${start.el.id}"]`);
@@ -7811,6 +7973,7 @@ function brfBind(b){
       }
       el.w=w; el.x=nx;
       if(!isTxt){ el.h=hgt; el.y=ny; }
+      rtSendMove([{id:el.id,x:el.x,y:el.y,w:el.w,h:el.h}]);
       const wl=$('brfWorld');
       const host=brfHostFrame(b,el);
       const n=wl?.querySelector(`[data-el="${el.id}"]`);
@@ -7846,6 +8009,11 @@ function brfBind(b){
   }
   function onUp(){
     if(mode){
+      /* Let go of anything we were holding so the other side can touch it. */
+      if(start){
+        if(start.el) rtUnlock(start.el.id);
+        if(start.pos) start.pos.forEach(p=>rtUnlock(p.k.id));
+      }
       const wasStructural = (mode==='resize'||mode==='elresize'||mode==='elrot'||mode==='drag') && moved;
       /* A click on a page title with no movement selects that page. */
       const pickedFrame = mode==='drag' && !moved && start && start.frameId ? start.frameId : null;
