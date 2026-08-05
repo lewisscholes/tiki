@@ -1620,6 +1620,28 @@ body:not(.dark) .asx-orb::before{opacity:.30}
   border-radius:0 0 12px 12px}
 .th-resolve:hover{background:var(--good-soft)}
 .brf-pin.resolved{opacity:.45}
+/* ---- Static Ads ---- */
+.sa-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.sa-filters .fi{width:auto;min-width:150px;flex:0 1 auto}
+.sa-filters #saQ{flex:1 1 240px}
+.sa-cost{font-size:.75rem;color:var(--ink-3);line-height:1.55;margin-bottom:14px}
+.sa-err{font-size:.82rem;background:var(--warn-soft);border:1px solid var(--warn-ink);
+  color:var(--warn-ink);border-radius:11px;padding:10px 13px;margin-bottom:14px}
+.sa-empty{font-size:.85rem;color:var(--ink-3);line-height:1.6;padding:22px 2px;max-width:560px}
+.sa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.sa-card{border:1px solid var(--line-2);border-radius:14px;overflow:hidden;background:var(--surface-2)}
+.sa-img{aspect-ratio:1;background:var(--neutral-soft);display:flex;align-items:center;
+  justify-content:center;overflow:hidden}
+.sa-img img{width:100%;height:100%;object-fit:cover;display:block}
+.sa-img span{font-size:.72rem;color:var(--ink-3)}
+.sa-meta{padding:10px 11px}
+.sa-brand{font-size:.82rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sa-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.sa-tag{font-size:.64rem;font-weight:700;padding:2px 7px;border-radius:5px;
+  background:var(--glass-on);color:var(--ink-3)}
+.sa-tag.score{background:var(--good-soft);color:var(--good-ink)}
+.sa-ref{font-family:ui-monospace,monospace;font-size:.72rem;font-weight:700;color:var(--accent-ink);
+  background:var(--accent-soft);border-radius:6px;padding:3px 7px;margin-top:8px;text-align:center}
 /* ---- Shapes ---- */
 .el-shape{border-radius:0}
 .brf-shape-svg{display:block;width:100%;height:100%;pointer-events:none;overflow:visible}
@@ -2145,6 +2167,7 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
       <div class="page" id="page-outreach"></div>
       <div class="page" id="page-retainers"></div>
       <div class="page" id="page-briefs"></div>
+      <div class="page" id="page-statics"></div>
       <div class="page" id="page-courses"></div>
       <div class="page" id="page-profit"></div>
       <div class="page" id="page-flows"></div>
@@ -2767,6 +2790,7 @@ const PAGES = [
     count:()=>SAMPLE_REQS.filter(s=>s.status==='pending').length + CHATS.reduce((n,c)=>n+c.unread,0) },
   { id:'retainers', label:'Retainers', icon:'card' },
   { id:'briefs',    label:'Briefs',    icon:'canvas' },
+  { id:'statics',   label:'Static Ads', icon:'image' },
   /* Placeholders — deliberately not built. They sit in the sidebar greyed out
      so the intent stays visible every day rather than living in a note. */
   { id:'genvideo',  label:'Video Generation', icon:'video', soon:true },
@@ -2791,7 +2815,7 @@ function renderSidebar(){
   const grp=(title,ids)=>{ const ps=n.filter(p=>ids.includes(p.id)); return ps.length?`<div class="sb-section">${title}</div>`+ps.map(navBtn).join(''):''; };
   $('sbNav').innerHTML =
     grp('Workspace',['overview','assistant','tasks']) +
-    grp('Operations',['creators','videos','outreach','retainers','briefs']) +
+    grp('Operations',['creators','videos','outreach','retainers','briefs','statics']) +
     grp('Content',['genvideo','genimage']);
   $('sbSettingsBtn')?.classList.toggle('active', state.page==='settings');
   renderDock();   /* the sidebar is hidden now — the dock is the real nav */
@@ -2811,7 +2835,7 @@ function renderSidebar(){
    touching thirty functions.
    ========================================================================== */
 const DOCK_TABS = ['assistant','overview','tasks'];
-const DOCK_OPS  = ['creators','videos','outreach','retainers','briefs'];
+const DOCK_OPS  = ['creators','videos','outreach','retainers','briefs','statics'];
 
 function renderDock(){
   const dock=$('rDock'); if(!dock) return;
@@ -2826,7 +2850,7 @@ function renderDock(){
   /* Each operation gets its own tint so the list is scannable by colour before
      you read a word of it — the same trick iOS Settings uses. */
   const TINT={creators:'10,132,255', videos:'255,59,48', outreach:'48,209,88',
-              retainers:'191,90,242', briefs:'255,159,10'};
+              retainers:'191,90,242', briefs:'255,159,10', statics:'48,213,200'};
   const row=(p)=>{
     const c=p.count?p.count():0, t=TINT[p.id];
     const st=t?`--tint:rgba(${t},.22);--tint-ink:rgb(${t})`:'';
@@ -3037,7 +3061,7 @@ function renderPage(page){
   ({ overview:renderOverview, assistant:renderAssistant, tasks:renderTasks, creators:renderCreators, videos:renderVideos, outreach:renderOutreach,
      retainers:renderRetainers, briefs:renderBriefs, courses:renderCourses,
      profit:renderProfit, map:renderMap, roadmap:renderRoadmap, memory:renderMemory,
-     flows:renderFlows, settings:renderSettings })[page]();
+     flows:renderFlows, statics:renderStatics, settings:renderSettings })[page]();
 }
 function rerenderAll(){ renderSidebar(); renderPage(state.page); renderBrandUI(); }
 
@@ -11290,6 +11314,162 @@ function asxThreadHTML(){
     }).join('')}</div>`;
 }
 /* ============================================================================
+   STATIC ADS
+   A browsable window onto GetHookd's library, and our own saved shortlist.
+
+   The credit rule shapes everything here: their SEARCH bills per result, while
+   individual lookups are free. So we search deliberately — never on keystroke,
+   never on page load — and once an ad is saved we keep everything we need
+   locally. From that point on it costs nothing, however often it is used.
+   ========================================================================== */
+const STATIC_LIB = [];          // ads Lewis has saved — our library, not theirs
+const SA_CATS = [
+  {id:1,t:'Before and After'},{id:17,t:'Facts and Stats'},{id:11,t:'FAQ Explainers'},
+  {id:18,t:'Features and Benefits'},{id:12,t:'Holiday / Seasonal'},{id:14,t:'Humor / Fun'},
+  {id:19,t:'Media and Press'},{id:8,t:'Promotion and Discount'},{id:16,t:'Reasons Why'},
+  {id:2,t:'Testimonial / Reviews'},{id:20,t:'Us vs Them'}
+];
+const SA_TIERS = [['winning','Winning (91+)'],['optimized','Optimized (81-90)'],
+                  ['growing','Growing (61-80)'],['scaling','Scaling (41-60)']];
+let SA = { q:'', cat:'', tier:'winning', geo:'US,GB', days:30, results:[], loading:false,
+           err:'', credits:null, tab:'library' };
+
+function renderStatics(){
+  $('page-statics').innerHTML=`
+    <div class="page-head"><div><h1>Static Ads</h1>
+      <p class="sub">Layouts that are already working for other brands — saved here, then rebuilt around your own angle.</p></div></div>
+    <div class="seg" style="width:max-content;margin-bottom:16px">
+      <button class="${SA.tab==='library'?'active':''}" onclick="SA.tab='library';renderStatics()">
+        My library${STATIC_LIB.length?` · ${STATIC_LIB.length}`:''}</button>
+      <button class="${SA.tab==='find'?'active':''}" onclick="SA.tab='find';renderStatics()">Find ads</button>
+    </div>
+    ${SA.tab==='find'?saFindHTML():saLibraryHTML()}`;
+}
+
+function saFindHTML(){
+  return `
+    <div class="sa-filters">
+      <input class="fi" id="saQ" placeholder="e.g. electrolytes, hydration, greens" value="${esc(SA.q)}"
+        onkeydown="if(event.key==='Enter')saSearch()">
+      <select class="fi" id="saCat"><option value="">Any layout</option>
+        ${SA_CATS.map(c=>`<option value="${c.id}" ${SA.cat==String(c.id)?'selected':''}>${c.t}</option>`).join('')}</select>
+      <select class="fi" id="saTier">
+        ${SA_TIERS.map(([v,l])=>`<option value="${v}" ${SA.tier===v?'selected':''}>${l}</option>`).join('')}</select>
+      <select class="fi" id="saGeo">
+        <option value="US,GB" ${SA.geo==='US,GB'?'selected':''}>US + UK</option>
+        <option value="GB" ${SA.geo==='GB'?'selected':''}>UK only</option>
+        <option value="US" ${SA.geo==='US'?'selected':''}>US only</option>
+        <option value="" ${SA.geo===''?'selected':''}>Anywhere</option></select>
+      <select class="fi" id="saDays">
+        ${[[0,'Any age'],[14,'Running 14+ days'],[30,'Running 30+ days'],[60,'Running 60+ days']]
+          .map(([v,l])=>`<option value="${v}" ${SA.days==v?'selected':''}>${l}</option>`).join('')}</select>
+      <button class="btn btn-primary" onclick="saSearch()" ${SA.loading?'disabled':''}>
+        ${SA.loading?'Searching…':'Search'}</button>
+    </div>
+    <div class="sa-cost">Statics only. A search costs credits per ad returned, so it only runs when you
+      press the button — never as you type.${SA.credits!=null?` <b>${SA.credits} credits left.</b>`:''}</div>
+    ${SA.err?`<div class="sa-err">${esc(SA.err)}</div>`:''}
+    ${SA.loading?`<div class="sa-empty">Searching the library…</div>`
+      : SA.results.length?`<div class="sa-grid">${SA.results.map(saCard).join('')}</div>`
+      : `<div class="sa-empty">Set your filters and press Search. Start narrow — "winning" plus one
+          layout gives you the strongest handful rather than a hundred to wade through.</div>`}`;
+}
+
+/* Everything the app needs later is kept on the saved row, so nothing has to be
+   fetched again to use it. */
+function saCard(a){
+  const saved=STATIC_LIB.some(x=>x.id===a.id);
+  return `<div class="sa-card">
+    <div class="sa-img">${a.thumb?`<img src="${esc(a.thumb)}" loading="lazy" alt="">`:'<span>no preview</span>'}</div>
+    <div class="sa-meta">
+      <div class="sa-brand">${esc(a.brand||'Unknown brand')}</div>
+      <div class="sa-tags">
+        ${a.score!=null?`<span class="sa-tag score">${a.score}</span>`:''}
+        ${a.cat?`<span class="sa-tag">${esc(a.cat)}</span>`:''}
+        ${a.days?`<span class="sa-tag">${a.days}d live</span>`:''}
+      </div>
+      <button class="btn ${saved?'btn-soft':'btn-primary'} btn-sm" style="width:100%;margin-top:8px"
+        onclick="saSave('${a.id}')" ${saved?'disabled':''}>${saved?'✓ In your library':'Save to library'}</button>
+    </div></div>`;
+}
+
+function saLibraryHTML(){
+  if(!STATIC_LIB.length) return `<div class="sa-empty">Nothing saved yet. Find an ad you like and save it —
+    from then on it costs nothing to use, however many times you rebuild it.</div>`;
+  return `<div class="sa-grid">${STATIC_LIB.map(a=>`
+    <div class="sa-card">
+      <div class="sa-img">${a.thumb?`<img src="${esc(a.thumb)}" loading="lazy" alt="">`:'<span>no preview</span>'}</div>
+      <div class="sa-meta">
+        <div class="sa-brand">${esc(a.brand||'Unknown brand')}</div>
+        <div class="sa-tags">
+          ${a.score!=null?`<span class="sa-tag score">${a.score}</span>`:''}
+          ${a.cat?`<span class="sa-tag">${esc(a.cat)}</span>`:''}
+        </div>
+        <div class="sa-ref" title="Give this to the assistant">${esc(a.ref)}</div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn btn-soft btn-sm" style="flex:1" onclick="saCopyRef('${a.ref}')">Copy ID</button>
+          <button class="btn btn-ghost btn-sm" onclick="saForget('${a.id}')" title="Remove">✕</button>
+        </div>
+      </div></div>`).join('')}</div>
+    <div class="sa-cost" style="margin-top:14px">Give an ID to the assistant — <i>"rebuild ${esc(STATIC_LIB[0].ref)}
+      for the shift-worker sub-avatar"</i> — and it works from the saved copy, free.</div>`;
+}
+
+/* Their row shape varies by plan and mode, so read defensively and keep only
+   what we actually use. */
+function saNormalise(row){
+  const media=(row.media&&row.media[0])||{};
+  return {
+    id: String(row.id ?? row.ad_id ?? ''),
+    ref: 'AD-'+String(row.id ?? row.ad_id ?? '').slice(-6).toUpperCase(),
+    brand: row.brand_name || row.brand?.name || row.page_name || '',
+    thumb: row.thumbnail_url || row.resized_url || row.primary_image_url || media.thumbnail_url || media.url || '',
+    score: row.performance_score ?? row.score ?? null,
+    cat: (row.creative_categories&&row.creative_categories[0]&&
+          (row.creative_categories[0].title||row.creative_categories[0])) || '',
+    days: row.days_active ?? null,
+    copy: row.ad_copy || row.body || '',
+    link: row.ad_library_url || row.permalink || ''
+  };
+}
+
+async function saSearch(){
+  SA.q=$('saQ').value.trim(); SA.cat=$('saCat').value; SA.tier=$('saTier').value;
+  SA.geo=$('saGeo').value; SA.days=+$('saDays').value;
+  SA.loading=true; SA.err=''; renderStatics();
+  try{
+    const params={ query:SA.q, ad_format:'image', limit:18, status:'active',
+      performance_scores:SA.tier, collapse_variants:true };
+    if(SA.cat) params.creative_categories=SA.cat;
+    if(SA.geo) params.geo=SA.geo;
+    if(SA.days) params.run_time=SA.days;
+    const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
+      body:JSON.stringify({ action:'search', params }) });
+    const j=await r.json().catch(()=>({}));
+    if(r.status===501) throw new Error('GETHOOKD_API is not set in Supabase');
+    if(r.status===402) throw new Error('Out of GetHookd credits');
+    if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+    SA.results=(j.data||[]).map(saNormalise).filter(a=>a.id);
+    if(j.remaining_credits!=null) SA.credits=j.remaining_credits;
+    if(!SA.results.length) SA.err='Nothing matched. Try a wider tier or drop the layout filter.';
+  }catch(e){ SA.err=e.message||'Search failed'; SA.results=[]; }
+  SA.loading=false; renderStatics();
+}
+function saSave(id){
+  const a=SA.results.find(x=>x.id===id); if(!a) return;
+  if(STATIC_LIB.some(x=>x.id===id)) return;
+  STATIC_LIB.unshift({...a, savedAt:Date.now()});
+  tikiPush(); renderStatics(); toast(`Saved as ${a.ref}`);
+}
+function saForget(id){
+  const i=STATIC_LIB.findIndex(x=>x.id===id); if(i<0) return;
+  STATIC_LIB.splice(i,1); tikiPush(); renderStatics(); toast('Removed');
+}
+function saCopyRef(ref){
+  navigator.clipboard?.writeText(ref).then(()=>toast(`${ref} copied`)).catch(()=>toast(ref));
+}
+
+/* ============================================================================
    MODEL PICKER
    The edge function validates whatever it is sent against a claude-* shape and
    falls back to the ASSISTANT_MODEL secret, so this only ever narrows the
@@ -13786,7 +13966,8 @@ function collectTikiState(){
   /* v12 adds action flows — the automation rules, stored as data so the chart
      in the back office is the thing that actually runs. */
   /* v13 adds projects — instructions and knowledge the assistant works inside. */
-  return { v:14, aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  /* v15 adds the saved static-ad library. */
+  return { v:15, statics:STATIC_LIB, aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
@@ -13909,6 +14090,7 @@ function applyTikiState(d){
   replaceArr(BRIEFS,d.briefs); replaceArr(OUTREACH_FLOWS,d.flows); replaceArr(SAMPLE_REQS,d.samples);
   replaceArr(CHATS,d.chats); replaceArr(PROFIT_VENDORS,d.profitVendors);
   if(Array.isArray(d.personal)) PERSONAL_OUTREACH=d.personal;
+  if(Array.isArray(d.statics)) replaceArr(STATIC_LIB,d.statics);
   if(typeof d.aiModel==='string') state.aiModel=d.aiModel;
   if(Array.isArray(d.projects)) PROJECTS=d.projects;
   if(Array.isArray(d.migrations)) state.migrations=d.migrations;
