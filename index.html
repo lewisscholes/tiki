@@ -2449,7 +2449,13 @@ const teammates = () => Object.keys(USERS).filter(u=>u!==ME);
 /* Tasks opens on YOUR dashboard, not a shared default. Only applied if the view
    is still the factory setting — once you have chosen something it is yours. */
 function taskHome(){
-  if(state.taskView==='kanban' && USERS[ME]) state.taskView='dash:'+ME;
+  if(!USERS[ME]) return;
+  /* 'kanban' is the factory setting. A dash: pointing at somebody who is not on
+     the account is the boot race: navTo runs while ME is still the pre-auth
+     default, then the cloud pull swaps USERS out underneath it. */
+  const v=state.taskView||'';
+  const stale = v.startsWith('dash:') && !USERS[v.slice(5)];
+  if(v==='kanban' || stale) state.taskView='dash:'+ME;
 }
 const AV_POOL = ['av-rod','av-c1','av-c2','av-c3','av-c4','av-c5','av-c6'];
 
@@ -3774,6 +3780,13 @@ function taskWhoOptions(){
 function renderTasks(){
   const all=state.tasks.filter(inBrand);
   if(!state.taskWho) state.taskWho='all';
+  /* Last line of defence: whoever this view or filter names must still exist.
+     Accounts get merged and renamed, and a dangling id should quietly fall back
+     rather than showing an error card where the dashboard should be. */
+  if(String(state.taskView||'').startsWith('dash:') && !USERS[state.taskView.slice(5)])
+    state.taskView = USERS[ME] ? 'dash:'+ME : 'kanban';
+  if(String(state.taskWho||'').startsWith('u:') && !USERS[state.taskWho.slice(2)])
+    state.taskWho = 'all';
   const counts={ all:all.filter(t=>t.status!=='Completed').length,
     mine:all.filter(t=>t.assignee===ME&&t.status!=='Completed').length,
     overdue:all.filter(isOverdue).length, completed:all.filter(t=>t.status==='Completed').length };
@@ -14539,6 +14552,9 @@ function applyTikiState(d){
   if(Array.isArray(d.personal)) PERSONAL_OUTREACH=d.personal;
   if(Array.isArray(d.statics)) replaceArr(STATIC_LIB,d.statics);
   if(d.dshCols && typeof d.dshCols==='object') state.dshCols=d.dshCols;
+  /* USERS has just been replaced wholesale — anything holding a user id is
+     now suspect until it has been re-checked against the new list. */
+  taskHome();
   if(typeof d.imgModel==='string') state.imgModel=d.imgModel;
   if(typeof d.imgRatio==='string') state.imgRatio=d.imgRatio;
   if(typeof d.aiModel==='string') state.aiModel=d.aiModel;
