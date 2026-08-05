@@ -2083,6 +2083,113 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
 .rmi .thm{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:.74rem;
   color:var(--ink-3);font-weight:600}
 
+
+/* ============================================================================
+   TASK BOARD + DASHBOARD (v4)
+   ========================================================================== */
+.kb-card .t{font-size:.845rem;font-weight:600;line-height:1.4;color:var(--ink)}
+.kb-card .meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.kb-card .foot{display:flex;align-items:center;gap:7px;margin-top:9px}
+.k-tag{font-size:.645rem;font-weight:750;padding:2px 8px;border-radius:6px;white-space:nowrap;line-height:1.5}
+.k-tag.sig{background:var(--accent-soft);color:var(--accent-ink)}
+.k-tag.noi{background:var(--line-2);color:var(--ink-3)}
+.k-tag.late{background:var(--crit-soft);color:var(--crit-ink)}
+.k-tag.today{background:var(--accent-soft);color:var(--accent-ink)}
+.k-tag.week{background:var(--line-2);color:var(--ink-2)}
+.k-tag.ok{background:var(--good-soft);color:var(--good-ink)}
+
+/* signal / noise picker in the task form */
+.sn-pick{display:flex;gap:8px}
+.sn-b{flex:1;height:38px;border-radius:11px;border:1px solid var(--line);background:var(--surface);
+  color:var(--ink-3);font-size:.82rem;font-weight:640;font-family:inherit;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:7px;transition:.15s}
+.sn-b:hover{background:var(--surface-2)}
+.sn-b.on{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+.sn-b .sn-d{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.sn-hint{font-size:.72rem;color:var(--ink-3);margin-top:7px;line-height:1.5}
+
+/* ---------- 1 · the banner ---------- */
+.dsh-banner{display:flex;align-items:center;background:var(--surface);border:1px solid var(--line-2);
+  border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 6px;margin-bottom:16px;flex-wrap:wrap}
+.dsh-seg{padding:0 20px;display:flex;align-items:center;gap:14px;border-right:1px solid var(--line-2)}
+.dsh-seg:last-child{border-right:none}
+.dsh-seg.grow{flex:1;min-width:240px}
+@media(max-width:1150px){.dsh-seg{border-right:none;padding:8px 16px}}
+.dsh-ring{width:64px;height:64px;flex:none;position:relative}
+.dsh-ring .mid{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:1.05rem;font-weight:730;letter-spacing:-.03em}
+.dsh-lb{font-size:.72rem;color:var(--ink-3);line-height:1.4}
+.dsh-lb b{display:block;font-size:.85rem;color:var(--ink);font-weight:680;letter-spacing:-.01em}
+.dsh-week{display:flex;gap:6px;flex:1;width:100%}
+.dsh-day{flex:1;text-align:center;min-width:26px}
+.dsh-day .dot{height:30px;border-radius:9px;background:var(--line-2);display:flex;align-items:center;
+  justify-content:center;font-size:.7rem;font-weight:750;color:var(--ink-3)}
+.dsh-day .dot.on{background:var(--good-ink);color:#fff}
+.dsh-day .dot.late{background:var(--crit-soft);color:var(--crit-ink)}
+.dsh-day .dl{font-size:.62rem;color:var(--ink-3);margin-top:4px}
+.dsh-mix{height:8px;border-radius:99px;overflow:hidden;display:flex;background:var(--surface-2)}
+.dsh-mix i{display:block;height:100%}
+.dsh-mixl{display:flex;justify-content:space-between;font-size:.72rem;color:var(--ink-3);margin-top:7px}
+.dsh-mixl b{color:var(--ink);font-weight:700}
+.dsh-stat{text-align:center}
+.dsh-stat .v{font-size:1.25rem;font-weight:720;letter-spacing:-.03em;line-height:1}
+.dsh-stat .v.ok{color:var(--good-ink)} .dsh-stat .v.late{color:var(--crit-ink)}
+.dsh-stat .l{font-size:.68rem;color:var(--ink-3);margin-top:4px;white-space:nowrap}
+.dsh-streak{display:flex;align-items:center;gap:10px}
+.dsh-streak .ico{font-size:1.3rem}
+
+/* ---------- 2 · your work ---------- */
+.dsh-ph{display:flex;align-items:center;gap:10px;padding:15px 18px 12px}
+.dsh-ph .t{font-size:.98rem;font-weight:670;letter-spacing:-.02em}
+.dsh-ph .n{font-size:.71rem;font-weight:700;padding:3px 9px;border-radius:99px;background:var(--surface-2);color:var(--ink-3)}
+.dsh-board{display:grid;gap:11px;padding:0 14px 15px}
+.dsh-board.c4{grid-template-columns:repeat(4,1fr)}
+.dsh-board.c3{grid-template-columns:repeat(3,1fr)}
+.dsh-board.c2{grid-template-columns:repeat(2,1fr)}
+.dsh-board.c1{grid-template-columns:1fr}
+@media(max-width:1000px){.dsh-board.c4,.dsh-board.c3{grid-template-columns:1fr 1fr}}
+@media(max-width:640px){.dsh-board{grid-template-columns:1fr !important}}
+.dsh-col{background:var(--surface-2);border-radius:15px;padding:10px;min-height:110px}
+.dsh-col.drop-on{outline:2px dashed var(--accent);outline-offset:2px}
+.dsh-colh{display:flex;align-items:center;gap:8px;padding:2px 4px 9px}
+.dsh-colh .bar{width:3px;height:16px;border-radius:2px;flex:none}
+.dsh-colh .dt{font-size:.77rem;font-weight:720}
+.dsh-colh .dn{margin-left:auto;font-size:.68rem;font-weight:700;color:var(--ink-3)}
+.dsh-col .kb-card{margin-bottom:8px}
+.dsh-col .kb-card:last-child{margin-bottom:0}
+.dsh-empty{padding:18px 10px;text-align:center;font-size:.77rem;color:var(--ink-3)}
+.dsh-cust{display:flex;gap:9px;flex-wrap:wrap;padding:0 18px 13px;align-items:center}
+.dsh-cust .lbl{font-size:.71rem;color:var(--ink-3);font-weight:660;text-transform:uppercase;letter-spacing:.05em}
+.dsh-tog{font-size:.75rem;font-weight:620;padding:7px 12px;border-radius:99px;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink-3);font-family:inherit;cursor:pointer}
+.dsh-tog.on{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+
+/* ---------- 3 · action row ---------- */
+.dsh-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media(max-width:1000px){.dsh-actions{grid-template-columns:1fr}}
+.dsh-actions .card{margin-bottom:0}
+.dsh-arow{display:flex;gap:11px;align-items:center;padding:11px 18px;border-top:1px solid var(--line-2)}
+.dsh-arow .a-t{font-size:.85rem;font-weight:610}
+.dsh-arow .a-m{font-size:.74rem;color:var(--ink-3);margin-top:2px}
+.dsh-cav{width:31px;height:31px;border-radius:50%;flex:none;display:flex;align-items:center;
+  justify-content:center;font-size:.86rem;background:var(--surface-2)}
+.dsh-sblock .dsh-arow{border-top:1px solid var(--line-2)}
+.dsh-sblock:first-of-type .dsh-arow{border-top:none}
+.dsh-sacts{display:flex;gap:7px;padding:0 18px 12px}
+
+/* review modal body */
+.rvw-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line-2);
+  border-radius:13px;overflow:hidden;margin-bottom:15px}
+.rvw-grid>div{background:var(--surface);padding:13px 12px;text-align:center}
+.rvw-grid .v{font-size:1.05rem;font-weight:720;letter-spacing:-.03em}
+.rvw-grid .l{font-size:.68rem;color:var(--ink-3);margin-top:3px}
+.rvw-note{font-size:.85rem;line-height:1.6;color:var(--ink-2);background:var(--surface-2);
+  border-radius:13px;padding:13px 15px}
+.rvw-want{font-size:.8rem;color:var(--ink-3);margin-top:12px}
+.rvw-want b{color:var(--ink);font-weight:660}
+.rvw-link{display:flex;align-items:center;gap:9px;margin-top:12px;padding:12px 15px;border-radius:13px;
+  border:1px solid var(--line);font-size:.85rem;font-weight:620;color:var(--accent-ink);text-decoration:none}
+.rvw-link:hover{background:var(--surface-2)}
 </style>
 </head>
 <body>
@@ -2346,7 +2453,31 @@ function taskHome(){
 }
 const AV_POOL = ['av-rod','av-c1','av-c2','av-c3','av-c4','av-c5','av-c6'];
 
-const TASK_STATUSES = ['Not Started','In Progress','Waiting on Creator','Waiting on Lewis','Waiting on Stock','Blocked','Completed'];
+/* Four states, not seven. Waiting on Creator / Lewis / Stock / Blocked were
+   four ways of saying "not moving", which meant four decisions about where a
+   card goes and no useful difference once it was there. */
+const TASK_STATUSES = ['Not Started','In Progress','Completed'];
+/* The board splits Not Started by KIND, so these are the columns you see. */
+const TASK_COLS = [
+  {k:'signal',   t:'Signal',      c:'var(--accent)'},
+  {k:'noise',    t:'Noise',       c:'var(--ink-3)'},
+  {k:'progress', t:'In Progress', c:'var(--warn-ink)'},
+  {k:'done',     t:'Completed',   c:'var(--good-ink)'}
+];
+/* Where does a task sit on the board? Status first, then kind. */
+const taskCol = t => t.status==='Completed' ? 'done'
+  : t.status==='In Progress' ? 'progress'
+  : (t.k==='noise' ? 'noise' : 'signal');
+const isSignal = t => t.k!=='noise';
+/* Due-date tag, the same logic everywhere. */
+function dueTag(t){
+  if(t.status==='Completed') return {cls:'ok', l:'Done'};
+  const d=new Date(t.due+'T00:00:00'), days=Math.round((d-TODAY)/86400000);
+  if(days<0)   return {cls:'late', l:`${Math.abs(days)}d overdue`};
+  if(days===0) return {cls:'today',l:'Today'};
+  if(days<=7)  return {cls:'week', l:'This week'};
+  return {cls:'week', l:fmtDate(t.due)};
+}
 const PRIORITIES = ['Low','Medium','High','Urgent'];
 /* Live clock — a fresh account runs on the real date, not a demo date. */
 const TODAY = (()=>{ const n=new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); })();
@@ -2581,7 +2712,7 @@ function weeklyBuckets(){
 
 /* ============ STATE ============ */
 const state = {
-  aiModel:'', imgModel:'', imgRatio:'4:5', taskWho:'all', taskPriority:'All', page:'overview', brand: Object.keys(BRANDS).length>1 ? 'all' : Object.keys(BRANDS)[0], dateRange:'This Month',
+  aiModel:'', imgModel:'', imgRatio:'4:5', taskWho:'all', taskKind:'all', page:'overview', brand: Object.keys(BRANDS).length>1 ? 'all' : Object.keys(BRANDS)[0], dateRange:'This Month',
   /* Set to your own dashboard once we know who is signed in — a shared default
      would land everyone on the same person's board. See resolveMe. */
   taskView:'kanban', taskStatusFilter:'All', taskSearch:'',
@@ -3683,9 +3814,10 @@ function taskFilterRow(){
       <option ${state.taskStatusFilter==='All'?'selected':''}>All</option>
       ${TASK_STATUSES.map(s=>`<option ${state.taskStatusFilter===s?'selected':''}>${s}</option>`).join('')}
     </select>
-    <select onchange="state.taskPriority=this.value==='All priorities'?'All':this.value;renderTasks()" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:.8rem">
-      <option ${!state.taskPriority||state.taskPriority==='All'?'selected':''}>All priorities</option>
-      ${PRIORITIES.map(p=>`<option ${state.taskPriority===p?'selected':''}>${p}</option>`).join('')}
+    <select onchange="state.taskKind=this.value;renderTasks()" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:.8rem">
+      <option value="all" ${!state.taskKind||state.taskKind==='all'?'selected':''}>Signal &amp; noise</option>
+      <option value="signal" ${state.taskKind==='signal'?'selected':''}>Signal only</option>
+      <option value="noise" ${state.taskKind==='noise'?'selected':''}>Noise only</option>
     </select>
   </div>`;
 }
@@ -3698,7 +3830,7 @@ function applyTaskFilters(list){
   else if(who==='completed') l=l.filter(t=>t.status==='Completed');
   else l=l.filter(t=>t.status!=='Completed');          /* 'Everyone' means everyone still doing something */
   if(state.taskStatusFilter&&state.taskStatusFilter!=='All') l=l.filter(t=>t.status===state.taskStatusFilter);
-  if(state.taskPriority&&state.taskPriority!=='All') l=l.filter(t=>t.priority===state.taskPriority);
+  if(state.taskKind&&state.taskKind!=='all') l=l.filter(t=>(state.taskKind==='signal')===isSignal(t));
   if(state.taskSearch){
     const q=state.taskSearch.toLowerCase();
     /* Was reading t.desc, which no task has — so every row carried the literal
@@ -3712,192 +3844,292 @@ function taskList(all){
   return taskFilterRow()+`
   <div class="card"><div class="card-b flush tbl-wrap">
     <table class="tbl"><thead><tr>
-      <th>Task</th><th>Brand</th><th>Assignee</th><th>Priority</th><th>Due</th><th>Status</th><th>Linked</th><th></th>
+      <th>Task</th><th>Assignee</th><th>Type</th><th>Due</th><th>Status</th><th>Linked</th><th></th>
     </tr></thead><tbody>
     ${list.map(t=>{
       const cr=creatorById(t.creator), pr=productById(t.product), cp=campaignById(t.campaign);
       const linked=[cr&&('👤 '+cr.name.split(' ')[0]), pr&&(pr.emoji+' '+BRAND_IDS().reduce((n,k)=>n.replace(BRANDS[k].name,''), pr.name.split('—')[0]).trim()), cp&&('🎯 '+cp.name)].filter(Boolean).slice(0,2).join(' · ');
       return `<tr class="clickable" onclick="openTaskDetail('${t.id}')">
-        <td class="main-cell" style="white-space:normal;min-width:220px"><div class="t">${esc(t.name)}</div><div class="s">${esc(t.desc.slice(0,64))}${t.desc.length>64?'…':''}</div></td>
-        <td>${brandBadge(t.brand)}</td>
+        <td class="main-cell" style="white-space:normal;min-width:220px"><div class="t">${esc(t.name)}</div><div class="s">${esc((t.desc||'').slice(0,64))}${(t.desc||'').length>64?'…':''}</div></td>
         <td>${userChip(t.assignee)}</td>
-        <td>${prioBadge(t.priority)}</td>
+        <td><span class="k-tag ${isSignal(t)?'sig':'noi'}">${isSignal(t)?'Signal':'Noise'}</span></td>
         <td style="${isOverdue(t)?'color:var(--crit-ink);font-weight:700':''}">${fmtDate(t.due)}${isOverdue(t)?' ⚠':''}</td>
         <td onclick="event.stopPropagation()"><div class="dd"><button onclick="toggleDD(event,'sdd-${t.id}')" style="all:unset;cursor:pointer">${statusBadge(t.status)}</button>
           <div class="dd-menu" id="sdd-${t.id}">${TASK_STATUSES.map(s=>`<button class="dd-item ${t.status===s?'sel':''}" onclick="setTaskStatus('${t.id}','${s}')">${s}<span class="check">✓</span></button>`).join('')}</div></div></td>
         <td style="font-size:.76rem;color:var(--ink-2)">${linked||'—'}</td>
         <td onclick="event.stopPropagation()">${t.status!=='Completed'?`<button class="btn btn-ghost btn-xs" onclick="completeTask('${t.id}')">✓ Done</button>`:''}</td>
-      </tr>`;}).join('')||`<tr><td colspan="8"><div class="empty"><div class="e-ico">✅</div>No tasks match this view</div></td></tr>`}
+      </tr>`;}).join('')||`<tr><td colspan="7"><div class="empty"><div class="e-ico">✅</div>No tasks match this view</div></td></tr>`}
     </tbody></table>
   </div></div>`;
 }
 function taskKanban(all){
-  const cols=TASK_STATUSES;
-  const colDot={'Not Started':'#98a2b3','In Progress':'#2a78d6','Waiting on Creator':'#4a3aa7','Waiting on Lewis':'#fab219','Waiting on Stock':'#e87ba4','Blocked':'#d03b3b','Completed':'#0ca30c'};
-  return `<div class="kanban">${cols.map(col=>{
-    const cards=all.filter(t=>t.status===col).sort((a,b)=>a.due.localeCompare(b.due));
-    return `<div class="kb-col" data-status="${col}" ondragover="kbDragOver(event)" ondragleave="kbDragLeave(event)" ondrop="kbDrop(event)">
-      <div class="kb-col-h"><span class="b-dot" style="background:${colDot[col]}"></span>${col}<span class="cnt">${cards.length}</span></div>
+  return `<div class="kanban">${TASK_COLS.map(col=>{
+    const cards=all.filter(t=>taskCol(t)===col.k).sort((a,b)=>a.due.localeCompare(b.due));
+    return `<div class="kb-col" data-col="${col.k}" ondragover="kbDragOver(event)" ondragleave="kbDragLeave(event)" ondrop="kbDrop(event)">
+      <div class="kb-col-h"><span class="b-dot" style="background:${col.c}"></span>${col.t}<span class="cnt">${cards.length}</span></div>
       <div class="kb-cards">
-        ${cards.map(t=>`
-          <div class="kb-card" draggable="true" data-task="${t.id}" ondragstart="kbDragStart(event)" ondragend="kbDragEnd(event)" onclick="openTaskDetail('${t.id}')">
-            <div class="t">${esc(t.name)}</div>
-            <div class="meta">${prioBadge(t.priority)}${brandBadge(t.brand)}</div>
-            <div class="foot">${userAv(t.assignee,'sm')}${t.comments.length?`<span style="font-size:.68rem;color:var(--ink-3);display:flex;align-items:center;gap:3px"><span style="width:12px;display:inline-block">${ICONS.comment}</span>${t.comments.length}</span>`:''}<span class="due ${isOverdue(t)?'over':''}">${fmtDate(t.due)}</span></div>
-          </div>`).join('')}
-      </div></div>`;}).join('')}</div>
-  <div style="font-size:.76rem;color:var(--ink-3);margin-top:8px">💡 Drag cards between columns to change status</div>`;
+        ${cards.map(kbCard).join('')}
+      </div></div>`;
+  }).join('')}</div>
+  <div style="font-size:.76rem;color:var(--ink-3);margin-top:8px">💡 Drag a card between columns · moving it between Signal and Noise re-labels the work too</div>`;
 }
-let dragTaskId=null;
-function kbDragStart(e){ dragTaskId=e.target.dataset.task; e.target.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; }
-function kbDragEnd(e){ e.target.classList.remove('dragging'); document.querySelectorAll('.kb-col').forEach(c=>c.classList.remove('drag-over')); }
-function kbDragOver(e){ e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
-function kbDragLeave(e){ e.currentTarget.classList.remove('drag-over'); }
+/* ---- drag and drop ----
+   Dropping into Signal or Noise re-labels the work as well as moving it: they
+   are the same decision, and making someone do it twice is how boards rot. */
+let KB_DRAG=null;
+function kbDragStart(e){
+  KB_DRAG=e.currentTarget.dataset.task;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed='move';
+}
+function kbDragEnd(e){
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.kb-col,.dsh-col').forEach(c=>c.classList.remove('drop-on'));
+}
+function kbDragOver(e){ e.preventDefault(); e.currentTarget.classList.add('drop-on'); }
+function kbDragLeave(e){ e.currentTarget.classList.remove('drop-on'); }
 function kbDrop(e){
-  e.preventDefault();
-  const status=e.currentTarget.dataset.status;
-  if(dragTaskId){ const t=state.tasks.find(x=>x.id===dragTaskId); if(t&&t.status!==status){ t.status=status; toast(`"${t.name.slice(0,32)}…" → ${status}`);} dragTaskId=null; renderTasks(); renderSidebar(); }
+  e.preventDefault(); e.currentTarget.classList.remove('drop-on');
+  const col=e.currentTarget.dataset.col, t=state.tasks.find(x=>x.id===KB_DRAG);
+  KB_DRAG=null;
+  if(!t||!col) return;
+  if(col==='done'){
+    t.status='Completed';
+    /* Recording WHEN is what makes on-time measurable — a due date alone cannot. */
+    t.at=TODAY_ISO;
+  } else if(col==='progress'){
+    t.status='In Progress'; delete t.at;
+  } else {
+    t.status='Not Started'; t.k=col; delete t.at;
+  }
+  tikiPush(); renderTasks();
+  toast(col==='done'
+    ? (TODAY_ISO<=t.due ? 'Done, on time' : 'Done — that one was late')
+    : `Moved to ${TASK_COLS.find(c=>c.k===col).t}`);
 }
-function taskCalendar(all){
-  const start=new Date(2026,6,27); // Mon 27 Jul
-  const days=[...Array(21)].map((_,i)=>{ const d=new Date(start); d.setDate(d.getDate()+i); return d; });
-  const dows=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  return `<div class="card"><div class="card-h"><div class="t">27 July – 16 August 2026</div>
-      <div class="right"><button class="btn btn-ghost btn-xs" onclick="toast('Previous period')">←</button><button class="btn btn-ghost btn-xs" onclick="toast('Next period')">→</button></div></div>
-    <div class="card-b"><div class="cal">
-      ${dows.map(d=>`<div class="cal-dow">${d}</div>`).join('')}
-      ${days.map(d=>{
-        const iso=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-        const isToday=iso===TODAY_ISO;
-        const dim=d.getMonth()===6&&d.getDate()<31&&!isToday?false:false;
-        const dayTasks=all.filter(t=>t.due===iso);
-        return `<div class="cal-day ${isToday?'today':''} ${d.getMonth()===6?'':''}">
-          <div class="d">${d.getDate()}${d.getDate()===1?' Aug':''}</div>
-          ${dayTasks.map(t=>`<button class="cal-task p-${t.priority.toLowerCase()}" onclick="openTaskDetail('${t.id}')" title="${esc(t.name)}">${t.status==='Completed'?'✓ ':''}${esc(t.name)}</button>`).join('')}
-        </div>`;}).join('')}
+
+/* One card, used by the board AND the dashboard so they cannot drift apart. */
+function kbCard(t){
+  const d=dueTag(t);
+  return `<div class="kb-card" draggable="true" data-task="${t.id}" ondragstart="kbDragStart(event)" ondragend="kbDragEnd(event)" onclick="openTaskDetail('${t.id}')">
+    <div class="t">${esc(t.name)}</div>
+    <div class="meta">
+      <span class="k-tag ${isSignal(t)?'sig':'noi'}">${isSignal(t)?'Signal':'Noise'}</span>
+      <span class="k-tag ${d.cls}">${d.l}</span>
     </div>
-    <div class="legend-row" style="margin-top:12px">
-      <span class="li"><span class="sw" style="background:var(--crit-soft);border:1px solid var(--crit)"></span>Urgent</span>
-      <span class="li"><span class="sw" style="background:var(--serious-soft);border:1px solid var(--serious)"></span>High</span>
-      <span class="li"><span class="sw" style="background:var(--accent-soft);border:1px solid var(--accent)"></span>Medium</span>
-      <span class="li"><span class="sw" style="background:var(--neutral-soft);border:1px solid var(--ink-3)"></span>Low</span>
-    </div></div></div>`;
+    <div class="foot">${userAv(t.assignee,'sm')}${t.comments&&t.comments.length?`<span style="font-size:.68rem;color:var(--ink-3);display:flex;align-items:center;gap:3px"><span style="width:12px;display:inline-block">${ICONS.comment}</span>${t.comments.length}</span>`:''}<span style="margin-left:auto;font-size:.68rem;color:var(--ink-3)">${esc(t.creator||'')}</span></div>
+  </div>`;
 }
+/* ============================================================================
+   THE DASHBOARD
+   Three bands: how the week has gone, what you are working on, what needs
+   chasing. Money deliberately absent — none of it is Rod's to act on.
+   ========================================================================== */
+function dshCols(){
+  if(!state.dshCols) state.dshCols={};
+  if(!state.dshCols[ME]) state.dshCols[ME]=['signal','progress','done'];
+  return state.dshCols[ME];
+}
+function dshToggleCol(k){
+  const cur=dshCols();
+  if(cur.includes(k)){
+    if(cur.length===1) return toast('Keep at least one column');
+    state.dshCols[ME]=cur.filter(x=>x!==k);
+  } else {
+    state.dshCols[ME]=TASK_COLS.map(c=>c.k).filter(x=>cur.includes(x)||x===k);
+  }
+  tikiPush(); renderTasks();
+}
+function dshCustomise(){ state.dshCust=!state.dshCust; renderTasks(); }
+
 function memberDashboard(uid){
   const u=USERS[uid];
   if(!u) return `<div class="card"><div class="empty" style="padding:50px 20px"><div class="e-ico">👥</div>That teammate is no longer on the account.</div></div>`;
-  const theirTasks=state.tasks.filter(t=>t.assignee===uid&&inBrand(t));
-  const today=theirTasks.filter(dueToday);
-  const week=theirTasks.filter(dueThisWeek);
-  const over=theirTasks.filter(isOverdue);
-  const followUp=CREATORS.filter(c=>inBrand(c)&&['Contacted','Interested','Sample Sent','Content Pending','Paused'].includes(c.stage));
-  const dispatch=CREATORS.filter(c=>inBrand(c)&&c.stage==='Sample Requested');
-  const approvals=state.tasks.filter(t=>inBrand(t)&&t.status==='Waiting on Lewis');
-  const theirCourses=COURSES.filter(c=>!c.watched);
-  const stat=(label,val,tone)=>`<div class="kpi"><div class="k-label" style="margin-bottom:6px">${label}</div><div class="k-val" style="color:${tone||'inherit'}">${val}</div></div>`;
+  const mine=state.tasks.filter(t=>t.assignee===uid&&inBrand(t));
+  const open=mine.filter(t=>t.status!=='Completed');
+  const done=mine.filter(t=>t.status==='Completed');
+  const late=open.filter(isOverdue).length;
+  const sig=open.filter(t=>taskCol(t)==='signal').length;
+
+  /* Scored on SIGNAL only. Hitting every admin deadline while the real work
+     slips is not a good week, and a number that rewards it is worse than none. */
+  const sigDone=done.filter(isSignal);
+  const onTime=sigDone.filter(t=>(t.at||t.due)<=t.due).length;
+  const lateDone=sigDone.length-onTime;
+  const pct=sigDone.length?Math.round(onTime/sigDone.length*100):0;
+  const arcCol = pct>=80?'var(--good-ink)' : pct>=55?'var(--warn-ink)' : 'var(--crit-ink)';
+
+  const nSig=done.filter(isSignal).length, nNoi=done.length-nSig, tot=Math.max(1,nSig+nNoi);
+
+  /* Streak: consecutive days where everything signal that was due got done on
+     time. Noise never counts against it. */
+  let streak=0;
+  for(let i=1;i<=14;i++){
+    const day=isoOf(new Date(TODAY.getTime()-i*864e5));
+    const due=sigDone.filter(t=>t.due===day);
+    if(!due.length) continue;
+    if(due.every(t=>(t.at||t.due)<=t.due)) streak++; else break;
+  }
+  const names=['M','T','W','T','F','S','S'];
+  let week='';
+  for(let i=6;i>=0;i--){
+    const day=isoOf(new Date(TODAY.getTime()-i*864e5));
+    const d=sigDone.filter(t=>t.due===day);
+    const cls=!d.length?'':d.every(t=>(t.at||t.due)<=t.due)?'on':'late';
+    const lab=names[(new Date(day+'T00:00:00').getDay()+6)%7];
+    week+=`<div class="dsh-day"><div class="dot ${cls}">${d.length||''}</div><div class="dl">${lab}</div></div>`;
+  }
+
+  const cols=dshCols();
+  const samples=SAMPLE_REQS.filter(x=>x.status==='pending');
+  const chase=CREATORS.filter(c=>['Contacted','Interested','Sample Sent','Content Pending','Paused'].includes(c.stage)).slice(0,4);
+  const courses=COURSES.filter(c=>!c.watched).slice(0,3);
+
   return `
-    <div class="card" style="background:linear-gradient(135deg,#0d7c54 0%,#1baf7a 100%);border:none;color:#fff;margin-bottom:16px">
-      <div class="card-b" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-        <span class="av lg ${u.av}" style="border:2.5px solid rgba(255,255,255,.4)">${u.initials}</span>
-        <div><div style="font-weight:800;font-size:1.15rem">${esc(u.short)}'s Day — ${fmtLongToday()}</div>
-        <div style="font-size:.82rem;opacity:.85">${esc(u.role)} · ${brandInfo(state.brand).name} · ${today.length} due today, ${over.length} overdue</div></div>
-        <div style="margin-left:auto;display:flex;gap:8px">
-          <button class="btn btn-sm" style="background:rgba(255,255,255,.16);color:#fff" onclick="toast('Nudge sent to ${esc(u.short)}')">👋 Nudge ${esc(u.short)}</button>
-          <button class="btn btn-sm" style="background:#fff;color:#0d7c54" onclick="state.taskView='u:${uid}';renderTasks()">View all tasks</button>
-        </div>
+  <div class="dsh-banner">
+    <div class="dsh-seg">
+      <div class="dsh-ring">
+        <svg width="64" height="64"><circle cx="32" cy="32" r="27" fill="none" stroke="var(--line-2)" stroke-width="7"/>
+          <circle cx="32" cy="32" r="27" fill="none" stroke="${arcCol}" stroke-width="7" stroke-linecap="round"
+            stroke-dasharray="170" stroke-dashoffset="${170-(170*pct/100)}" transform="rotate(-90 32 32)"/></svg>
+        <div class="mid">${sigDone.length?pct+'%':'—'}</div>
+      </div>
+      <div class="dsh-lb"><b>Signal on time</b>Scored on signal only</div>
+    </div>
+    <div class="dsh-seg grow"><div class="dsh-week">${week}</div></div>
+    <div class="dsh-seg">
+      <div style="flex:1;min-width:140px">
+        <div class="dsh-mix"><i style="width:${nSig/tot*100}%;background:var(--accent)"></i><i style="width:${nNoi/tot*100}%;background:var(--ink-3);opacity:.45"></i></div>
+        <div class="dsh-mixl"><span><b>${nSig}</b> signal</span><span><b>${nNoi}</b> noise</span></div>
       </div>
     </div>
-    <div class="kpi-grid" style="margin-bottom:16px">
-      ${stat('Due Today',today.length, today.length?'var(--serious)':'var(--good)')}
-      ${stat('Due This Week',week.length)}
-      ${stat('Overdue',over.length, over.length?'var(--crit)':'var(--good)')}
-      ${stat('Courses To Watch',theirCourses.length,'var(--accent-ink)')}
+    <div class="dsh-seg">
+      <div class="dsh-stat"><div class="v ok">${onTime}</div><div class="l">on time</div></div>
+      <div class="dsh-stat"><div class="v late">${lateDone}</div><div class="l">late</div></div>
+      <div class="dsh-streak"><span class="ico">${streak>=3?'🔥':streak?'✨':'🌱'}</span>
+        <div class="dsh-lb"><b>${streak?streak+' day streak':'No streak yet'}</b>${streak?'signal, all on time':'finish a day clean to start'}</div></div>
     </div>
-    <div class="grid g-2">
-      <div class="card">
-        <div class="card-h"><div class="t">🔥 Today & Overdue</div></div>
-        <div class="card-b flush">
-          ${[...over,...today.filter(t=>!over.includes(t))].map(t=>`
-            <div class="feed-item" style="cursor:pointer" onclick="openTaskDetail('${t.id}')">
-              <div class="fi-body"><div class="fi-top"><span class="fi-title">${esc(t.name)}</span>${isOverdue(t)?'<span class="badge bg-crit">Overdue</span>':'<span class="badge bg-serious">Today</span>'}</div>
-              <div class="fi-meta">${prioBadge(t.priority)}${brandBadge(t.brand)}<span>due ${fmtDate(t.due)}</span></div></div>
-              <button class="btn btn-ghost btn-xs" style="align-self:center" onclick="event.stopPropagation();completeTask('${t.id}')">✓ Done</button>
-            </div>`).join('')||'<div class="empty">🎉 Nothing due or overdue today</div>'}
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-h"><div class="t">👥 Creators Needing Follow-up</div><span class="badge bg-warn">${followUp.length}</span></div>
-        <div class="card-b flush">
-          ${followUp.slice(0,5).map(c=>`
-            <div class="rank-item" style="cursor:pointer" onclick="openCreatorDetail('${c.id}')">
-              <span class="av ${c.av}">${c.name.split(' ').map(w=>w[0]).join('')}</span>
-              <div class="ri-meta"><div class="n">${c.name}</div><div class="s">${c.handle} · last contact ${fmtDate(c.lastContact)}</div></div>
-              ${stageBadge(c.stage)}
-            </div>`).join('')}
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-h"><div class="t">📦 Samples Needing Dispatch</div></div>
-        <div class="card-b flush">
-          ${dispatch.map(c=>`
-            <div class="rank-item"><span class="av ${c.av}">${c.name.split(' ').map(w=>w[0]).join('')}</span>
-              <div class="ri-meta"><div class="n">${c.name}</div><div class="s">${brandInfo(c.brand).name} sample requested</div></div>
-              <button class="btn btn-soft btn-xs" onclick="toast('Marked as dispatched (prototype)')">Mark dispatched</button>
-            </div>`).join('')||'<div class="empty">No samples waiting</div>'}
+  </div>
 
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-h"><div class="t">🎓 Courses To Watch</div><div class="right"><button class="link-btn" onclick="navTo('courses')">All courses →</button></div></div>
-        <div class="card-b flush">
-          ${COURSES.filter(c=>!c.watched).map(c=>`
-            <div class="rank-item"><span style="width:14px;display:inline-block;color:var(--accent-ink)">${ICONS.video}</span>
-              <div class="ri-meta"><div class="n">${esc(c.title)}</div><div class="s">${c.duration} · uploaded ${c.uploaded}</div></div>
-              <button class="btn btn-soft btn-xs" onclick="openCourseDetail('${c.id}')">Watch</button></div>`).join('')||'<div class="empty">🎉 All courses watched</div>'}
-        </div>
-      </div>
-    </div>`;
+  <div class="card" style="margin-bottom:16px">
+    <div class="dsh-ph"><span class="t">Your work</span><span class="n">${open.length} open</span>
+      <button class="link-btn" style="margin-left:auto" onclick="dshCustomise()">${state.dshCust?'Done':'Customise'}</button></div>
+    ${state.dshCust?`<div class="dsh-cust"><span class="lbl">Columns</span>${
+      TASK_COLS.map(c=>`<button class="dsh-tog ${cols.includes(c.k)?'on':''}" onclick="dshToggleCol('${c.k}')">${cols.includes(c.k)?'✓':'＋'} ${c.t}</button>`).join('')
+    }</div>`:''}
+    <div class="dsh-board c${cols.length}">
+      ${cols.map(k=>{
+        const c=TASK_COLS.find(x=>x.k===k);
+        const list=mine.filter(t=>taskCol(t)===k).sort((a,b)=>a.due.localeCompare(b.due));
+        return `<div class="dsh-col" data-col="${k}" ondragover="kbDragOver(event)" ondragleave="kbDragLeave(event)" ondrop="kbDrop(event)">
+          <div class="dsh-colh"><span class="bar" style="background:${c.c}"></span><span class="dt">${c.t}</span>
+            <span class="dn">${list.length}</span></div>
+          ${list.map(kbCard).join('')||'<div class="dsh-empty">Nothing here</div>'}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>
+
+  <div class="dsh-actions">
+    <div class="card">
+      <div class="dsh-ph"><span class="t">Samples to review</span><span class="n">${samples.length}</span></div>
+      ${samples.length?samples.slice(0,4).map(sq=>`
+        <div class="dsh-sblock">
+          <div class="dsh-arow"><span class="av ${sq.av||''}">${esc((sq.name||'?').split(' ').map(w=>w[0]).join(''))}</span>
+            <div style="flex:1;min-width:0"><div class="a-t">${esc(sq.name||'Unknown')}</div>
+              <div class="a-m">${esc(sq.product||'sample')} · ${esc(sq.followers||'')} followers</div></div></div>
+          <div class="dsh-sacts">
+            <button class="btn btn-primary btn-sm" style="flex:1" onclick="openSampleReview('${sq.id}')">Review</button>
+            <button class="btn btn-ghost btn-sm" style="flex:1;color:var(--crit-ink)" onclick="sampleDecide('${sq.id}',false);renderTasks()">Decline</button>
+          </div></div>`).join(''):'<div class="dsh-empty" style="padding:20px">Nothing waiting on you.</div>'}
+    </div>
+
+    <div class="card">
+      <div class="dsh-ph"><span class="t">Creators to chase</span><span class="n">${chase.length}</span></div>
+      ${chase.length?chase.map(c=>`<div class="dsh-arow">${userAvatarLike(c)}
+        <div style="flex:1;min-width:0"><div class="a-t">${esc(c.handle||c.name)}</div>
+          <div class="a-m">${esc(c.stage)}</div></div>
+        <button class="link-btn" onclick="navTo('creators')">Follow up</button></div>`).join('')
+        :'<div class="dsh-empty" style="padding:20px">Everyone is up to date.</div>'}
+    </div>
+
+    <div class="card">
+      <div class="dsh-ph"><span class="t">Courses to watch</span><span class="n">${courses.length}</span></div>
+      ${courses.length?courses.map(c=>`<div class="dsh-arow">
+        <span class="dsh-cav">🎓</span>
+        <div style="flex:1;min-width:0"><div class="a-t">${esc(c.title||'Course')}</div>
+          <div class="a-m">${esc(c.duration||'')}</div></div>
+        <button class="link-btn" onclick="navTo('courses')">Watch</button></div>`).join('')
+        :'<div class="dsh-empty" style="padding:20px">All watched.</div>'}
+    </div>
+  </div>`;
 }
 
-/* ---- Task modals ---- */
-function setTaskStatus(id,s){
-  const t=state.tasks.find(x=>x.id===id); t.status=s; closeAllDD();
-  toast(`Status → ${s}`); renderPage(state.page); renderSidebar();
+/* ---- sample review ---------------------------------------------------------
+   A sample is stock going out of the door, so it is a decision, not a chore.
+   Show what the creator has actually done before saying yes. */
+function openSampleReview(id){
+  const sq=SAMPLE_REQS.find(x=>x.id===id); if(!sq) return;
+  openModal(modalShell(
+    `<span style="display:flex;align-items:center;gap:11px"><span class="av lg ${sq.av||''}">${esc((sq.name||'?').split(' ').map(w=>w[0]).join(''))}</span>
+      <span>${esc(sq.name||'Unknown')}<div style="font-size:.75rem;font-weight:500;color:var(--ink-3)">
+        ${esc(sq.handle||'')} · ${esc(sq.niche||'')}</div></span></span>`,
+    `<div class="rvw-grid">
+       <div><div class="v">${esc(sq.followers||'—')}</div><div class="l">followers</div></div>
+       <div><div class="v">${esc(sq.avgViews||'—')}</div><div class="l">avg views</div></div>
+       <div><div class="v">${esc(sq.er||'—')}</div><div class="l">engagement</div></div>
+       <div><div class="v">${sq.fit!=null?sq.fit:'—'}</div><div class="l">fit score</div></div>
+     </div>
+     <div class="rvw-note" style="${(sq.fit!=null&&sq.fit<5)?'background:var(--crit-soft);color:var(--crit-ink)':''}">${esc(sq.signal||'No notes on this request.')}</div>
+     <div class="rvw-want">They want <b>${esc(sq.product||'a sample')}</b>${sq.requested?` · requested ${esc(sq.requested)}`:''}</div>
+     ${sq.handle?`<a class="rvw-link" href="https://www.tiktok.com/${esc(sq.handle)}" target="_blank" rel="noopener">↗ Watch their content on TikTok</a>`:''}`,
+    `<button class="btn btn-ghost" style="color:var(--crit-ink)" onclick="closeModal();sampleDecide('${id}',false);renderTasks()">Decline</button>
+     <button class="btn btn-primary" onclick="closeModal();sampleDecide('${id}',true);renderTasks()">Approve &amp; send</button>`));
 }
-function completeTask(id){
-  const t=state.tasks.find(x=>x.id===id); t.status='Completed';
-  toast(`✓ "${t.name.slice(0,36)}" completed`); renderPage(state.page); renderSidebar();
-}
+
+let TM_KIND='signal';
+function tmKind(k){ TM_KIND=k;
+  $('tmSig')?.classList.toggle('on',k==='signal');
+  $('tmNoi')?.classList.toggle('on',k==='noise'); }
 function openTaskModal(editId){
   const t=editId? state.tasks.find(x=>x.id===editId) : null;
   openModal(modalShell(t?'Edit Task':'Create Task',`
     <div class="form-grid">
       <div class="field full"><label>Task name</label><input id="tmName" value="${t?esc(t.name):''}" placeholder="e.g. Chase creator for draft video"></div>
       <div class="field full"><label>Description</label><textarea id="tmDesc" placeholder="What needs to happen, and what does done look like?">${t?esc(t.desc):''}</textarea></div>
-      <div class="field"><label>Brand</label><select id="tmBrand">${brandOptions(t?t.brand:defaultBrand(),'All Brands')}</select></div>
+
       <div class="field"><label>Assigned to</label><select id="tmWho">${Object.values(USERS).map(u=>`<option value="${u.id}" ${t&&t.assignee===u.id?'selected':''}>${u.short}</option>`).join('')}</select></div>
-      <div class="field"><label>Priority</label><select id="tmPrio">${PRIORITIES.map(p=>`<option ${t&&t.priority===p?'selected':''}>${p}</option>`).join('')}</select></div>
+      <div class="field" style="grid-column:1/-1"><label>Signal or noise</label>
+        <div class="sn-pick">
+          <button type="button" class="sn-b ${!t||t.k!=='noise'?'on':''}" id="tmSig" onclick="tmKind('signal')">
+            <span class="sh"><span class="dot" style="background:var(--accent)"></span>Signal</span>
+            <span class="sd">Moves the business forward</span></button>
+          <button type="button" class="sn-b noiz ${t&&t.k==='noise'?'on':''}" id="tmNoi" onclick="tmKind('noise')">
+            <span class="sh"><span class="dot" style="background:var(--ink-3)"></span>Noise</span>
+            <span class="sd">Has to happen, changes nothing on its own</span></button>
+        </div></div>
       <div class="field"><label>Due date</label><input id="tmDue" type="date" value="${t?t.due:isoOf(new Date(TODAY.getTime()+3*864e5))}"></div>
       <div class="field"><label>Status</label><select id="tmStatus">${TASK_STATUSES.map(s=>`<option ${t&&t.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
       <div class="field"><label>Related creator</label><select id="tmCreator"><option value="">None</option>${CREATORS.map(c=>`<option value="${c.id}" ${t&&t.creator===c.id?'selected':''}>${c.name}</option>`).join('')}</select></div>
-      <div class="field"><label>Related product</label><select id="tmProduct"><option value="">None</option>${PRODUCTS.map(p=>`<option value="${p.id}" ${t&&t.product===p.id?'selected':''}>${p.name}</option>`).join('')}</select></div>
+
       <div class="field full"><label>Notes</label><textarea id="tmNotes" style="min-height:52px">${t?esc(t.notes):''}</textarea></div>
       <div class="field full"><label>Attachment / completion link</label><input id="tmLink" value="${t?esc(t.link):''}" placeholder="https://…"><div class="hint">Paste a drive link, video link, or proof of completion</div></div>
     </div>`,
     `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
      <button class="btn btn-primary" onclick="saveTask('${editId||''}')">${t?'Save changes':'Create task'}</button>`,'wide'));
-  if(t){ $('tmBrand').value=t.brand; $('tmWho').value=t.assignee; }
+  TM_KIND = t && t.k==='noise' ? 'noise' : 'signal';
+  if(t){ $('tmWho').value=t.assignee; }
 }
 function saveTask(editId){
   const name=$('tmName').value.trim()||'Untitled task';
   if(editId){
     const t=state.tasks.find(x=>x.id===editId);
-    Object.assign(t,{name,desc:$('tmDesc').value,brand:$('tmBrand').value,assignee:$('tmWho').value,priority:$('tmPrio').value,
-      due:$('tmDue').value,status:$('tmStatus').value,creator:$('tmCreator').value,product:$('tmProduct').value,notes:$('tmNotes').value,link:$('tmLink').value});
+    Object.assign(t,{name,desc:$('tmDesc').value,assignee:$('tmWho').value,k:TM_KIND,
+      due:$('tmDue').value,status:$('tmStatus').value,creator:$('tmCreator').value,notes:$('tmNotes').value,link:$('tmLink').value});
     toast('Task updated');
   } else {
-    state.tasks.unshift({id:'t'+(state.tasks.length+100),name,desc:$('tmDesc').value,brand:$('tmBrand').value,assignee:$('tmWho').value,
-      priority:$('tmPrio').value,due:$('tmDue').value,status:$('tmStatus').value,creator:$('tmCreator').value,product:$('tmProduct').value,
+    state.tasks.unshift({id:'t'+(state.tasks.length+100),name,desc:$('tmDesc').value,brand:defaultBrand(),assignee:$('tmWho').value,
+      k:TM_KIND,due:$('tmDue').value,status:$('tmStatus').value,creator:$('tmCreator').value,
       campaign:'',notes:$('tmNotes').value,link:$('tmLink').value,comments:[]});
     toast('Task created');
   }
@@ -3907,7 +4139,7 @@ function openTaskDetail(id){
   const t=state.tasks.find(x=>x.id===id);
   const cr=creatorById(t.creator), pr=productById(t.product), cp=campaignById(t.campaign);
   openModal(modalShell(esc(t.name),`
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${statusBadge(t.status)}${prioBadge(t.priority)}${brandBadge(t.brand)}${isOverdue(t)?'<span class="badge bg-crit">⚠ Overdue</span>':''}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${statusBadge(t.status)}<span class="k-tag ${isSignal(t)?'sig':'noi'}">${isSignal(t)?'Signal':'Noise'}</span>${isOverdue(t)?'<span class="badge bg-crit">⚠ Overdue</span>':''}</div>
     <p style="font-size:.87rem;color:var(--ink-2);line-height:1.55;margin-bottom:14px">${esc(t.desc)}</p>
     <div class="detail-kv" style="margin-bottom:14px">
       <span class="k">Assigned to</span><span class="v">${userChip(t.assignee)}</span>
@@ -9847,7 +10079,7 @@ function sampleDecide(id, ok){
   s.status=ok?'approved':'rejected';
   if(ok){
     state.tasks.unshift({ id:'t'+(state.tasks.length+300), name:`Dispatch sample — ${s.name} (${s.product})`, desc:'Auto-created from sample approval', brand:s.brand,
-      assignee: teammates()[0]||ME, priority:'High', due:isoOf(new Date(TODAY.getTime()+3*864e5)), status:'Not Started', creator:'', product:'', campaign:'', notes:'Tracked 24 as standard', link:'', comments:[] });
+      assignee: teammates()[0]||ME, k:'signal', due:isoOf(new Date(TODAY.getTime()+3*864e5)), status:'Not Started', creator:'', product:'', campaign:'', notes:'Tracked 24 as standard', link:'', comments:[] });
     toast(`Approved — dispatch task created for ${USERS[teammates()[0]||ME].short}`);
   } else toast('Rejected — creator notified via TikTok');
   renderSidebar(); renderOutreach();
@@ -14142,7 +14374,7 @@ function collectTikiState(){
      in the back office is the thing that actually runs. */
   /* v13 adds projects — instructions and knowledge the assistant works inside. */
   /* v15 adds the saved static-ad library. */
-  return { v:16, statics:STATIC_LIB, imgModel:state.imgModel||'', imgRatio:state.imgRatio||'4:5', aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  return { v:17, dshCols:state.dshCols||{}, statics:STATIC_LIB, imgModel:state.imgModel||'', imgRatio:state.imgRatio||'4:5', aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
@@ -14238,8 +14470,24 @@ const MIGRATIONS = [
   { id:'2026-08-comment-authors', fn:mig_commentAuthors },
   { id:'2026-08-merge-founder',   fn:mig_mergeDuplicateFounder },
   { id:'2026-08-task-title-field',fn:mig_taskTitleField },
-  { id:'2026-08-notif-timestamps',fn:mig_notifTimestamps }
+  { id:'2026-08-notif-timestamps',fn:mig_notifTimestamps },
+  { id:'2026-08-signal-noise',    fn:mig_signalNoise }
 ];
+
+/* Seven statuses collapse to three, and every task gains a signal/noise mark.
+   Old priority is the only honest signal we have for the split: Urgent and High
+   were the things that actually mattered. Everything waiting on someone else is
+   In Progress — the work has started, it is just not with you. */
+function mig_signalNoise(){
+  const LEGACY_PROGRESS = ['Waiting on Creator','Waiting on Lewis','Waiting on Stock','Blocked','In Review'];
+  (state.tasks||[]).forEach(t=>{
+    if(!t.k) t.k = (t.priority==='Urgent'||t.priority==='High') ? 'signal' : 'noise';
+    if(t.status==='Completed'){ if(!t.at) t.at = t.due; return; }
+    if(LEGACY_PROGRESS.includes(t.status)) t.status='In Progress';
+    else if(!TASK_STATUSES.includes(t.status)) t.status='Not Started';
+  });
+  return true;
+}
 function tikiMigrate(){
   if(!Array.isArray(state.migrations)) state.migrations=[];
   const ran=[];
@@ -14266,6 +14514,7 @@ function applyTikiState(d){
   replaceArr(CHATS,d.chats); replaceArr(PROFIT_VENDORS,d.profitVendors);
   if(Array.isArray(d.personal)) PERSONAL_OUTREACH=d.personal;
   if(Array.isArray(d.statics)) replaceArr(STATIC_LIB,d.statics);
+  if(d.dshCols && typeof d.dshCols==='object') state.dshCols=d.dshCols;
   if(typeof d.imgModel==='string') state.imgModel=d.imgModel;
   if(typeof d.imgRatio==='string') state.imgRatio=d.imgRatio;
   if(typeof d.aiModel==='string') state.aiModel=d.aiModel;
