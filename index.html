@@ -6891,6 +6891,66 @@ const RT = { ws:null, topic:null, ref:0, joined:false, hb:null, sweep:null,
 const RT_COLOURS = ['#2a78d6','#1baf7a','#d1495b','#8b5cf6','#eda100','#0ea5e9','#ec4899'];
 const rtColour = id => RT_COLOURS[[...String(id)].reduce((n,c)=>n+c.charCodeAt(0),0)%RT_COLOURS.length];
 const rtRef = () => String(++RT.ref);
+/* ---------------------------------------------------------------------------
+   WORKSPACE CHANNEL
+   The existing socket is per-brief and carries cursors only, so it dies the
+   moment you leave the editor. This one stays up for the whole session and
+   carries a single message: "the workspace moved to revision N". Anyone behind
+   pulls immediately, which is what makes a change on one machine appear on
+   another within about a second.
+   ------------------------------------------------------------------------- */
+const WS = { ws:null, joined:false, hb:null, retry:0, closing:false };
+const WS_TOPIC = 'realtime:tiki-workspace';
+
+function wsSend(o){ try{ if(WS.ws&&WS.ws.readyState===1) WS.ws.send(JSON.stringify(o)); }catch(e){} }
+
+function rtWorkspaceConnect(){
+  if(!tikiSession||!tikiSession.at) return;
+  if(WS.ws && (WS.ws.readyState===0||WS.ws.readyState===1)) return;
+  WS.closing=false;
+  const url=`${TIKI_CFG.url.replace(/^http/,'ws')}/realtime/v1/websocket?apikey=${TIKI_CFG.key}&vsn=1.0.0`;
+  let ws; try{ ws=new WebSocket(url); }catch(e){ return; }
+  WS.ws=ws; WS.joined=false;
+
+  ws.onopen=()=>{
+    WS.retry=0;
+    wsSend({ topic:WS_TOPIC, event:'phx_join', ref:rtRef(), payload:{
+      config:{ broadcast:{ self:false, ack:false }, private:false },
+      access_token: tikiSession.at } });
+    WS.hb=setInterval(()=>wsSend({topic:'phoenix',event:'heartbeat',ref:rtRef(),payload:{}}), 25000);
+  };
+  ws.onmessage=ev=>{
+    let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+    if(m.event==='phx_reply'&&m.topic===WS_TOPIC){
+      if(m.payload&&m.payload.status==='ok') WS.joined=true;
+      return;
+    }
+    if(m.event!=='broadcast'||!m.payload) return;
+    if(m.payload.event!=='state') return;
+    const inner=m.payload.payload||{};
+    if(inner.by===TIKI_TAB) return;                 /* our own echo */
+    if(Number(inner.rev||0) <= TIKI_REV) return;    /* already have it */
+    tikiRefetch(`${whoName(inner.who)||'Someone'} made a change`);
+  };
+  ws.onclose=()=>{
+    clearInterval(WS.hb); WS.joined=false; WS.ws=null;
+    if(WS.closing) return;
+    /* Back off rather than hammering a socket that is refusing us. */
+    const wait=Math.min(20000, 1000*Math.pow(2, WS.retry++));
+    setTimeout(rtWorkspaceConnect, wait);
+  };
+  ws.onerror=()=>{ try{ ws.close(); }catch(e){} };
+}
+/* Distinguishes THIS tab from another tab of the same signed-in person, which a
+   user id cannot do — and two tabs of one account is exactly our problem. */
+const TIKI_TAB = 't'+Math.random().toString(36).slice(2,10);
+
+function rtBroadcastState(){
+  if(!WS.joined) return;
+  wsSend({ topic:WS_TOPIC, event:'broadcast', ref:rtRef(), payload:{
+    event:'state', payload:{ rev:TIKI_REV, by:TIKI_TAB, who:ME } } });
+}
+
 function rtSend(o){ try{ if(RT.ws&&RT.ws.readyState===1) RT.ws.send(JSON.stringify(o)); }catch(e){} }
 
 function rtConnect(briefId){
@@ -13709,12 +13769,28 @@ function applyTikiState(d){
   }
 }
 function tikiDirty(){ /* autosave loop picks changes up */ }
+/* ============================================================================
+   SYNC
+   This used to be: every tab writes the WHOLE workspace over whatever is there,
+   every four seconds, without checking whether anyone else had written since it
+   loaded. Two tabs open meant a write war, and the slower one silently flattened
+   the other's work — which is exactly how Rod lost an afternoon.
+
+   Two changes fix it, and together they give live updating as a side effect:
+     · a revision number, so a tab holding an old copy is REFUSED, not obeyed
+     · a broadcast after every successful write, so other devices pull at once
+   ========================================================================== */
+let TIKI_REV = 0;
+
 async function tikiPull(){
-  const r=await tikiFetch('/rest/v1/tiki_state?key=eq.app&select=value');
+  const r=await tikiFetch('/rest/v1/tiki_state?key=eq.app&select=value,rev');
   if(!r.ok) throw new Error('load failed');
   const rows=await r.json();
-  if(rows.length){ applyTikiState(rows[0].value); tikiLastPushed=JSON.stringify(collectTikiState()); }
-  else tikiLastPushed='';   // first run — seed data will be pushed
+  if(rows.length){
+    TIKI_REV = Number(rows[0].rev)||0;
+    applyTikiState(rows[0].value);
+    tikiLastPushed=JSON.stringify(collectTikiState());
+  } else { TIKI_REV=0; tikiLastPushed=''; }   // first run — seed data will be pushed
 }
 let TIKI_LOADED=false;   // no successful pull yet -> pushing would destroy data
 async function tikiPush(){
@@ -13724,13 +13800,59 @@ async function tikiPush(){
   if(s===tikiLastPushed) return;
   tikiSaving=true; syncStatus('saving','Saving…');
   try{
-    const r=await tikiFetch('/rest/v1/tiki_state?on_conflict=key',{ method:'POST',
-      headers:{ Prefer:'resolution=merge-duplicates' },
-      body:JSON.stringify({ key:'app', value:JSON.parse(s), updated_at:new Date().toISOString() }) });
-    if(r.ok){ tikiLastPushed=s; syncStatus('', 'Synced · '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})); }
+    /* Write only if the server is still on the revision we loaded. If someone
+       else has written since, this matches zero rows and changes nothing. */
+    const r=await tikiFetch(`/rest/v1/tiki_state?key=eq.app&rev=eq.${TIKI_REV}`,{ method:'PATCH',
+      headers:{ Prefer:'return=representation' },
+      body:JSON.stringify({ value:JSON.parse(s), rev:TIKI_REV+1,
+        updated_at:new Date().toISOString() }) });
+
+    if(r.ok){
+      const rows=await r.json().catch(()=>[]);
+      if(rows.length){
+        TIKI_REV=Number(rows[0].rev)||TIKI_REV+1;
+        tikiLastPushed=s;
+        syncStatus('', 'Synced · '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}));
+        rtBroadcastState();          // tell every other device to catch up
+      } else {
+        /* Somebody else got there first. Take THEIR copy rather than stamping
+           over it — at most four seconds of local work is redone, instead of
+           however long they have been editing. */
+        tikiSaving=false;
+        await tikiRefetch('Someone else saved — catching up');
+        return;
+      }
+    }
+    else if(r.status===404 || r.status===400){
+      /* No row yet (first ever run) — create it. */
+      const c=await tikiFetch('/rest/v1/tiki_state?on_conflict=key',{ method:'POST',
+        headers:{ Prefer:'resolution=merge-duplicates' },
+        body:JSON.stringify({ key:'app', value:JSON.parse(s), rev:1,
+          updated_at:new Date().toISOString() }) });
+      if(c.ok){ TIKI_REV=1; tikiLastPushed=s; syncStatus('','Synced'); rtBroadcastState(); }
+      else syncStatus('error','Save failed — retrying');
+    }
     else syncStatus('error','Save failed — retrying');
   } catch(e){ syncStatus('error','Offline — will retry'); }
   tikiSaving=false;
+}
+
+/* Reload from the server and repaint. Used when we are behind, either because
+   another device wrote or because it told us it did. */
+let TIKI_REFETCHING=false;
+async function tikiRefetch(why){
+  if(TIKI_REFETCHING||!TIKI_LOADED) return;
+  TIKI_REFETCHING=true;
+  try{
+    syncStatus('saving', why||'Updating…');
+    await tikiPull();
+    /* Repaint whatever is on screen so the change is visible immediately. */
+    renderBrandUI(); renderSidebar(); renderNotifs();
+    if(state.briefId && !state.brf.present) renderBriefEditor();
+    else renderPage(state.page);
+    syncStatus('', 'Synced · '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}));
+  }catch(e){ syncStatus('error','Could not refresh'); }
+  TIKI_REFETCHING=false;
 }
 async function tikiEnter(inviteType){
   $('gate').classList.add('hidden');
@@ -13745,6 +13867,12 @@ async function tikiEnter(inviteType){
     /* Repairs run here — after the load, before the autosave starts — so the
        corrected state is what gets written back. */
     resolveMe();
+    rtWorkspaceConnect();
+    /* A tab that has been in the background is the one most likely to be stale,
+       so it checks the moment you look at it again rather than waiting. */
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.visibilityState==='visible'){ rtWorkspaceConnect(); tikiRefetch('Checking for changes'); }
+    });
     brfAutoTaskSweep();   /* unanswered comments reach the board without a click */
     const ran=tikiMigrate();
     if(ran.length){ tikiPush(); console.info('Applied migrations:', ran.join(', ')); }
