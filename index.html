@@ -1620,6 +1620,24 @@ body:not(.dark) .asx-orb::before{opacity:.30}
   border-radius:0 0 12px 12px}
 .th-resolve:hover{background:var(--good-soft)}
 .brf-pin.resolved{opacity:.45}
+.img-btn.on{background:var(--violet-soft);border-color:var(--violet-ink);color:var(--violet-ink)}
+.img-btn #imgBtnLbl:empty{display:none}
+.img-ratios{display:flex;gap:5px;padding:4px 9px 8px}
+.img-ratio{flex:1;padding:6px 4px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);
+  font-size:.68rem;font-weight:700;color:var(--ink-2);cursor:pointer;font-family:inherit}
+.img-ratio.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.img-gen{border:1px solid var(--violet-ink);background:var(--violet-soft);border-radius:14px;padding:13px 15px}
+.ig-h{display:flex;align-items:center;gap:9px;font-size:.85rem;font-weight:650;color:var(--violet-ink)}
+.ig-sub{font-size:.75rem;color:var(--ink-3);margin-top:5px}
+.ig-spin{width:14px;height:14px;border:2px solid var(--violet-soft);border-top-color:var(--violet-ink);
+  border-radius:50%;animation:asxsp .8s linear infinite;flex:none}
+.img-done{border:1px solid var(--line-2);border-radius:14px;overflow:hidden;background:var(--surface-2);
+  max-width:340px}
+.img-done img{width:100%;display:block}
+.ig-acts{display:flex;gap:7px;padding:10px}
+.ig-acts .bai-act{text-decoration:none;display:inline-flex;align-items:center}
+.img-fail{border:1px solid var(--crit-ink);background:var(--crit-soft);color:var(--crit-ink);
+  border-radius:12px;padding:11px 13px;font-size:.82rem;line-height:1.5}
 /* ---- Static Ads ---- */
 .sa-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .sa-filters .fi{width:auto;min-width:150px;flex:0 1 auto}
@@ -2558,7 +2576,7 @@ function weeklyBuckets(){
 
 /* ============ STATE ============ */
 const state = {
-  aiModel:'', page:'overview', brand: Object.keys(BRANDS).length>1 ? 'all' : Object.keys(BRANDS)[0], dateRange:'This Month',
+  aiModel:'', imgModel:'', imgRatio:'4:5', page:'overview', brand: Object.keys(BRANDS).length>1 ? 'all' : Object.keys(BRANDS)[0], dateRange:'This Month',
   taskView:'kanban', taskStatusFilter:'All', taskSearch:'',
   creatorFilter:'all', creatorStage:'All', creatorSearch:'', briefFolder:null,
   /* Videos. videoBasis is the toggle Lewis asked for:
@@ -11295,6 +11313,9 @@ function asxToggle(what){
 function asxSend(){
   const ta=$('asxTa'); const q=(ta?.value||'').trim(); if(!q) return;
   ta.value=''; ta.style.height='auto';
+  /* With an image model switched on, the composer draws instead of answering.
+     imgGenerate pushes the user's line itself, so it is not pushed twice. */
+  if(state.imgModel){ imgGenerate(q); return; }
   aiPush('me', esc(q));
   if(AI.cloud!==false) aiCloudRespond(q); else aiTyping(()=>aiRespond(q));
 }
@@ -11313,6 +11334,118 @@ function asxThreadHTML(){
         <div class="body">${m.html}</div></div>`;
     }).join('')}</div>`;
 }
+/* ============================================================================
+   IMAGE GENERATION
+   Turning a model on changes what the composer DOES: your message becomes the
+   image prompt rather than a question. Turning it off puts you back to chat.
+   That is the whole mental model — no separate page, no mode to remember.
+   ========================================================================== */
+const IMG_MODELS = [
+  { id:'',                name:'Off',             note:'Chat with the assistant as normal' },
+  { id:'nano-banana-2',   name:'Nano Banana 2',   note:'Best text, faster — the default for ads' },
+  { id:'nano-banana-pro', name:'Nano Banana Pro', note:'Richer light and texture, slower and dearer' }
+];
+const IMG_RATIOS = [['4:5','4:5 feed'],['1:1','Square'],['9:16','Story'],['16:9','Wide']];
+const imgModelName = id => (IMG_MODELS.find(m=>m.id===id)||IMG_MODELS[0]).name;
+
+function imgSetModel(id){
+  state.imgModel=id; closeAllDD(); tikiPush();
+  if(state.page==='assistant') renderAssistant();
+  toast(id?`${imgModelName(id)} — your next message draws an image`:'Image generation off');
+}
+function imgSetRatio(r){
+  state.imgRatio=r; closeAllDD(); tikiPush();
+  if(state.page==='assistant') renderAssistant();
+}
+function imgMenuHTML(){
+  return `<div class="dd-label">Image generation</div>`+
+    IMG_MODELS.map(m=>`<button class="dd-item ${(state.imgModel||'')===m.id?'sel':''}" onclick="imgSetModel('${m.id}')">
+      <span style="flex:1;min-width:0"><span class="pj-n">${m.name}</span><span class="pj-d">${m.note}</span></span>
+      <span class="check">&#10003;</span></button>`).join('')+
+    (state.imgModel?`<div class="pj-sep"></div><div class="dd-label">Shape</div>
+      <div class="img-ratios">${IMG_RATIOS.map(([v,l])=>
+        `<button class="img-ratio ${(state.imgRatio||'4:5')===v?'on':''}" onclick="imgSetRatio('${v}')">${l}</button>`).join('')}</div>`:'')+
+    `<div class="mdl-foot">While a model is on, whatever you type is drawn rather than answered.
+      Mention a saved ad ID to borrow its layout.</div>`;
+}
+
+/* Generation is asynchronous — create a task, then poll. The thread shows it
+   working so nothing looks frozen for the half minute it takes. */
+async function imgGenerate(prompt){
+  const model=state.imgModel; if(!model) return;
+  const id='g'+Math.random().toString(36).slice(2,8);
+
+  /* A saved ad ID in the prompt pulls that ad in as the layout reference —
+     which is the entire point of keeping the library. */
+  let refs=[], usedRef=null;
+  const m=prompt.match(/\bAD-[A-Z0-9]{4,8}\b/i);
+  if(m){
+    const saved=STATIC_LIB.find(a=>a.ref.toLowerCase()===m[0].toLowerCase());
+    if(saved&&saved.thumb){ refs=[saved.thumb]; usedRef=saved; }
+  }
+
+  aiPush('me', esc(prompt));
+  AI.msgs.push({ who:'card', html:`<div class="img-gen" id="${id}">
+      <div class="ig-h"><span class="ig-spin"></span>Drawing with ${imgModelName(model)}${
+        usedRef?` &middot; layout from ${esc(usedRef.ref)}`:''}</div>
+      <div class="ig-sub">Usually 15&ndash;30 seconds.</div></div>` });
+  aiRenderAll();
+
+  const replace=html=>{
+    const el=$(id); if(el) el.outerHTML=html;
+    AI.msgs=AI.msgs.map(x=>(x.html&&x.html.includes(`id="${id}"`))?{who:'card',html}:x);
+    tikiPush();
+  };
+  const fail=msg=>replace(`<div class="img-fail">Couldn't draw that &mdash; ${esc(msg)}</div>`);
+
+  try{
+    const r=await tikiFetch('/functions/v1/imagegen',{ method:'POST',
+      body:JSON.stringify({ action:'create', model, prompt,
+        aspect:state.imgRatio||'4:5', resolution:'2K', images:refs }) });
+    const j=await r.json().catch(()=>({}));
+    if(r.status===501) return fail('KIE_API_KEY is not set in Supabase');
+    if(r.status===402) return fail('the kie.ai account is out of credit');
+    if(!r.ok||!j.taskId) return fail(j.error||('HTTP '+r.status));
+
+    /* Poll, but give up rather than hanging forever on a stuck task. */
+    for(let i=0;i<60;i++){
+      await new Promise(res=>setTimeout(res, i<5?2000:3000));
+      const sr=await tikiFetch('/functions/v1/imagegen',{ method:'POST',
+        body:JSON.stringify({ action:'status', taskId:j.taskId }) });
+      const sj=await sr.json().catch(()=>({}));
+      if(sj.state==='fail') return fail(sj.failMsg||'the model rejected it');
+      if(sj.state==='success' && sj.urls && sj.urls.length){
+        const url=sj.urls[0];
+        replace(`<div class="img-done"><img src="${esc(url)}" alt="">
+          <div class="ig-acts">
+            <button class="bai-act" onclick="imgToBrief('${esc(url)}')">Add to a brief</button>
+            <a class="bai-act ghost" href="${esc(url)}" target="_blank" rel="noopener">Full size</a>
+          </div></div>`);
+        aiRenderAll();
+        return;
+      }
+    }
+    fail('it took too long — try again');
+  }catch(e){ fail(e.message||'unknown error'); }
+}
+
+/* Lands as an ordinary image element, so everything already built for images
+   works on it: drag, free-form resize, rotate, background removal, and text
+   layers over the top. That is what makes it an editable template rather than
+   a finished picture. */
+function imgToBrief(url){
+  const b=briefById(state.briefId) || BRIEFS[0];
+  if(!b){ toast('Make a brief first'); return; }
+  const frames=b.elements.filter(e=>e.type==='frame');
+  const right=frames.length?Math.max(...frames.map(f=>f.x+f.w))+60:120;
+  const el={ id:'g'+Date.now()%100000, type:'image', src:url,
+    x:right, y:140, w:520, h:650, alt:'Generated ad' };
+  b.elements.push(el);
+  state.briefId=b.id; state.brf.sel=el.id;
+  tikiPush(); navTo('briefs');
+  toast('Added — drag it, resize it, or put text over it');
+}
+
 /* ============================================================================
    STATIC ADS
    A browsable window onto GetHookd's library, and our own saved shortlist.
@@ -11438,11 +11571,13 @@ async function saSearch(){
   SA.geo=$('saGeo').value; SA.days=+$('saDays').value;
   SA.loading=true; SA.err=''; renderStatics();
   try{
-    const params={ query:SA.q, ad_format:'image', limit:18, status:'active',
+    /* The REST endpoint names these differently from the MCP wrapper: per_page,
+       formats, location, days_active. Sending the MCP names got them rejected. */
+    const params={ query:SA.q, formats:'image', per_page:18, status:'active',
       performance_scores:SA.tier, collapse_variants:true };
     if(SA.cat) params.creative_categories=SA.cat;
-    if(SA.geo) params.geo=SA.geo;
-    if(SA.days) params.run_time=SA.days;
+    if(SA.geo) params.location=SA.geo;
+    if(SA.days) params.days_active=SA.days;
     const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
       body:JSON.stringify({ action:'search', params }) });
     const j=await r.json().catch(()=>({}));
@@ -12719,6 +12854,10 @@ function renderAssistant(){
 }
 /* The folder button IS the state indicator — there is no banner. */
 function projPaintBtn(){
+  const im=$('imgMenu'); if(im) im.innerHTML=imgMenuHTML();
+  const ib=$('imgBtn'), il=$('imgBtnLbl');
+  if(ib){ ib.classList.toggle('on', !!state.imgModel);
+    il.textContent = state.imgModel ? imgModelName(state.imgModel) : ''; }
   const mm=$('mdlMenu'); if(mm) mm.innerHTML=aiModelMenuHTML();
   const mb=$('mdlBtn'), ml=$('mdlBtnLbl');
   if(mb){ mb.classList.toggle('on', !!state.aiModel);
@@ -12752,6 +12891,13 @@ function asxComposerHTML(){
           <span id="mdlBtnLbl"></span>
         </button>
         <div class="dd-menu mdl-menu" id="mdlMenu"></div>
+      </div>
+      <div class="dd asx-proj">
+        <button class="asx-ib pj-btn img-btn" id="imgBtn" onclick="toggleDD(event,'imgMenu')" title="Image generation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="m4 17 5-5 4 4 3-3 4 4"/></svg>
+          <span id="imgBtnLbl"></span>
+        </button>
+        <div class="dd-menu mdl-menu" id="imgMenu"></div>
       </div>
       <div class="dd asx-proj">
         <button class="asx-ib pj-btn" id="pjBtn" onclick="toggleDD(event,'pjMenu')" title="Projects">
@@ -13967,7 +14113,7 @@ function collectTikiState(){
      in the back office is the thing that actually runs. */
   /* v13 adds projects — instructions and knowledge the assistant works inside. */
   /* v15 adds the saved static-ad library. */
-  return { v:15, statics:STATIC_LIB, aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  return { v:16, statics:STATIC_LIB, imgModel:state.imgModel||'', imgRatio:state.imgRatio||'4:5', aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
@@ -14091,6 +14237,8 @@ function applyTikiState(d){
   replaceArr(CHATS,d.chats); replaceArr(PROFIT_VENDORS,d.profitVendors);
   if(Array.isArray(d.personal)) PERSONAL_OUTREACH=d.personal;
   if(Array.isArray(d.statics)) replaceArr(STATIC_LIB,d.statics);
+  if(typeof d.imgModel==='string') state.imgModel=d.imgModel;
+  if(typeof d.imgRatio==='string') state.imgRatio=d.imgRatio;
   if(typeof d.aiModel==='string') state.aiModel=d.aiModel;
   if(Array.isArray(d.projects)) PROJECTS=d.projects;
   if(Array.isArray(d.migrations)) state.migrations=d.migrations;
