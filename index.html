@@ -7022,14 +7022,39 @@ function brfCut(){
   toast('Cut — ⌘V to paste it back');
 }
 function brfCopy(){
-  const b=briefById(state.briefId); const el=b&&b.elements.find(x=>x.id===state.brf.sel);
-  if(!el) return;
-  BRF_CLIP=JSON.parse(JSON.stringify(el));
-  toast('Copied');
+  const b=briefById(state.briefId); if(!b) return;
+  const el=b.elements.find(x=>x.id===state.brf.sel);
+  if(el){ BRF_CLIP=JSON.parse(JSON.stringify(el)); toast('Copied'); return; }
+  /* Nothing selected but a page is — copy the page and everything on it. */
+  const fr=b.elements.find(x=>x.id===state.brf.selFrame&&x.type==='frame');
+  if(!fr) return;
+  const kids=b.elements.filter(e=>e.type!=='frame' && brfHostFrame(b,e)===fr);
+  BRF_CLIP={ __page:true, frame:JSON.parse(JSON.stringify(fr)),
+             kids:JSON.parse(JSON.stringify(kids)) };
+  toast(`Page copied — ${kids.length} item${kids.length===1?'':'s'}`);
 }
 function brfPaste(){
   const b=briefById(state.briefId); if(!b||!BRF_CLIP) return;
   brfSnapshot();
+  if(BRF_CLIP.__page){
+    const src=BRF_CLIP.frame;
+    /* Land beside the right-most page so pasting repeatedly never stacks. */
+    const frames=b.elements.filter(e=>e.type==='frame');
+    const rightEdge=Math.max(...frames.map(f=>f.x+f.w), src.x+src.w);
+    const dx=(rightEdge+60)-src.x;
+    const nid=()=>'d'+Math.random().toString(36).slice(2,8);
+    const nf={ ...JSON.parse(JSON.stringify(src)), id:nid(), x:src.x+dx,
+               title:brfCopyName(b, src.title) };
+    const kids=BRF_CLIP.kids.map(k=>({ ...JSON.parse(JSON.stringify(k)), id:nid(), x:k.x+dx }));
+    const lastFrame=b.elements.map(e=>e.type==='frame').lastIndexOf(true);
+    b.elements.splice(lastFrame+1, 0, nf);
+    b.elements.push(...kids);
+    state.brf.selFrame=nf.id; state.brf.sel=null;
+    brfLog(b,'frame', nf.title);
+    tikiPush(); renderBriefEditor();
+    toast(`Pasted — ${kids.length} item${kids.length===1?'':'s'}`);
+    return;
+  }
   const copy=JSON.parse(JSON.stringify(BRF_CLIP));
   copy.id=(copy.type[0]||'e')+Date.now()%100000+Math.floor(Math.random()*90+10);
   copy.x=(copy.x||0)+24; copy.y=(copy.y||0)+24;   // offset so it's visibly a new object
@@ -7056,6 +7081,9 @@ function brfKeydown(e){
   if(meta && e.key.toLowerCase()==='x'){ e.preventDefault(); brfCut(); return; }
   if(meta && e.key.toLowerCase()==='c'){ e.preventDefault(); brfCopy(); return; }
   if(meta && e.key.toLowerCase()==='v'){ e.preventDefault(); brfPaste(); return; }
+  if((e.key==='Backspace'||e.key==='Delete') && !state.brf.sel && state.brf.selFrame){
+    e.preventDefault(); brfDeletePage(state.brf.selFrame); return;
+  }
   if((e.key==='Backspace'||e.key==='Delete') && state.brf.sel){
     e.preventDefault(); brfDelete(state.brf.sel); return;
   }
@@ -8209,10 +8237,11 @@ function brfDuplicatePage(fid){
   const nid=()=>'d'+Math.random().toString(36).slice(2,8);
   const newFrameId=nid();
 
-  /* Same test the canvas uses to decide what belongs to a page, so what you
-     see on the page is exactly what gets copied. */
-  const kids=b.elements.filter(e=>e.type!=='frame'
-    && e.x>=fr.x && e.x<=fr.x+fr.w && e.y>=fr.y && e.y<=fr.y+fr.h);
+  /* Ask the canvas itself what belongs to this page rather than re-deriving it.
+     brfHostFrame decides by an element's CENTRE; testing its top-left corner
+     instead quietly dropped anything that bleeds past the page edge — which is
+     exactly what a full-bleed background panel does. */
+  const kids=b.elements.filter(e=>e.type!=='frame' && brfHostFrame(b,e)===fr);
 
   const copyFrame={ ...JSON.parse(JSON.stringify(fr)), id:newFrameId,
     x:fr.x+dx, y:fr.y+dy, title:brfCopyName(b, fr.title) };
@@ -8228,6 +8257,7 @@ function brfDuplicatePage(fid){
   /* Comment pins belong to the page too, but a copied page starts a fresh
      conversation — the threads stay with the original. */
   const pins=(b.comments||[]).filter(c=>c.x>=fr.x&&c.x<=fr.x+fr.w&&c.y>=fr.y&&c.y<=fr.y+fr.h);
+  if(!copyFrame.bg && fr.bg) copyFrame.bg=fr.bg;   /* belt and braces on the page colour */
 
   brfLog(b,'frame', copyFrame.title);
   state.brf.selFrame=newFrameId; state.brf.sel=null;
@@ -8243,6 +8273,29 @@ function brfCopyName(b, title){
   for(let n=2; taken.has(name); n++) name=`${base} copy ${n}`;
   return name;
 }
+/* Deleting a page takes its contents with it, so it always confirms and always
+   says how much is going. Backspace on a selected page is a fast key to hit by
+   accident, and undo after the fact is a worse experience than one question. */
+function brfDeletePage(fid){
+  const b=briefById(state.briefId); if(!b) return;
+  const fr=b.elements.find(e=>e.id===fid&&e.type==='frame'); if(!fr) return;
+  const kids=b.elements.filter(e=>e.type!=='frame' && brfHostFrame(b,e)===fr);
+  const pins=(b.comments||[]).filter(c=>c.x>=fr.x&&c.x<=fr.x+fr.w&&c.y>=fr.y&&c.y<=fr.y+fr.h);
+  const bits=[];
+  if(kids.length) bits.push(`${kids.length} item${kids.length===1?'':'s'} on it`);
+  if(pins.length) bits.push(`${pins.length} comment${pins.length===1?'':'s'}`);
+  if(!confirm(`Delete "${fr.title}"?`+(bits.length?`\n\nThis also removes ${bits.join(' and ')}.`:'')+
+              `\n\nUndo will bring it back.`)) return;
+  brfSnapshot();
+  const gone=new Set([fr.id, ...kids.map(k=>k.id)]);
+  b.elements=b.elements.filter(e=>!gone.has(e.id));
+  b.comments=(b.comments||[]).filter(c=>!pins.includes(c));
+  state.brf.selFrame=null; state.brf.sel=null;
+  brfLog(b,'delete', fr.title);
+  tikiPush(); renderBriefEditor();
+  toast(`Deleted ${fr.title}`);
+}
+
 function brfPageMenu(ev,id){
   ev.preventDefault(); ev.stopPropagation();
   brfCloseLayerMenu();
@@ -8255,7 +8308,8 @@ function brfPageMenu(ev,id){
     <div class="sep"></div>
     <button onclick="brfCloseLayerMenu();brfEditFrameTitle('${id}')">${ICONS.edit}Rename page</button>
     <div class="sep"></div>
-    <button onclick="brfCloseLayerMenu();brfDuplicatePage('${id}')">${ICONS.copy||ICONS.doc}Duplicate page &amp; contents</button>`;
+    <button onclick="brfCloseLayerMenu();brfDuplicatePage('${id}')">${ICONS.copy||ICONS.doc}Duplicate page &amp; contents</button>
+    <button class="danger" onclick="brfCloseLayerMenu();brfDeletePage('${id}')">${ICONS.x}Delete page<kbd>⌫</kbd></button>`;
   document.body.appendChild(m);
   const w=m.offsetWidth, h=m.offsetHeight;
   m.style.left=Math.min(ev.clientX, window.innerWidth-w-8)+'px';
