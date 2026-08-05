@@ -14058,17 +14058,64 @@ async function tikiEnter(inviteType){
       `<button class="btn btn-primary" onclick="location.reload()">Reload</button>`));
   }
   resolveMe();
-  await tiktokLoadStatus(); await xeroLoadStatus();
-  await cogsLoad();
-  if(TIKTOK_STATUS&&TIKTOK_STATUS.shop_id){ await tiktokLoadData(); await settlementsLoad(); await creatorsLoad(); await videosLoad(); await adSpendLoad(); }
-  if(XERO_STATUS&&XERO_STATUS.tenant_id) await xeroLoadData();
+  /* ------------------------------------------------------------------------
+     The app is usable the moment the workspace has loaded. Everything below
+     this line is TikTok and Xero data, which used to be a chain of sequential
+     awaits BEFORE the first render — videosLoad alone pulls up to 200,000 rows.
+     That is why opening the app took ten seconds, and why navTo('assistant')
+     firing at the end yanked you back if you had clicked away in the meantime.
+     Now: paint first, land on a page, then fetch in the background.
+     ---------------------------------------------------------------------- */
   rerenderAll(); renderNotifs();
   navTo('assistant');
-  tiktokAutoSync();          /* fire and forget — the app is already usable */
   setInterval(tikiPush, 4000);
+  bootLoadData();
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') tikiPush(); });
   /* Profile completion is mandatory for everyone — invited users also set a password. */
   if(inviteType || !USERS[ME]?.onboarded) openOnboarding(!!inviteType);
+}
+
+/* Background data load. Nothing here blocks the interface, and nothing here
+   moves you off the page you are on. */
+let BOOT_LOADING=false;
+async function bootLoadData(){
+  if(BOOT_LOADING) return;
+  BOOT_LOADING=true;
+  const safe=p=>p.catch(e=>{ console.warn('background load failed', e); });
+  try{
+    syncStatus('saving','Loading your data…');
+    await Promise.all([safe(tiktokLoadStatus()), safe(xeroLoadStatus()), safe(cogsLoad())]);
+
+    if(TIKTOK_STATUS&&TIKTOK_STATUS.shop_id){
+      /* Everything except videos, in parallel — these are small and make the
+         dashboard correct quickly. */
+      await Promise.all([safe(tiktokLoadData()), safe(settlementsLoad()),
+                         safe(creatorsLoad()), safe(adSpendLoad())]);
+      bootRepaint();
+      /* Videos are by far the heaviest, so they come last and on their own.
+         The rest of the app is fully usable while they arrive. */
+      await safe(videosLoad());
+    }
+    if(XERO_STATUS&&XERO_STATUS.tenant_id) await safe(xeroLoadData());
+    bootRepaint();
+    syncStatus('', 'Synced · '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}));
+    tiktokAutoSync();
+  }catch(e){
+    syncStatus('error','Some data could not load');
+  }
+  BOOT_LOADING=false;
+}
+/* Repaint what is on screen WITHOUT navigating. The old code called navTo at
+   the end of loading, which is what threw you back to the assistant. */
+function bootRepaint(){
+  try{
+    renderBrandUI(); renderSidebar(); renderNotifs();
+    /* Never rebuild a brief someone is working in — it would drop the drag,
+       the caret and the selection. It will pick the data up on next open. */
+    if(state.briefId) return;
+    if(state.page==='assistant') return;   // the composer must survive too
+    renderPage(state.page);
+  }catch(e){ console.warn('repaint failed', e); }
 }
 
 /* ============ INIT ============ */
