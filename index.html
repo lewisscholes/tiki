@@ -2321,14 +2321,14 @@ let ME = 'lewis';
 function resolveMe(){
   const em=(tikiSession?.email||'').toLowerCase();
   const hit=Object.values(USERS).find(u=>(u.email||'').toLowerCase()===em);
-  if(hit){ ME=hit.id; return; }
+  if(hit){ ME=hit.id; taskHome(); return; }
   /* Before minting anything: an account with no email at all can never be
      signed into, so it is almost certainly this person's own seeded account
      that lost its address. Claim it rather than creating a twin — that is how
      the duplicate "Lewis Scholes" appeared in the first place. */
   if(em){
     const orphan=Object.values(USERS).filter(u=>!u.email);
-    if(orphan.length===1){ orphan[0].email=em; ME=orphan[0].id; return; }
+    if(orphan.length===1){ orphan[0].email=em; ME=orphan[0].id; taskHome(); return; }
   }
   if(em){
     /* Signed in but not on the team list (edge case: invite record lost) — create a bare entry. */
@@ -2339,6 +2339,11 @@ function resolveMe(){
   }
 }
 const teammates = () => Object.keys(USERS).filter(u=>u!==ME);
+/* Tasks opens on YOUR dashboard, not a shared default. Only applied if the view
+   is still the factory setting — once you have chosen something it is yours. */
+function taskHome(){
+  if(state.taskView==='kanban' && USERS[ME]) state.taskView='dash:'+ME;
+}
 const AV_POOL = ['av-rod','av-c1','av-c2','av-c3','av-c4','av-c5','av-c6'];
 
 const TASK_STATUSES = ['Not Started','In Progress','Waiting on Creator','Waiting on Lewis','Waiting on Stock','Blocked','Completed'];
@@ -2577,6 +2582,8 @@ function weeklyBuckets(){
 /* ============ STATE ============ */
 const state = {
   aiModel:'', imgModel:'', imgRatio:'4:5', taskWho:'all', taskPriority:'All', page:'overview', brand: Object.keys(BRANDS).length>1 ? 'all' : Object.keys(BRANDS)[0], dateRange:'This Month',
+  /* Set to your own dashboard once we know who is signed in — a shared default
+     would land everyone on the same person's board. See resolveMe. */
   taskView:'kanban', taskStatusFilter:'All', taskSearch:'',
   creatorFilter:'all', creatorStage:'All', creatorSearch:'', briefFolder:null,
   /* Videos. videoBasis is the toggle Lewis asked for:
