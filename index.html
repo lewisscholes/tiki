@@ -2736,6 +2736,8 @@ const state = {
 const I = (p,extra='') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${p}</svg>`;
 const ICONS = {
   home: I('<path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M9 22V12h6v10"/>'),
+  /* Overview is the money page, so it gets the money icon. */
+  dollar: I('<path d="M12 2v20"/><path d="M17 6.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 2.7 5 3.2 5 1.3 5 3.3-2.2 3.2-5 3.2-5-1.2-5-3.2"/>'),
   tasks: I('<rect x="3" y="4" width="18" height="17" rx="3"/><path d="m8.5 12.5 2.5 2.5 5-5"/>'),
   updates: I('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
   users: I('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'),
@@ -2937,9 +2939,9 @@ function toggleSidebar(force){
 
 /* ============ NAV / ROUTER ============ */
 const PAGES = [
-  { id:'overview',  label:'Overview',  icon:'home' },
+  { id:'overview',  label:'Overview',  icon:'dollar' },
   { id:'assistant', label:'Assistant', icon:'spark' },
-  { id:'tasks',     label:'Tasks',     icon:'tasks',  count:()=>state.tasks.filter(t=>inBrand(t)&&t.status!=='Completed').length },
+  { id:'tasks',     label:'Dashboard', icon:'home',   count:()=>state.tasks.filter(t=>inBrand(t)&&t.status!=='Completed').length },
   { id:'creators',  label:'Creators',  icon:'users' },
   { id:'videos',    label:'Videos',    icon:'video' },
   { id:'outreach',  label:'Outreach',  icon:'send',
@@ -2970,8 +2972,9 @@ function renderSidebar(){
   const n=navPages();
   const grp=(title,ids)=>{ const ps=n.filter(p=>ids.includes(p.id)); return ps.length?`<div class="sb-section">${title}</div>`+ps.map(navBtn).join(''):''; };
   $('sbNav').innerHTML =
-    grp('Workspace',['overview','assistant','tasks']) +
-    grp('Operations',['creators','videos','outreach','retainers','briefs','statics']) +
+    grp('Workspace',['assistant','tasks','overview']) +
+    grp('TikTok',['creators','videos','outreach','retainers','briefs']) +
+    grp('Meta',['statics']) +
     grp('Content',['genvideo','genimage']);
   $('sbSettingsBtn')?.classList.toggle('active', state.page==='settings');
   renderDock();   /* the sidebar is hidden now — the dock is the real nav */
@@ -2990,7 +2993,8 @@ function renderSidebar(){
    the dock instead. That keeps every existing call site working without
    touching thirty functions.
    ========================================================================== */
-const DOCK_TABS = ['assistant','overview','tasks'];
+/* Assistant → Dashboard → Overview: what you ask, what you do, what it earned. */
+const DOCK_TABS = ['assistant','tasks','overview'];
 const DOCK_OPS  = ['creators','videos','outreach','retainers','briefs','statics'];
 
 function renderDock(){
@@ -3028,8 +3032,10 @@ function renderDock(){
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     </button>
     <div class="rfly" id="rFly">
-      <div class="rm-cap">Operations</div>
-      ${DOCK_OPS.map(id=>P(id)).filter(Boolean).map(row).join('')}
+      <div class="rm-cap">TikTok</div>
+      ${['creators','videos','outreach','retainers','briefs'].map(id=>P(id)).filter(Boolean).map(row).join('')}
+      <div class="rm-cap">Meta</div>
+      ${['statics'].map(id=>P(id)).filter(Boolean).map(row).join('')}
       <div class="rm-cap">Content</div>
       ${['genvideo','genimage'].map(id=>P(id)).filter(Boolean).map(row).join('')}
     </div>`;
@@ -3187,6 +3193,7 @@ function goNeedsLewis(){
   navTo('tasks',{taskView:'list'});
 }
 function navTo(page, opts={}){
+  const wasOn=state.page;
   if(state.page==='settings' && page!=='settings' && state.vaultOpen){ state.vaultOpen=false; revealedPw.clear(); }
   /* Leaving briefs OR the assistant restores the sidebar. Without the
      'assistant' exemption, collapsing the nav in the assistant and then
@@ -3204,6 +3211,11 @@ function navTo(page, opts={}){
   /* The flow canvas is the other full-screen page; leaving it must put the
      shell back or you are stranded with no navigation. */
   if(page!=='flows') document.body.classList.remove('flow-full');
+  /* Arriving at the Dashboard always lands you on YOUR dashboard. The view
+     picker still switches to the board, the list or a teammate — that choice
+     just doesn't survive leaving the page, because the tab is called Dashboard
+     and should behave like one. */
+  if(page==='tasks' && !opts.taskView && wasOn!=='tasks' && USERS[ME]) state.taskView='dash:'+ME;
   if(opts.taskView) state.taskView=opts.taskView;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $('page-'+page).classList.add('active');
@@ -3389,6 +3401,18 @@ function notify(type, title, desc, icon, key){
 /* =====================================================================
    PAGE: OVERVIEW
    ===================================================================== */
+/* Business-first, and it knows who is looking and when. No "good morning" —
+   that is a greeting, not a reason to open the page. */
+function overviewGreeting(){
+  const n = (USERS[ME] && USERS[ME].short) || 'there';
+  const h = new Date().getHours();
+  const line = h<5  ? "Still up, %s?"
+             : h<12 ? "Let's take a look, %s"
+             : h<17 ? "Where we're at, %s"
+             : h<21 ? "How today landed, %s"
+             :        "Wrapping up, %s";
+  return line.replace('%s', esc(n));
+}
 function renderOverview(){
   const k=BRAND_KPIS[state.brand] || (state.brand==='all'
     ? BRAND_IDS().reduce((acc,id)=>{ const x=BRAND_KPIS[id]||{}; ['gmv','net','videos','creators','approvals'].forEach(f=>acc[f]=(acc[f]||0)+(x[f]||0)); return acc; },
@@ -3445,7 +3469,7 @@ function renderOverview(){
   $('page-overview').innerHTML=`
     <div class="page-head">
       <div>
-        <h1>Good morning, Lewis 👋</h1>
+        <h1>${overviewGreeting()}</h1>
         <div class="desc">Here's what's happening across ${brandInfo(state.brand).name} · ${fmtLongToday()}</div>
       </div>
       <div class="actions">
@@ -3760,7 +3784,7 @@ function renderTasks(){
   const whoItem=(k,l,ico)=>`<button class="dd-item ${state.taskWho===k?'sel':''}" onclick="state.taskWho='${k}';renderTasks()">${ICONS[ico]}${l}<span style="margin-left:auto;font-size:.7rem;color:var(--ink-3);font-weight:700;padding-left:12px">${counts[k]||0}</span></button>`;
   $('page-tasks').innerHTML=`
     <div class="page-head">
-      <div><h1>Tasks</h1><div class="desc">Everything that needs doing across ${brandInfo(state.brand).name} — who, what, and by when</div></div>
+      <div><h1>Dashboard</h1><div class="desc">Your work first — switch views to see the whole team</div></div>
       <div class="actions">
         <div class="dd">
           <button class="btn btn-ghost btn-sm" onclick="toggleDD(event,'taskViewMenu')">
@@ -14675,7 +14699,7 @@ async function tikiEnter(inviteType){
      Now: paint first, land on a page, then fetch in the background.
      ---------------------------------------------------------------------- */
   rerenderAll(); renderNotifs();
-  navTo('assistant');
+  navTo('tasks');
   setInterval(tikiPush, 4000);
   bootLoadData();
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') tikiPush(); });
@@ -14730,7 +14754,7 @@ function bootRepaint(){
 async function init(){
   renderBrandUI(); renderNewMenu(); renderSidebar(); renderNotifs();
   silkStart();
-  navTo('assistant');
+  navTo('tasks');
   /* A shared brief is a public page: no session, no gate, nothing loaded from
      the workspace. Handled before auth so a creator is never asked to sign in. */
   const shared=new URLSearchParams(location.search).get('b');
