@@ -1610,6 +1610,11 @@ body:not(.dark) .asx-orb::before{opacity:.30}
 .bg-hint{font-size:.7rem;color:var(--ink-3);line-height:1.5;margin-top:6px}
 .bg-note{font-size:.7rem;color:var(--ink-3);line-height:1.55;margin-top:14px;padding-top:11px;
   border-top:1px solid var(--line-2)}
+.th-resolve{width:100%;padding:9px;border-top:1px solid var(--line-2);font-size:.78rem;
+  font-weight:700;color:var(--good-ink);background:none;cursor:pointer;font-family:inherit;
+  border-radius:0 0 12px 12px}
+.th-resolve:hover{background:var(--good-soft)}
+.brf-pin.resolved{opacity:.45}
 /* ---- Shapes ---- */
 .el-shape{border-radius:0}
 .brf-shape-svg{display:block;width:100%;height:100%;pointer-events:none;overflow:visible}
@@ -6234,7 +6239,8 @@ function renderBriefEditor(){
   const s=state.brf;
   if(s.present){ renderBriefPresent(b); return; }
   const tools=[['select','cursor','Select / move (drag empty space to pan)'],['text','type','Add text'],['image','image','Add a photo'],['link','link','Add link'],['video','video','Add TikTok video'],['shape','shape','Add a shape'],['frame','frame','Add frame / page'],['comment','pin','Add comment']];
-  const openComments=b.comments.filter(c=>!c.resolved).length;
+  const openComments=brfOpenPins(b).length;
+  const resolvedCount=(b.comments||[]).length-openComments;
   $('page-briefs').innerHTML=`
     <div class="brf-editor">
       <div class="brf-top">
@@ -6245,8 +6251,12 @@ function renderBriefEditor(){
         <span class="badge ${b.status==='Shared'?'bg-good':'bg-neutral'}">${b.status}</span>
         <div style="margin-left:auto;display:flex;gap:9px;align-items:center;flex-wrap:wrap">
           <div class="av-stack">${Object.keys(USERS).map(u=>userAv(u,'sm')).join('')}</div>
-          <button class="btn btn-ghost btn-sm ${s.showComments?'':''}" onclick="state.brf.showComments=!state.brf.showComments;renderBriefEditor()" title="Toggle comment pins">
+          <button class="btn btn-ghost btn-sm" onclick="state.brf.showComments=!state.brf.showComments;renderBriefEditor()" title="Toggle comment pins">
             💬 ${openComments}<span style="font-size:.68rem;color:var(--ink-3)">${s.showComments?'':' hidden'}</span></button>
+          ${resolvedCount?`<button class="btn btn-ghost btn-sm" onclick="brfToggleResolved()"
+            title="Resolved threads are kept — show them to reopen one"
+            style="${s.showResolved?'background:var(--good-soft);color:var(--good-ink)':''}">
+            ✓ ${resolvedCount} resolved</button>`:''}
           <span class="rt-peers" id="brfPeers" style="display:flex;align-items:center;gap:6px"></span>
           <div class="brf-zoom">
             <button onclick="brfZoom(-1)">−</button><span class="zv">${Math.round(s.zoom*100)}%</span><button onclick="brfZoom(1)">+</button>
@@ -6593,10 +6603,13 @@ function brfContextText(b){
     return `PAGE ${i+1} "${f.title||'untitled'}" — ${counts.join(', ')||'no media'}\n  text: ${txt.slice(0,6).join(' | ')||'(none)'}`;
   }).join('\n');
   const threads=(b.comments||[]).map((c,i)=>{
+    /* Resolved threads are finished business. Feeding them to the assistant made
+       the digest noisy and the wait longer for no gain. */
+    if(c.resolved) return null;
     if(!(c.thread||[]).length) return null;
     const msgs=c.thread.map(m=>`    ${whoName(m.who)}${m.who===ME?' (me)':''} — "${(m.text||'').replace(/"/g,"'")}"`).join('\n');
     const page=frames.findIndex(f=>c.x>=f.x&&c.x<=f.x+f.w&&c.y>=f.y&&c.y<=f.y+f.h);
-    return `PIN ${i+1}${page>-1?` (on page ${page+1})`:' (off-page)'}${c.resolved?' [RESOLVED]':''}\n${msgs}`;
+    return `PIN ${i+1}${page>-1?` (on page ${page+1})`:' (off-page)'}\n${msgs}`;
   }).filter(Boolean).join('\n');
   return `BRIEF "${b.name}" · status ${b.status}\n${pages}\n\nCOMMENT THREADS\n${threads||'(none)'}`;
 }
@@ -7498,15 +7511,17 @@ function brfWorldHTML(b){
     }
   });
   if(s.showComments) b.comments.forEach((c,i)=>{
+    /* A resolved pin is clutter — it stays in the data so it can be reopened,
+       but it comes off the canvas. */
+    if(c.resolved && !state.brf.showResolved) return;
     h+=`<div class="brf-pin ${c.resolved?'resolved':''}" data-pin="${c.id}" style="left:${c.x}px;top:${c.y}px;background:${c.thread[0]&&c.thread[0].who!==ME?'var(--aqua-ink)':'var(--accent)'}" onclick="event.stopPropagation();brfOpenThread('${c.id}')">${i+1}</div>`;
   });
   if(s.openThread){
     const c=b.comments.find(x=>x.id===s.openThread);
     if(c) h+=`<div class="brf-thread" style="left:${c.x+22}px;top:${c.y-8}px" onmousedown="event.stopPropagation()">
-      <div class="th-h">Pin ${b.comments.indexOf(c)+1} of ${b.comments.length}
+      <div class="th-h">Pin ${brfOpenPins(b).indexOf(c)+1} of ${brfOpenPins(b).length}
         <span style="font-weight:500;color:var(--ink-3);font-size:.7rem">${c.thread.length} message${c.thread.length===1?'':'s'}</span>
         <span style="margin-left:auto;display:flex;gap:6px">
-          <button class="btn btn-ghost btn-xs" onclick="brfResolve('${c.id}')">${c.resolved?'Reopen':'✓ Resolve'}</button>
           <button class="btn btn-ghost btn-xs" onclick="brfCloseThread()">✕</button></span></div>
       <div class="th-msgs">
         ${c.thread.map(m=>`<div class="comment">${userAv(m.who,'sm')}<div class="c-body"><div class="c-who">${esc(whoName(m.who))}</div>${esc(m.text)}<div class="c-time">${esc(relTime(m))}</div></div></div>`).join('')||'<div style="font-size:.74rem;color:var(--ink-3);padding:8px 0">New comment — write the first message</div>'}
@@ -7515,7 +7530,9 @@ function brfWorldHTML(b){
         <input id="brfReply" placeholder="Reply…" style="flex:1;padding:7px 10px;border:1px solid var(--line);border-radius:8px;outline:none;font-size:.78rem"
           onkeydown="if(event.key==='Enter')brfReply('${c.id}')" onmousedown="event.stopPropagation()">
         <button class="btn btn-primary btn-sm" onclick="brfReply('${c.id}')">${ICONS.send}</button>
-      </div></div>`;
+      </div>
+      <button class="th-resolve" onclick="brfResolve('${c.id}')">
+        ✓ Resolve &amp; remove this pin</button></div>`;
   }
   /* Clip layers go in after the frames so photos paint over the page colour,
      and the handle overlay goes last so it's above everything. */
@@ -7809,84 +7826,42 @@ function brfBind(b){
    the way in — 1400px on the long edge is far more than a brief ever needs. */
 /* ============================================================================
    BACKGROUND REMOVER
-   No model, no API, no library — a flood fill inward from the four edges,
-   clearing anything close enough in colour to what it started on.
+   Photoroom, through the `cutout` edge function so the key stays server-side.
 
-   Be clear about what this is good at, because the difference matters:
-   a logo, a pack shot or a screenshot on a flat background comes out clean.
-   A person photographed against a busy room does not, and no amount of
-   tolerance will fix that — it needs a segmentation model we do not ship.
-   The panel says so rather than letting Rod discover it on a deadline.
+   This replaced a local flood fill that cleared anything close in colour to the
+   image edge. That can only ask "is this pixel a similar colour to the border?",
+   so a grey logo on white was hopeless — the two are near neighbours, and any
+   tolerance that removed the white also ate the logo. Segmentation understands
+   what the object IS, which is the only way this works.
    ========================================================================== */
-const BRF_BG_TOL_DEFAULT = 32;
+let BRF_CUTTING = null;   // element id currently being cut
 
-function brfBgRemove(id, tol, keyPt){
+async function brfBgRemove(id){
   const b=briefById(state.briefId); const el=b&&b.elements.find(x=>x.id===id);
-  if(!el || el.type!=='image') return;
-  /* The original is kept so tolerance can be re-run from clean pixels every
-     time — repeatedly eating into an already-cut image destroys edges. */
-  const src=el.srcOrig || el.src;
-  const img=new Image();
-  img.onerror=()=>toast('Could not read that image');
-  img.onload=()=>{
-    const w=img.naturalWidth, h=img.naturalHeight;
-    const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-    const ctx=cv.getContext('2d', { willReadFrequently:true });
-    ctx.drawImage(img,0,0);
-    let d;
-    try{ d=ctx.getImageData(0,0,w,h); }
-    catch(e){ toast('That image is cross-origin — re-upload it to cut it out'); return; }
-    const px=d.data, n=w*h;
-
-    /* Seed colour: a clicked point if given, otherwise the average of the four
-       corners, which is what a flat background almost always is. */
-    let kr,kg,kb;
-    if(keyPt){
-      const i=((keyPt.y*w+keyPt.x)|0)*4; kr=px[i]; kg=px[i+1]; kb=px[i+2];
-    } else {
-      const c=[0,(w-1)*4,(h-1)*w*4,((h-1)*w+(w-1))*4];
-      kr=Math.round(c.reduce((a,i)=>a+px[i],0)/4);
-      kg=Math.round(c.reduce((a,i)=>a+px[i+1],0)/4);
-      kb=Math.round(c.reduce((a,i)=>a+px[i+2],0)/4);
-    }
-
-    const hard=tol*tol*3, soft=hard*2.6;      /* squared distances */
-    const seen=new Uint8Array(n);
-    const q=new Int32Array(n); let qs=0, qe=0;
-    const push=p=>{ if(!seen[p]){ seen[p]=1; q[qe++]=p; } };
-    for(let x=0;x<w;x++){ push(x); push((h-1)*w+x); }
-    for(let y=0;y<h;y++){ push(y*w); push(y*w+(w-1)); }
-
-    while(qs<qe){
-      const p=q[qs++], i=p*4;
-      const dr=px[i]-kr, dg=px[i+1]-kg, db=px[i+2]-kb;
-      const dist=dr*dr+dg*dg+db*db;
-      if(dist>soft) continue;                  /* clearly foreground — stop here */
-      /* Inside the hard band it goes entirely; in the soft band it fades, which
-         is what stops a logo getting a hard white halo. */
-      px[i+3] = dist<=hard ? 0
-        : Math.round(px[i+3] * Math.min(1,(dist-hard)/(soft-hard)));
-      const x=p%w, y=(p-x)/w;
-      if(x>0)     push(p-1);
-      if(x<w-1)   push(p+1);
-      if(y>0)     push(p-w);
-      if(y<h-1)   push(p+w);
-    }
-    ctx.putImageData(d,0,0);
+  if(!el || el.type!=='image' || BRF_CUTTING) return;
+  BRF_CUTTING=id; renderBriefEditor();
+  try{
+    const r=await tikiFetch('/functions/v1/cutout',{ method:'POST',
+      body:JSON.stringify({ image: el.srcOrig || el.src }) });
+    const j=await r.json().catch(()=>({}));
+    if(r.status===501){ throw new Error('the Photoroom key is not set in Supabase'); }
+    if(!r.ok || !j.image){ throw new Error(j.error||('HTTP '+r.status)); }
     brfSnapshot();
-    if(!el.srcOrig) el.srcOrig=src;
-    el.src=cv.toDataURL('image/png');          /* PNG — JPEG has no alpha */
-    el.bgTol=tol;
-    tikiPush(); renderBriefEditor();
-    toast(`Background removed · tolerance ${tol}`);
-  };
-  img.src=src;
+    /* Keep the original so it can always be put back — and so a second attempt
+       starts from clean pixels rather than cutting into a cut-out. */
+    if(!el.srcOrig) el.srcOrig = el.src;
+    el.src=j.image;
+    tikiPush(); toast('Background removed');
+  }catch(e){
+    toast('Could not cut it out — '+(e.message||'unknown error'));
+  }
+  BRF_CUTTING=null; renderBriefEditor();
 }
 function brfBgRestore(id){
   const b=briefById(state.briefId); const el=b&&b.elements.find(x=>x.id===id);
   if(!el||!el.srcOrig) return;
   brfSnapshot();
-  el.src=el.srcOrig; delete el.srcOrig; delete el.bgTol;
+  el.src=el.srcOrig; delete el.srcOrig;
   tikiPush(); renderBriefEditor(); toast('Original restored');
 }
 
@@ -8482,31 +8457,20 @@ function brfShapePanel(b,e){
     </div>`;
 }
 function brfImagePanel(b,e){
-  const tol=e.bgTol||BRF_BG_TOL_DEFAULT;
+  const busy=BRF_CUTTING===e.id;
   return `
     <div class="brf-side">
       <div class="sd-h">Image</div>
       <div style="font-size:.7rem;color:var(--ink-3);margin-bottom:14px">${e.w} × ${e.h}</div>
 
       <div class="sd-h">Background</div>
-      <button class="btn btn-primary btn-sm" style="width:100%"
-        onclick="brfBgRemove('${e.id}',${tol})">${e.srcOrig?'Cut out again':'Remove background'}</button>
-
-      <div class="bg-row">
-        <label>Tolerance</label>
-        <input type="range" min="8" max="90" value="${tol}" id="bgTol"
-          oninput="$('bgTolV').textContent=this.value"
-          onchange="brfBgRemove('${e.id}',+this.value)">
-        <span id="bgTolV">${tol}</span>
-      </div>
-      <div class="bg-hint">Higher removes more. If the edges of your logo start disappearing, come back down.</div>
-
-      ${e.srcOrig?`<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:9px"
+      <button class="btn btn-primary btn-sm" style="width:100%" ${busy?'disabled':''}
+        onclick="brfBgRemove('${e.id}')">
+        ${busy?'Cutting out…':(e.srcOrig?'Cut out again':'Remove background')}</button>
+      ${e.srcOrig&&!busy?`<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px"
         onclick="brfBgRestore('${e.id}')">Restore the original</button>`:''}
-
-      <div class="bg-note">Works on a flat background — logos, pack shots, screenshots.
-        A photo of a person in a busy room will not cut out cleanly; that needs a
-        proper cut-out doing by hand.</div>
+      <div class="bg-note">Works on logos, products and people alike — it recognises the subject
+        rather than matching colours. Takes a couple of seconds.</div>
     </div>`;
 }
 function brfSidePanel(b){
@@ -8679,12 +8643,34 @@ function brfReply(cid){
   tikiPush(); renderBriefEditor(); toast('Comment posted');
   setTimeout(()=>{ const i=$('brfReply'); if(i) i.focus(); },30);
 }
+/* Open threads only — everything on screen and everything the assistant reads
+   works from this, so the two can never disagree. */
+function brfOpenPins(b){ return (b.comments||[]).filter(c=>!c.resolved); }
+
 function brfResolve(cid){
   const b=briefById(state.briefId); const c=b.comments.find(x=>x.id===cid);
-  c.resolved=!c.resolved; if(c.resolved) state.brf.openThread=null;
-  if(c.resolved) brfLog(b,'resolve','pin '+(b.comments.indexOf(c)+1));
+  if(!c) return;
+  const wasOpen=!c.resolved;
+  c.resolved=wasOpen;
+  state.brf.openThread=null;
+  if(wasOpen){
+    /* Whoever was waiting needs to know it is done — otherwise resolving is a
+       private act and they keep chasing. The log drives their catch-up too. */
+    const others=[...new Set((c.thread||[]).map(m=>m.who).filter(w=>w&&w!==ME))];
+    brfLog(b,'resolve', (c.thread?.[0]?.text||'').slice(0,60));
+    if(others.length) notify('good','Comment resolved',
+      `${whoName(ME)} resolved ${others.map(whoName).join(' & ')}'s comment on ${b.name}`,
+      'canvas', 'res-'+c.id);
+  }
   brfAutoTask(b); tikiPush();
-  renderBriefEditor(); toast(c.resolved?'Thread resolved':'Thread reopened');
+  renderBriefEditor(); brfAiEnsure(true);
+  toast(wasOpen?'Resolved — pin removed':'Reopened');
+}
+/* Resolved threads are kept, not deleted, so they can come back. */
+function brfToggleResolved(){
+  state.brf.showResolved=!state.brf.showResolved;
+  renderBriefEditor();
+  toast(state.brf.showResolved?'Showing resolved pins':'Resolved pins hidden');
 }
 /* ---- present mode (affiliate view) ---- */
 function renderBriefPresent(b){
