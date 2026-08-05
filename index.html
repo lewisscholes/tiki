@@ -3841,17 +3841,6 @@ function memberDashboard(uid){
         </div>
       </div>
       <div class="card">
-        <div class="card-h"><div class="t">🕐 Videos Awaiting Approval</div></div>
-        <div class="card-b flush">
-          ${approvals.map(t=>`
-            <div class="feed-item"><div class="fi-body"><div class="fi-title">${esc(t.name)}</div>
-              <div class="fi-meta">${brandBadge(t.brand)}<span>waiting on ${USERS[ME].short} since ${fmtDate(t.due)}</span></div></div>
-              <button class="btn btn-ghost btn-xs" style="align-self:center" onclick="toast('Reminder sent to ${USERS[ME].short}')">Remind ${USERS[ME].short}</button>
-            </div>`).join('')||'<div class="empty">Approval queue clear</div>'}
-        </div>
-      </div>
-      
-      <div class="card">
         <div class="card-h"><div class="t">🎓 Courses To Watch</div><div class="right"><button class="link-btn" onclick="navTo('courses')">All courses →</button></div></div>
         <div class="card-b flush">
           ${COURSES.filter(c=>!c.watched).map(c=>`
