@@ -2581,6 +2581,7 @@ const ICONS = {
   cursor: I('<path d="m4 3 8 17 2.2-6.8L21 11Z"/>'),
   type: I('<path d="M5 5h14M12 5v14M9 19h6"/>'),
   frame: I('<path d="M6 2v20M18 2v20M2 6h20M2 18h20"/>'),
+  copy: I('<rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 4.5H5A1.5 1.5 0 0 0 3.5 6v10.5"/>'),
   shape: I('<rect x="2.5" y="3" width="11" height="11" rx="2"/><circle cx="15.5" cy="15" r="6"/>'),
   pin: I('<path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>'),
   panel: I('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9.5 3v18"/>'),
@@ -7393,7 +7394,7 @@ function brfWorldHTML(b){
   b.elements.filter(e=>e.type==='frame').forEach(e=>{
     const fs=s.selFrame===e.id?'fsel':'';
     h+=`<div class="brf-frame ${fs}" data-frame="${e.id}" style="left:${e.x}px;top:${e.y}px;width:${e.w}px;height:${e.h}px;background:${e.bg||'#ffffff'};border-color:${e.bg&&e.bg!=='#ffffff'?'transparent':'#dde1e7'}">
-      <div class="fr-title" data-fdrag="${e.id}" ondblclick="brfEditFrameTitle('${e.id}')" title="Click to select this page · double-click to rename">${esc(e.title)}</div>
+      <div class="fr-title" data-fdrag="${e.id}" ondblclick="brfEditFrameTitle('${e.id}')" oncontextmenu="brfPageMenu(event,'${e.id}')" title="Click to select this page · double-click to rename · right-click for more">${esc(e.title)}</div>
       <div class="fr-rs fr-rs-s" data-rs="${e.id}:s" title="Drag to make this sheet longer"></div>
       <div class="fr-rs fr-rs-se" data-rs="${e.id}:se" title="Drag to resize"></div></div>`;
   });
@@ -8192,6 +8193,56 @@ function brfLayerDrop(ev,targetId){
   tikiPush(); renderBriefEditor();
 }
 /* Right-click menu */
+/* ---------------------------------------------------------------------------
+   DUPLICATE A PAGE
+   Copies the frame AND everything sitting on it — text, photos, videos, shapes,
+   plus the comment pins — into a new page beside it. Every id is regenerated so
+   the copy is genuinely independent; reusing ids would make the two pages edit
+   each other, which is the classic way this goes wrong.
+   ------------------------------------------------------------------------- */
+function brfDuplicatePage(fid){
+  const b=briefById(state.briefId); if(!b) return;
+  const fr=b.elements.find(e=>e.id===fid&&e.type==='frame'); if(!fr) return;
+  brfSnapshot();
+
+  const GAP=60, dx=fr.w+GAP, dy=0;
+  const nid=()=>'d'+Math.random().toString(36).slice(2,8);
+  const newFrameId=nid();
+
+  /* Same test the canvas uses to decide what belongs to a page, so what you
+     see on the page is exactly what gets copied. */
+  const kids=b.elements.filter(e=>e.type!=='frame'
+    && e.x>=fr.x && e.x<=fr.x+fr.w && e.y>=fr.y && e.y<=fr.y+fr.h);
+
+  const copyFrame={ ...JSON.parse(JSON.stringify(fr)), id:newFrameId,
+    x:fr.x+dx, y:fr.y+dy, title:brfCopyName(b, fr.title) };
+  const copies=kids.map(k=>({ ...JSON.parse(JSON.stringify(k)), id:nid(),
+    x:k.x+dx, y:k.y+dy }));
+
+  /* Frames live at the front of the array, children after — keep that shape or
+     the new page renders on top of its own contents. */
+  const lastFrame=b.elements.map(e=>e.type==='frame').lastIndexOf(true);
+  b.elements.splice(lastFrame+1, 0, copyFrame);
+  b.elements.push(...copies);
+
+  /* Comment pins belong to the page too, but a copied page starts a fresh
+     conversation — the threads stay with the original. */
+  const pins=(b.comments||[]).filter(c=>c.x>=fr.x&&c.x<=fr.x+fr.w&&c.y>=fr.y&&c.y<=fr.y+fr.h);
+
+  brfLog(b,'frame', copyFrame.title);
+  state.brf.selFrame=newFrameId; state.brf.sel=null;
+  tikiPush(); renderBriefEditor();
+  toast(`Duplicated — ${copies.length} item${copies.length===1?'':'s'} copied`+
+        (pins.length?`, ${pins.length} comment${pins.length===1?'':'s'} left on the original`:''));
+}
+/* "Introduction" → "Introduction copy" → "Introduction copy 2" */
+function brfCopyName(b, title){
+  const base=String(title||'Page').replace(/\s+copy(\s+\d+)?$/i,'');
+  const taken=new Set(b.elements.filter(e=>e.type==='frame').map(e=>e.title));
+  let name=base+' copy';
+  for(let n=2; taken.has(name); n++) name=`${base} copy ${n}`;
+  return name;
+}
 function brfPageMenu(ev,id){
   ev.preventDefault(); ev.stopPropagation();
   brfCloseLayerMenu();
@@ -8202,7 +8253,9 @@ function brfPageMenu(ev,id){
     <button onclick="brfCloseLayerMenu();brfMovePage('${id}',-1)"><span style="display:flex;transform:rotate(-90deg)">${ICONS.chev}</span>Move page up</button>
     <button onclick="brfCloseLayerMenu();brfMovePage('${id}',1)"><span style="display:flex;transform:rotate(90deg)">${ICONS.chev}</span>Move page down</button>
     <div class="sep"></div>
-    <button onclick="brfCloseLayerMenu();brfEditFrameTitle('${id}')">${ICONS.edit}Rename page</button>`;
+    <button onclick="brfCloseLayerMenu();brfEditFrameTitle('${id}')">${ICONS.edit}Rename page</button>
+    <div class="sep"></div>
+    <button onclick="brfCloseLayerMenu();brfDuplicatePage('${id}')">${ICONS.copy||ICONS.doc}Duplicate page &amp; contents</button>`;
   document.body.appendChild(m);
   const w=m.offsetWidth, h=m.offsetHeight;
   m.style.left=Math.min(ev.clientX, window.innerWidth-w-8)+'px';
