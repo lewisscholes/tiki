@@ -3598,7 +3598,10 @@ function openActivityModal(){
    never applied a filter at all. They are now separate: pick a view, then
    narrow it, and the two combine. */
 function taskViews(){
+  /* Built from teammates(), which excludes whoever is signed in — so everyone
+     could see each other's dashboard and never their own. Put yourself first. */
   return [['list','List'],['kanban','Kanban'],['calendar','Calendar'],
+    ...(USERS[ME] ? [[`dash:${ME}`, 'My Dashboard']] : []),
     ...teammates().map(u=>[`dash:${u}`, `${USERS[u].short} Dashboard`])];
 }
 function taskWhoOptions(){
@@ -3631,6 +3634,7 @@ function renderTasks(){
             ${viewItem('list','List','tasks')}
             ${viewItem('kanban','Kanban Board','frame')}
             ${viewItem('calendar','Calendar','cal')}
+            ${USERS[ME]?viewItem('dash:'+ME,'My Dashboard','user'):''}
             ${teammates().map(u=>viewItem('dash:'+u, USERS[u].short+' Dashboard','user')).join('')}
           </div>
         </div>
