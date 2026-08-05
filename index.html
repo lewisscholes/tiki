@@ -1603,6 +1603,13 @@ body:not(.dark) .asx-orb::before{opacity:.30}
   color:var(--ink-3);padding:2px 2px 9px}
 .shp-hint{font-size:.71rem;color:var(--ink-3);line-height:1.5;margin-top:11px;padding-top:9px;
   border-top:1px solid var(--line-2)}
+.bg-row{display:flex;align-items:center;gap:8px;margin-top:11px}
+.bg-row label{font-size:.72rem;font-weight:700;color:var(--ink-3);flex:none}
+.bg-row input[type=range]{flex:1;accent-color:var(--accent)}
+.bg-row span{font-size:.72rem;font-weight:700;color:var(--ink-2);min-width:20px;text-align:right}
+.bg-hint{font-size:.7rem;color:var(--ink-3);line-height:1.5;margin-top:6px}
+.bg-note{font-size:.7rem;color:var(--ink-3);line-height:1.55;margin-top:14px;padding-top:11px;
+  border-top:1px solid var(--line-2)}
 /* ---- Shapes ---- */
 .el-shape{border-radius:0}
 .brf-shape-svg{display:block;width:100%;height:100%;pointer-events:none;overflow:visible}
@@ -7800,6 +7807,89 @@ function brfBind(b){
    raw phone photo (4-8 MB, and a third bigger again once base64'd) would bloat
    every single save for every user. Everything is downscaled and re-encoded on
    the way in — 1400px on the long edge is far more than a brief ever needs. */
+/* ============================================================================
+   BACKGROUND REMOVER
+   No model, no API, no library — a flood fill inward from the four edges,
+   clearing anything close enough in colour to what it started on.
+
+   Be clear about what this is good at, because the difference matters:
+   a logo, a pack shot or a screenshot on a flat background comes out clean.
+   A person photographed against a busy room does not, and no amount of
+   tolerance will fix that — it needs a segmentation model we do not ship.
+   The panel says so rather than letting Rod discover it on a deadline.
+   ========================================================================== */
+const BRF_BG_TOL_DEFAULT = 32;
+
+function brfBgRemove(id, tol, keyPt){
+  const b=briefById(state.briefId); const el=b&&b.elements.find(x=>x.id===id);
+  if(!el || el.type!=='image') return;
+  /* The original is kept so tolerance can be re-run from clean pixels every
+     time — repeatedly eating into an already-cut image destroys edges. */
+  const src=el.srcOrig || el.src;
+  const img=new Image();
+  img.onerror=()=>toast('Could not read that image');
+  img.onload=()=>{
+    const w=img.naturalWidth, h=img.naturalHeight;
+    const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+    const ctx=cv.getContext('2d', { willReadFrequently:true });
+    ctx.drawImage(img,0,0);
+    let d;
+    try{ d=ctx.getImageData(0,0,w,h); }
+    catch(e){ toast('That image is cross-origin — re-upload it to cut it out'); return; }
+    const px=d.data, n=w*h;
+
+    /* Seed colour: a clicked point if given, otherwise the average of the four
+       corners, which is what a flat background almost always is. */
+    let kr,kg,kb;
+    if(keyPt){
+      const i=((keyPt.y*w+keyPt.x)|0)*4; kr=px[i]; kg=px[i+1]; kb=px[i+2];
+    } else {
+      const c=[0,(w-1)*4,(h-1)*w*4,((h-1)*w+(w-1))*4];
+      kr=Math.round(c.reduce((a,i)=>a+px[i],0)/4);
+      kg=Math.round(c.reduce((a,i)=>a+px[i+1],0)/4);
+      kb=Math.round(c.reduce((a,i)=>a+px[i+2],0)/4);
+    }
+
+    const hard=tol*tol*3, soft=hard*2.6;      /* squared distances */
+    const seen=new Uint8Array(n);
+    const q=new Int32Array(n); let qs=0, qe=0;
+    const push=p=>{ if(!seen[p]){ seen[p]=1; q[qe++]=p; } };
+    for(let x=0;x<w;x++){ push(x); push((h-1)*w+x); }
+    for(let y=0;y<h;y++){ push(y*w); push(y*w+(w-1)); }
+
+    while(qs<qe){
+      const p=q[qs++], i=p*4;
+      const dr=px[i]-kr, dg=px[i+1]-kg, db=px[i+2]-kb;
+      const dist=dr*dr+dg*dg+db*db;
+      if(dist>soft) continue;                  /* clearly foreground — stop here */
+      /* Inside the hard band it goes entirely; in the soft band it fades, which
+         is what stops a logo getting a hard white halo. */
+      px[i+3] = dist<=hard ? 0
+        : Math.round(px[i+3] * Math.min(1,(dist-hard)/(soft-hard)));
+      const x=p%w, y=(p-x)/w;
+      if(x>0)     push(p-1);
+      if(x<w-1)   push(p+1);
+      if(y>0)     push(p-w);
+      if(y<h-1)   push(p+w);
+    }
+    ctx.putImageData(d,0,0);
+    brfSnapshot();
+    if(!el.srcOrig) el.srcOrig=src;
+    el.src=cv.toDataURL('image/png');          /* PNG — JPEG has no alpha */
+    el.bgTol=tol;
+    tikiPush(); renderBriefEditor();
+    toast(`Background removed · tolerance ${tol}`);
+  };
+  img.src=src;
+}
+function brfBgRestore(id){
+  const b=briefById(state.briefId); const el=b&&b.elements.find(x=>x.id===id);
+  if(!el||!el.srcOrig) return;
+  brfSnapshot();
+  el.src=el.srcOrig; delete el.srcOrig; delete el.bgTol;
+  tikiPush(); renderBriefEditor(); toast('Original restored');
+}
+
 const BRF_IMG_MAX=1400, BRF_IMG_Q=0.82;
 function brfPickImage(x,y){
   state.brf.dropAt={x,y};
@@ -8391,6 +8481,34 @@ function brfShapePanel(b,e){
         The grip below the shape spins it.</div>
     </div>`;
 }
+function brfImagePanel(b,e){
+  const tol=e.bgTol||BRF_BG_TOL_DEFAULT;
+  return `
+    <div class="brf-side">
+      <div class="sd-h">Image</div>
+      <div style="font-size:.7rem;color:var(--ink-3);margin-bottom:14px">${e.w} × ${e.h}</div>
+
+      <div class="sd-h">Background</div>
+      <button class="btn btn-primary btn-sm" style="width:100%"
+        onclick="brfBgRemove('${e.id}',${tol})">${e.srcOrig?'Cut out again':'Remove background'}</button>
+
+      <div class="bg-row">
+        <label>Tolerance</label>
+        <input type="range" min="8" max="90" value="${tol}" id="bgTol"
+          oninput="$('bgTolV').textContent=this.value"
+          onchange="brfBgRemove('${e.id}',+this.value)">
+        <span id="bgTolV">${tol}</span>
+      </div>
+      <div class="bg-hint">Higher removes more. If the edges of your logo start disappearing, come back down.</div>
+
+      ${e.srcOrig?`<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:9px"
+        onclick="brfBgRestore('${e.id}')">Restore the original</button>`:''}
+
+      <div class="bg-note">Works on a flat background — logos, pack shots, screenshots.
+        A photo of a person in a busy room will not cut out cleanly; that needs a
+        proper cut-out doing by hand.</div>
+    </div>`;
+}
 function brfSidePanel(b){
   /* A selected text box takes priority: you're more likely to be styling the
      thing you just clicked than the page behind it. */
@@ -8398,6 +8516,8 @@ function brfSidePanel(b){
   if(tx) return brfTextPanel(b,tx);
   const sh=b.elements.find(e=>e.id===state.brf.sel&&e.type==='shape');
   if(sh) return brfShapePanel(b,sh);
+  const im=b.elements.find(e=>e.id===state.brf.sel&&e.type==='image');
+  if(im) return brfImagePanel(b,im);
   const fr=b.elements.find(e=>e.id===state.brf.selFrame&&e.type==='frame');
   if(!fr) return '';
   const cur=(fr.bg||'#ffffff').toLowerCase();
