@@ -2576,7 +2576,7 @@ function weeklyBuckets(){
 
 /* ============ STATE ============ */
 const state = {
-  aiModel:'', imgModel:'', imgRatio:'4:5', page:'overview', brand: Object.keys(BRANDS).length>1 ? 'all' : Object.keys(BRANDS)[0], dateRange:'This Month',
+  aiModel:'', imgModel:'', imgRatio:'4:5', taskWho:'all', taskPriority:'All', page:'overview', brand: Object.keys(BRANDS).length>1 ? 'all' : Object.keys(BRANDS)[0], dateRange:'This Month',
   taskView:'kanban', taskStatusFilter:'All', taskSearch:'',
   creatorFilter:'all', creatorStage:'All', creatorSearch:'', briefFolder:null,
   /* Videos. videoBasis is the toggle Lewis asked for:
@@ -3593,20 +3593,30 @@ function openActivityModal(){
    ===================================================================== */
 /* Views are built from the team. Each invited member gets their own task filter
    ("u:<id>") and their own day dashboard ("dash:<id>") automatically. */
+/* The view and the filter used to be ONE variable, so choosing "Rod's Tasks"
+   threw you out of your Kanban board into a list — and Kanban and Calendar
+   never applied a filter at all. They are now separate: pick a view, then
+   narrow it, and the two combine. */
 function taskViews(){
-  return [['list','List'],['kanban','Kanban'],['calendar','Calendar'],['mine','My Tasks'],
-    ...teammates().map(u=>[`u:${u}`, `${USERS[u].short}'s Tasks`]),
-    ['overdue','Overdue'],['completed','Completed'],
-    ...teammates().map(u=>[`dash:${u}`, `🎯 ${USERS[u].short} Dashboard`])];
+  return [['list','List'],['kanban','Kanban'],['calendar','Calendar'],
+    ...teammates().map(u=>[`dash:${u}`, `${USERS[u].short} Dashboard`])];
+}
+function taskWhoOptions(){
+  return [['all','Everyone'],['mine','My tasks'],
+    ...teammates().map(u=>[`u:${u}`, `${USERS[u].short}'s tasks`]),
+    ['overdue','Overdue'],['completed','Completed']];
 }
 function renderTasks(){
   const all=state.tasks.filter(inBrand);
-  const counts={ list:all.length, kanban:all.length, calendar:all.length,
+  if(!state.taskWho) state.taskWho='all';
+  const counts={ all:all.filter(t=>t.status!=='Completed').length,
     mine:all.filter(t=>t.assignee===ME&&t.status!=='Completed').length,
     overdue:all.filter(isOverdue).length, completed:all.filter(t=>t.status==='Completed').length };
-  teammates().forEach(u=>{ counts['u:'+u]=all.filter(t=>t.assignee===u&&t.status!=='Completed').length; counts['dash:'+u]=0; });
+  teammates().forEach(u=>{ counts['u:'+u]=all.filter(t=>t.assignee===u&&t.status!=='Completed').length; });
   const viewLabel=Object.fromEntries(taskViews())[state.taskView]||'List';
-  const viewItem=(k,l,ico)=>`<button class="dd-item ${state.taskView===k?'sel':''}" onclick="state.taskView='${k}';renderTasks()">${ICONS[ico]}${l}${counts[k]?`<span style="margin-left:auto;font-size:.7rem;color:var(--ink-3);font-weight:700;padding-left:12px">${counts[k]}</span>`:'<span class="check">✓</span>'}</button>`;
+  const whoLabel=Object.fromEntries(taskWhoOptions())[state.taskWho]||'Everyone';
+  const viewItem=(k,l,ico)=>`<button class="dd-item ${state.taskView===k?'sel':''}" onclick="state.taskView='${k}';renderTasks()">${ICONS[ico]}${l}<span class="check">✓</span></button>`;
+  const whoItem=(k,l,ico)=>`<button class="dd-item ${state.taskWho===k?'sel':''}" onclick="state.taskWho='${k}';renderTasks()">${ICONS[ico]}${l}<span style="margin-left:auto;font-size:.7rem;color:var(--ink-3);font-weight:700;padding-left:12px">${counts[k]||0}</span></button>`;
   $('page-tasks').innerHTML=`
     <div class="page-head">
       <div><h1>Tasks</h1><div class="desc">Everything that needs doing across ${brandInfo(state.brand).name} — who, what, and by when</div></div>
@@ -3622,12 +3632,21 @@ function renderTasks(){
             ${viewItem('kanban','Kanban Board','frame')}
             ${viewItem('calendar','Calendar','cal')}
             ${teammates().map(u=>viewItem('dash:'+u, USERS[u].short+' Dashboard','user')).join('')}
-            <div class="dd-sep"></div>
-            <div class="dd-label">Quick filters</div>
-            ${viewItem('mine','My Tasks','user')}
-            ${teammates().map(u=>viewItem('u:'+u, USERS[u].short+"'s Tasks",'user')).join('')}
-            ${viewItem('overdue','Overdue','clock')}
-            ${viewItem('completed','Completed','check')}
+          </div>
+        </div>
+        <div class="dd">
+          <button class="btn btn-ghost btn-sm ${state.taskWho!=='all'?'act':''}" onclick="toggleDD(event,'taskWhoMenu')"
+            style="${state.taskWho!=='all'?'background:var(--accent-soft);color:var(--accent-ink)':''}">
+            ${ICONS.users}<span>${whoLabel}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="dd-menu" id="taskWhoMenu" style="min-width:220px">
+            <div class="dd-label">Show</div>
+            ${whoItem('all','Everyone','users')}
+            ${whoItem('mine','My tasks','user')}
+            ${teammates().map(u=>whoItem('u:'+u, USERS[u].short+"'s tasks",'user')).join('')}
+            ${whoItem('overdue','Overdue','clock')}
+            ${whoItem('completed','Completed','check')}
           </div>
         </div>
         <button class="btn btn-primary btn-sm" onclick="openTaskModal()">${ICONS.plus} Create task</button>
@@ -3635,8 +3654,10 @@ function renderTasks(){
     </div>
     <div id="taskViewBody"></div>`;
   const body=$('taskViewBody');
-  if(state.taskView==='kanban') body.innerHTML=taskKanban(all);
-  else if(state.taskView==='calendar') body.innerHTML=taskCalendar(all);
+  /* Filter FIRST, then draw — so Kanban and Calendar respect it too. */
+  const shown=applyTaskFilters(all);
+  if(state.taskView==='kanban') body.innerHTML=taskFilterRow()+taskKanban(shown);
+  else if(state.taskView==='calendar') body.innerHTML=taskFilterRow()+taskCalendar(shown);
   else if(state.taskView.startsWith('dash:')) body.innerHTML=memberDashboard(state.taskView.slice(5));
   else body.innerHTML=taskList(all);
 }
@@ -3651,21 +3672,29 @@ function taskFilterRow(){
       <option ${state.taskStatusFilter==='All'?'selected':''}>All</option>
       ${TASK_STATUSES.map(s=>`<option ${state.taskStatusFilter===s?'selected':''}>${s}</option>`).join('')}
     </select>
-    <select onchange="toast('Priority filter applied (visual only)')" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:.8rem">
-      <option>All priorities</option>${PRIORITIES.map(p=>`<option>${p}</option>`).join('')}
+    <select onchange="state.taskPriority=this.value==='All priorities'?'All':this.value;renderTasks()" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:.8rem">
+      <option ${!state.taskPriority||state.taskPriority==='All'?'selected':''}>All priorities</option>
+      ${PRIORITIES.map(p=>`<option ${state.taskPriority===p?'selected':''}>${p}</option>`).join('')}
     </select>
   </div>`;
 }
 function applyTaskFilters(list){
+  const who=state.taskWho||'all';
   let l=list;
-  if(state.taskView==='mine') l=l.filter(t=>t.assignee===ME&&t.status!=='Completed');
-  if(state.taskView.startsWith('u:')){ const u=state.taskView.slice(2); l=l.filter(t=>t.assignee===u&&t.status!=='Completed'); }
-  if(state.taskView==='overdue') l=l.filter(isOverdue);
-  if(state.taskView==='completed') l=l.filter(t=>t.status==='Completed');
-  if(state.taskView==='list') l=l.filter(t=>t.status!=='Completed');
-  if(state.taskStatusFilter!=='All') l=l.filter(t=>t.status===state.taskStatusFilter);
-  if(state.taskSearch) l=l.filter(t=>(t.name+' '+t.desc).toLowerCase().includes(state.taskSearch.toLowerCase()));
-  return l.sort((a,b)=>a.due.localeCompare(b.due));
+  if(who==='mine') l=l.filter(t=>t.assignee===ME&&t.status!=='Completed');
+  else if(who.startsWith('u:')){ const u=who.slice(2); l=l.filter(t=>t.assignee===u&&t.status!=='Completed'); }
+  else if(who==='overdue') l=l.filter(isOverdue);
+  else if(who==='completed') l=l.filter(t=>t.status==='Completed');
+  else l=l.filter(t=>t.status!=='Completed');          /* 'Everyone' means everyone still doing something */
+  if(state.taskStatusFilter&&state.taskStatusFilter!=='All') l=l.filter(t=>t.status===state.taskStatusFilter);
+  if(state.taskPriority&&state.taskPriority!=='All') l=l.filter(t=>t.priority===state.taskPriority);
+  if(state.taskSearch){
+    const q=state.taskSearch.toLowerCase();
+    /* Was reading t.desc, which no task has — so every row carried the literal
+       word "undefined" and searching for it matched everything. */
+    l=l.filter(t=>`${t.name||''} ${t.notes||''} ${t.creator||''}`.toLowerCase().includes(q));
+  }
+  return l.sort((a,b)=>String(a.due||'').localeCompare(String(b.due||'')));
 }
 function taskList(all){
   const list=applyTaskFilters(all);
