@@ -1593,6 +1593,33 @@ body:not(.dark) .asx-orb::before{opacity:.30}
 .mdl-menu .dd-item{align-items:flex-start}
 .mdl-foot{font-size:.71rem;color:var(--ink-3);line-height:1.5;padding:9px 11px 4px;
   border-top:1px solid var(--line-2);margin-top:5px}
+/* ---- Shapes ---- */
+.el-shape{border-radius:0}
+.brf-shape-svg{display:block;width:100%;height:100%;pointer-events:none;overflow:visible}
+.brf-shape-tx{position:absolute;inset:0;display:flex;align-items:center;padding:10px 14px;
+  line-height:1.3;white-space:pre-wrap;word-break:break-word;pointer-events:none;text-align:center}
+.shp-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.shp-item{display:flex;flex-direction:column;align-items:center;gap:7px;padding:12px 6px;border-radius:12px;
+  border:1px solid var(--line-2);background:var(--surface-2);color:var(--ink-2);cursor:pointer;font-family:inherit}
+.shp-item:hover{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+.shp-prev{width:42px;height:34px;display:block}
+.shp-prev svg{width:100%;height:100%}
+.shp-nm{font-size:.7rem;font-weight:650}
+.shp-kinds{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.shp-k{height:32px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);
+  color:var(--ink-3);cursor:pointer;padding:6px;display:flex;align-items:center;justify-content:center}
+.shp-k svg{width:100%;height:100%}
+.shp-k:hover{border-color:var(--accent);color:var(--accent-ink)}
+.shp-k.on{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+.shp-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.shp-w{flex:1;min-width:30px;height:28px;border-radius:7px;border:1px solid var(--line-2);
+  background:var(--surface);font-size:.72rem;font-weight:700;color:var(--ink-2);cursor:pointer;font-family:inherit}
+.shp-w:hover{border-color:var(--accent);color:var(--accent-ink)}
+.shp-w.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.sw.none{background:var(--surface-2);color:var(--ink-3);font-size:.8rem;font-weight:800;
+  display:flex;align-items:center;justify-content:center}
+.shp-col{width:100%;height:30px;margin-top:8px;border:1px solid var(--line-2);border-radius:8px;
+  background:var(--surface);cursor:pointer;padding:2px}
 /* ---- Projects ---- */
 /* The base .dd-menu pins itself with `top`, so a bottom offset alone left the
    panel stretched downward behind the suggestion pills. Clear top explicitly. */
@@ -2544,6 +2571,7 @@ const ICONS = {
   cursor: I('<path d="m4 3 8 17 2.2-6.8L21 11Z"/>'),
   type: I('<path d="M5 5h14M12 5v14M9 19h6"/>'),
   frame: I('<path d="M6 2v20M18 2v20M2 6h20M2 18h20"/>'),
+  shape: I('<rect x="2.5" y="3" width="11" height="11" rx="2"/><circle cx="15.5" cy="15" r="6"/>'),
   pin: I('<path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>'),
   panel: I('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9.5 3v18"/>'),
   graph: I('<circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6.8 8.2 10.6 15.8M17.2 8.2 13.4 15.8M7.5 6h9"/>'),
@@ -6187,7 +6215,7 @@ function renderBriefEditor(){
   document.body.classList.add('brief-full');
   const s=state.brf;
   if(s.present){ renderBriefPresent(b); return; }
-  const tools=[['select','cursor','Select / move (drag empty space to pan)'],['text','type','Add text'],['image','image','Add a photo'],['link','link','Add link'],['video','video','Add TikTok video'],['frame','frame','Add frame / page'],['comment','pin','Add comment']];
+  const tools=[['select','cursor','Select / move (drag empty space to pan)'],['text','type','Add text'],['image','image','Add a photo'],['link','link','Add link'],['video','video','Add TikTok video'],['shape','shape','Add a shape'],['frame','frame','Add frame / page'],['comment','pin','Add comment']];
   const openComments=b.comments.filter(c=>!c.resolved).length;
   $('page-briefs').innerHTML=`
     <div class="brf-editor">
@@ -7214,6 +7242,94 @@ function brfVideoHTML(e, opts){
 /* All eight grips, so a photo can be pulled from any side or corner. Dragging
    a north or west grip moves the origin as well as the size — otherwise the
    opposite edge would walk across the page instead of staying put. */
+/* ============================================================================
+   SHAPES
+   Drawn as SVG with preserveAspectRatio="none", which is the whole point: the
+   shape stretches to whatever box you drag rather than keeping its proportions.
+   Pull an ellipse sideways and it gets wider, not bigger.
+   ========================================================================== */
+const BRF_SHAPES = [
+  { id:'rect',     name:'Rectangle',   w:260, h:150 },
+  { id:'round',    name:'Rounded',     w:260, h:150 },
+  { id:'pill',     name:'Pill',        w:260, h:80  },
+  { id:'ellipse',  name:'Ellipse',     w:240, h:160 },
+  { id:'triangle', name:'Triangle',    w:200, h:170 },
+  { id:'diamond',  name:'Diamond',     w:200, h:170 },
+  { id:'banner',   name:'Banner',      w:300, h:90  },
+  { id:'arrow',    name:'Arrow',       w:260, h:90  },
+  { id:'line',     name:'Line',        w:260, h:8   },
+  { id:'star',     name:'Burst',       w:200, h:200 }
+];
+const BRF_SHAPE_FILLS = ['#111827','#ffffff','#2a78d6','#eb6834','#12b76a','#f79009','#f04438','#7a5af8','#fde68a','#e5e7eb'];
+
+/* Each shape is one path/element in a 0..100 box, stretched by the SVG. */
+function brfShapeSVG(e){
+  const fill=e.fill||'#111827', stroke=e.stroke||'none', sw=e.strokeW==null?0:e.strokeW;
+  const common=`fill="${fill}" stroke="${stroke}" stroke-width="${sw}" vector-effect="non-scaling-stroke"`;
+  const r=e.shape==='round'?8:0;
+  let inner;
+  switch(e.shape){
+    case 'ellipse':  inner=`<ellipse cx="50" cy="50" rx="49.5" ry="49.5" ${common}/>`; break;
+    case 'triangle': inner=`<polygon points="50,1 99,99 1,99" ${common}/>`; break;
+    case 'diamond':  inner=`<polygon points="50,1 99,50 50,99 1,50" ${common}/>`; break;
+    case 'banner':   inner=`<polygon points="1,1 99,1 92,50 99,99 1,99 8,50" ${common}/>`; break;
+    case 'arrow':    inner=`<polygon points="1,28 68,28 68,3 99,50 68,97 68,72 1,72" ${common}/>`; break;
+    case 'line':     inner=`<rect x="0" y="0" width="100" height="100" ${common}/>`; break;
+    case 'star':     inner=`<polygon points="${
+        Array.from({length:20},(_,i)=>{ const a=(Math.PI/10)*i-Math.PI/2, rr=i%2?22:49;
+          return `${(50+Math.cos(a)*rr).toFixed(1)},${(50+Math.sin(a)*rr).toFixed(1)}`; }).join(' ')
+      }" ${common}/>`; break;
+    case 'pill':     inner=`<rect x="0.5" y="0.5" width="99" height="99" rx="50" ry="50" ${common}/>`; break;
+    case 'round':    inner=`<rect x="0.5" y="0.5" width="99" height="99" rx="${r}" ry="${r}" ${common}/>`; break;
+    default:         inner=`<rect x="0.5" y="0.5" width="99" height="99" ${common}/>`;
+  }
+  return `<svg class="brf-shape-svg" viewBox="0 0 100 100" preserveAspectRatio="none">${inner}</svg>`;
+}
+function brfShapeHTML(e){
+  const tc=e.textColour||'#ffffff', fs=e.fontSize||18;
+  return `${brfShapeSVG(e)}
+    <div class="brf-shape-tx" style="color:${tc};font-size:${fs}px;font-weight:${e.bold===false?500:700};
+      justify-content:${e.align==='left'?'flex-start':e.align==='right'?'flex-end':'center'}"
+      >${e.text?esc(e.text).replace(/\n/g,'<br>'):''}</div>`;
+}
+function brfAddShape(kind){
+  const b=briefById(state.briefId); const def=BRF_SHAPES.find(x=>x.id===kind)||BRF_SHAPES[0];
+  const at=state.brf.dropAt||{x:220,y:220};
+  brfSnapshot();
+  const el={ id:'s'+Date.now()%100000, type:'shape', shape:kind, x:at.x, y:at.y,
+    w:def.w, h:def.h, fill:'#111827', stroke:'none', strokeW:0,
+    text:'', textColour:'#ffffff', fontSize:18, align:'center' };
+  /* Shapes go to the BACK of the list so they sit behind text and photos —
+     which is the whole point of using one as a backing panel. */
+  b.elements.unshift(el);
+  state.brf.tool='select'; state.brf.sel=el.id;
+  brfLog(b,'shape',def.name);
+  tikiPush(); renderBriefEditor();
+  toast('Double-click the shape to write on it');
+}
+function brfShapePicker(){
+  openModal(modalShell('Add a shape',
+    `<div class="shp-grid">${BRF_SHAPES.map(sh=>`
+      <button class="shp-item" onclick="closeModal();brfAddShape('${sh.id}')">
+        <span class="shp-prev">${brfShapeSVG({shape:sh.id,fill:'currentColor'})}</span>
+        <span class="shp-nm">${sh.name}</span></button>`).join('')}</div>
+     <div style="font-size:.75rem;color:var(--ink-3);line-height:1.55;margin-top:12px">
+       Drag any edge to stretch it — width and height move independently, so a pill can run the
+       full width of a page without getting taller. Hold Shift while dragging a corner to keep it in proportion.</div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>`,'wide'));
+}
+function brfEditShapeText(ev,id){
+  ev.stopPropagation();
+  const b=briefById(state.briefId); const el=b.elements.find(x=>x.id===id); if(!el) return;
+  const v=prompt('Text on this shape', el.text||'');
+  if(v===null) return;
+  brfSnapshot(); el.text=v; tikiPush(); renderBriefEditor();
+}
+function brfShapeSet(id,prop,val){
+  const b=briefById(state.briefId); const el=b.elements.find(x=>x.id===id); if(!el) return;
+  el[prop]=val; tikiPush(); renderBriefEditor();
+}
+
 const BRF_HANDLES=['nw','n','ne','w','e','sw','s','se'];
 /* Text height follows the words, so vertical-only grips would be lying about
    what they do — corners and sides only, exactly like Canva. */
@@ -7290,8 +7406,12 @@ function brfWorldHTML(b){
       } else {
         const inner = e.type==='image'
           ? `<img class="brf-img" src="${e.src}" alt="${esc(e.alt||'')}" draggable="false">`
+          : e.type==='shape' ? brfShapeHTML(e)
           : brfVideoHTML(e,{live:false});
-        body=`<div class="brf-el el-img" data-el="${e.id}" ${e.type==='video'?`ondblclick="brfEditVideo('${e.id}')" title="Double-click to paste a TikTok link"`:''} style="left:${ix}px;top:${iy}px;width:${e.w}px;height:${e.h}px;${brfRotCss(e)}">
+        body=`<div class="brf-el ${e.type==='shape'?'el-shape':'el-img'}" data-el="${e.id}" ${
+          e.type==='video'?`ondblclick="brfEditVideo('${e.id}')" title="Double-click to paste a TikTok link"`
+          : e.type==='shape'?`ondblclick="brfEditShapeText(event,'${e.id}')" title="Double-click to write on it"`:''
+        } style="left:${ix}px;top:${iy}px;width:${e.w}px;height:${e.h}px;${brfRotCss(e)}">
           ${inner}</div>`;
       }
       if(host) clips[host.id]=(clips[host.id]||'')+body; else h+=body;
@@ -8102,11 +8222,51 @@ function brfSyncTextBoxes(){
     if(n) ov.style.height=(n.getBoundingClientRect().height/z)+'px';
   });
 }
+function brfShapePanel(b,e){
+  const sw=(prop,val)=>`onclick="brfShapeSet('${e.id}','${prop}','${val}')"`;
+  const swatches=(prop,cur)=>BRF_SHAPE_FILLS.map(c=>
+    `<button class="sw ${(cur||'').toLowerCase()===c?'on':''}" style="background:${c}" ${sw(prop,c)} title="${c}"></button>`).join('');
+  return `
+    <div class="brf-side">
+      <div class="sd-h">Shape</div>
+      <div class="shp-kinds">${BRF_SHAPES.map(k=>
+        `<button class="shp-k ${e.shape===k.id?'on':''}" title="${k.name}"
+          onclick="brfShapeSet('${e.id}','shape','${k.id}')">${brfShapeSVG({shape:k.id,fill:'currentColor'})}</button>`).join('')}</div>
+
+      <div class="sd-h" style="margin-top:16px">Fill</div>
+      <div class="sw-grid">${swatches('fill',e.fill)}
+        <button class="sw none ${e.fill==='none'?'on':''}" ${sw('fill','none')} title="No fill">/</button></div>
+      <input type="color" class="shp-col" value="${/^#/.test(e.fill||'')?e.fill:'#111827'}"
+        oninput="brfShapeSet('${e.id}','fill',this.value)">
+
+      <div class="sd-h" style="margin-top:14px">Border</div>
+      <div class="sw-grid">${swatches('stroke',e.stroke)}
+        <button class="sw none ${(e.stroke||'none')==='none'?'on':''}" ${sw('stroke','none')} title="No border">/</button></div>
+      <div class="shp-row">${[0,1,2,3,5,8].map(n=>
+        `<button class="shp-w ${(e.strokeW||0)===n?'on':''}" onclick="brfShapeSet('${e.id}','strokeW',${n})">${n||'—'}</button>`).join('')}</div>
+
+      <div class="sd-h" style="margin-top:16px">Text</div>
+      <button class="btn btn-soft btn-sm" style="width:100%" onclick="brfEditShapeText(event,'${e.id}')">
+        ${e.text?'Edit text':'Add text'}</button>
+      ${e.text?`
+      <div class="sw-grid" style="margin-top:9px">${swatches('textColour',e.textColour)}</div>
+      <div class="shp-row" style="margin-top:8px">${[12,14,16,18,22,28,36].map(n=>
+        `<button class="shp-w ${(e.fontSize||18)===n?'on':''}" onclick="brfShapeSet('${e.id}','fontSize',${n})">${n}</button>`).join('')}</div>
+      <div class="shp-row" style="margin-top:8px">${[['left','⟨'],['center','≡'],['right','⟩']].map(([a,ic])=>
+        `<button class="shp-w ${(e.align||'center')===a?'on':''}" onclick="brfShapeSet('${e.id}','align','${a}')">${ic}</button>`).join('')}</div>`:''}
+
+      <div style="font-size:.71rem;color:var(--ink-3);line-height:1.5;margin-top:16px">
+        Drag any edge to stretch width and height independently. Shift on a corner keeps it in proportion.
+        The grip below the shape spins it.</div>
+    </div>`;
+}
 function brfSidePanel(b){
   /* A selected text box takes priority: you're more likely to be styling the
      thing you just clicked than the page behind it. */
   const tx=b.elements.find(e=>e.id===state.brf.sel&&e.type==='text');
   if(tx) return brfTextPanel(b,tx);
+  const sh=b.elements.find(e=>e.id===state.brf.sel&&e.type==='shape');
+  if(sh) return brfShapePanel(b,sh);
   const fr=b.elements.find(e=>e.id===state.brf.selFrame&&e.type==='frame');
   if(!fr) return '';
   const cur=(fr.bg||'#ffffff').toLowerCase();
@@ -8149,6 +8309,7 @@ function brfAddAt(b,x,y){
   const s=state.brf; const id=(s.tool[0])+Date.now()%100000;
   brfSnapshot();
   if(s.tool==='image'){ brfPickImage(x,y); return; }
+  if(s.tool==='shape'){ state.brf.dropAt={x,y}; s.tool='select'; brfShapePicker(); return; }
   if(s.tool==='text') b.elements.push({id,type:'text',x,y,w:320,fontSize:15,font:'sans',
     html:'New text \u2014 double-click to edit'});
   else if(s.tool==='link') b.elements.push({id,type:'link',x,y,url:'paste-link.com/…',label:'New link — double-click to edit'});
