@@ -11902,7 +11902,9 @@ function saCard(a){
       </div>
       <div style="display:flex;gap:6px;margin-top:8px">
         <button class="btn btn-primary btn-sm" style="flex:1" onclick="clPick('${a.id}')">Clone this</button>
-        ${saved?'':`<button class="btn btn-soft btn-sm" onclick="saSave('${a.id}')" title="Pin to your library">＋</button>`}
+        ${saved
+          ? `<button class="btn btn-ghost btn-sm" onclick="saForget('${a.id}')" title="Remove from your swipe file">✕</button>`
+          : `<button class="btn btn-soft btn-sm" onclick="saSave('${a.id}')" title="Save to your swipe file · free">＋</button>`}
       </div>
     </div></div>`;
 }
@@ -12125,15 +12127,31 @@ async function saSearch(){
   }catch(e){ SA.err=e.message||'Search failed'; SA.results=[]; }
   SA.loading=false; renderStatics();
 }
-function saSave(id){
+/* Saving is free on their side, so the swipe file IS the library rather than a
+   second copy of it. Write through, then keep a local pin as well so the card
+   does not disappear if their read is slow or the key is missing. */
+async function saSave(id){
   const a=[...SA.results,...SW.rows].find(x=>x.id===id); if(!a) return;
-  if(STATIC_LIB.some(x=>x.id===id)) return;
-  STATIC_LIB.unshift({...a, savedAt:Date.now()});
-  tikiPush(); renderStatics(); toast(`Saved as ${a.ref}`);
+  if(!STATIC_LIB.some(x=>x.id===id)) STATIC_LIB.unshift({...a, savedAt:Date.now()});
+  if(!SW.rows.some(x=>x.id===id)) SW.rows.unshift(a);
+  tikiPush(); renderStatics(); toast('Saved to your swipe file');
+  try{
+    const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
+      body:JSON.stringify({ action:'swipe_save', id }) });
+    /* 409 means it was already there, which is a success as far as we care. */
+    if(!r.ok && r.status!==409){
+      const j=await r.json().catch(()=>({}));
+      toast('Pinned here, but GetHookd said: '+(j.error||('HTTP '+r.status)));
+    }
+  }catch(e){ toast('Pinned here — could not reach GetHookd'); }
 }
-function saForget(id){
-  const i=STATIC_LIB.findIndex(x=>x.id===id); if(i<0) return;
-  STATIC_LIB.splice(i,1); tikiPush(); renderStatics(); toast('Removed');
+async function saForget(id){
+  const i=STATIC_LIB.findIndex(x=>x.id===id); if(i>=0) STATIC_LIB.splice(i,1);
+  const k=SW.rows.findIndex(x=>x.id===id); if(k>=0) SW.rows.splice(k,1);
+  if(CL.adId===id){ CL.adId=null; CL.ad=null; }
+  tikiPush(); renderStatics(); toast('Removed');
+  try{ await tikiFetch('/functions/v1/adlib',{ method:'POST',
+    body:JSON.stringify({ action:'swipe_remove', id }) }); }catch(e){}
 }
 function saCopyRef(ref){
   navigator.clipboard?.writeText(ref).then(()=>toast(`${ref} copied`)).catch(()=>toast(ref));
