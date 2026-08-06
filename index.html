@@ -518,8 +518,9 @@ body.sb-hidden .sb-restore{display:flex}
   border-radius:18px 18px 5px 18px;padding:11px 15px;
   font-size:.88rem;line-height:1.5;max-width:80%}
 .asx-ai .who{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.asx-ai .av{width:23px;height:23px;border-radius:7px;background:#111;color:#fff;display:flex;
+.asx-ai .av{width:23px;height:23px;border-radius:7px;background:linear-gradient(145deg,#ff3b30,#c1121f);color:#fff;display:flex;
   align-items:center;justify-content:center;font-size:.66rem;font-weight:800}
+.asx-ai .av svg{width:14px;height:14px;display:block}
 .asx-ai .nm{font-size:.78rem;font-weight:700}
 .asx-ai .body{font-size:.89rem;line-height:1.62;white-space:pre-wrap;
   background:#e9e9eb;color:var(--ink);border-radius:18px 18px 18px 5px;
@@ -2258,6 +2259,99 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
 .cl-res img{width:100%;display:block;background:#fff}
 .cl-acts{display:flex;gap:6px;padding:9px}
 .cl-acts .btn{text-decoration:none}
+
+/* ---- clone an ad, in the composer --------------------------------------- */
+.cl-pan{border:1px solid var(--accent);border-radius:16px;margin-bottom:10px;overflow:hidden;
+  background:color-mix(in srgb,var(--accent) 4%,var(--surface));box-shadow:var(--shadow)}
+.cl-pan.hide{display:none}
+.cl-h{display:flex;align-items:center;gap:8px;padding:11px 14px;font-size:.81rem;font-weight:670}
+.cl-ic{color:var(--accent)}
+.cl-cr{margin-left:auto;font-size:.72rem;font-weight:600;color:var(--ink-3)}
+.cl-x{width:22px;height:22px;border-radius:7px;border:none;background:none;color:var(--ink-3);
+  cursor:pointer;font-size:.8rem;font-family:inherit}
+.cl-x:hover{background:var(--surface-2);color:var(--ink)}
+.cl-b{padding:0 14px 13px;display:flex;flex-direction:column;gap:13px}
+.cl-f{display:flex;gap:12px;align-items:flex-start}
+.cl-l{width:88px;flex:none;font-size:.68rem;font-weight:800;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--ink-3);padding-top:8px}
+.cl-w{flex:1;min-width:0}
+.cl-strip{display:flex;gap:7px;overflow-x:auto;padding-bottom:3px;scrollbar-width:thin}
+.cl-th{width:60px;height:60px;border-radius:10px;flex:none;overflow:hidden;padding:0;cursor:pointer;
+  border:2px solid transparent;background:var(--surface-2);position:relative;
+  display:flex;align-items:center;justify-content:center;color:var(--ink-3);font-size:.75rem}
+.cl-th.on{border-color:var(--accent)}
+.cl-th img{width:100%;height:100%;object-fit:cover;display:block}
+.cl-th.pr img{object-fit:contain;background:#fff}
+.cl-used{position:absolute;left:0;right:0;bottom:0;background:var(--accent);color:#fff;
+  font-size:.48rem;font-weight:800;padding:2px 0;text-align:center;letter-spacing:.04em}
+.cl-hint{font-size:.72rem;color:var(--ink-3);margin-top:7px;line-height:1.5}
+.cl-hint b{color:var(--ink);font-weight:640}
+.cl-warn{font-size:.72rem;color:var(--warn-ink);margin-top:7px;line-height:1.5}
+.cl-angles{display:flex;gap:6px;flex-wrap:wrap}
+.cl-ang{font-size:.74rem;font-weight:620;padding:6px 11px;border-radius:99px;cursor:pointer;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink-2);font-family:inherit;
+  max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cl-ang:hover{border-color:var(--accent)}
+.cl-ang.on{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+.cl-ang.ghost{color:var(--ink-3);border-style:dashed}
+.cl-ctrls{display:flex;gap:7px;flex-wrap:wrap}
+.cl-sel{height:32px;border:1px solid var(--line);border-radius:9px;padding:0 9px;font-family:inherit;
+  font-size:.78rem;background:var(--surface);color:var(--ink);outline:none;cursor:pointer}
+.cl-btn.on{background:var(--accent-soft);color:var(--accent-ink)}
+.cl-btn span{font-size:.75rem;font-weight:640}
+
+/* ---- the result card in the thread --------------------------------------- */
+.cl-card{border:1px solid var(--line-2);border-radius:16px;overflow:hidden;background:var(--surface-2);
+  margin:2px 0 4px}
+.cl-ch{display:flex;align-items:center;gap:8px;padding:11px 14px;font-size:.82rem;font-weight:660}
+.cl-cm{font-size:.72rem;font-weight:500;color:var(--ink-3)}
+.cl-pill{margin-left:auto;font-size:.63rem;font-weight:750;padding:2px 9px;border-radius:99px;
+  background:var(--good-soft);color:var(--good-ink)}
+.cl-pill.bad{background:var(--crit-soft);color:var(--crit-ink)}
+.cl-sp{margin-left:auto;width:15px;height:15px;border-radius:50%;flex:none;
+  border:2px solid var(--line);border-top-color:var(--accent);animation:clspin .8s linear infinite}
+@keyframes clspin{to{transform:rotate(360deg)}}
+.cl-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 12px 11px}
+@media(max-width:820px){.cl-grid{grid-template-columns:repeat(2,1fr)}}
+.cl-shot{border-radius:11px;overflow:hidden;background:#fff;border:1px solid var(--line-2);
+  display:block;aspect-ratio:1}
+.cl-shot img{width:100%;height:100%;object-fit:cover;display:block}
+.cl-shot.ph{background:var(--surface);border-style:dashed;animation:clpulse 1.6s ease-in-out infinite}
+@keyframes clpulse{0%,100%{opacity:.5}50%{opacity:.9}}
+.cl-cf{display:flex;align-items:center;gap:10px;padding:0 14px 13px;font-size:.74rem;color:var(--ink-3);line-height:1.5}
+.cl-open{margin-left:auto;white-space:nowrap;font-size:.75rem;font-weight:650;color:var(--accent-ink);
+  background:none;border:none;cursor:pointer;font-family:inherit}
+
+/* ---- prompt lab ---------------------------------------------------------- */
+.clp-wrap{display:grid;grid-template-columns:1fr 380px;gap:16px;align-items:start}
+@media(max-width:1000px){.clp-wrap{grid-template-columns:1fr}}
+.clp-name{width:100%;border:none;background:none;font-family:inherit;font-size:1.02rem;font-weight:660;
+  color:var(--ink);outline:none;padding:0 0 10px;border-bottom:1px solid var(--line-2);margin-bottom:12px}
+.clp-ta{width:100%;min-height:460px;border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.79rem;line-height:1.7;
+  background:var(--surface-2);color:var(--ink-2);outline:none;resize:vertical}
+.clp-ta:focus{border-color:var(--accent)}
+.clp-acts{display:flex;align-items:center;gap:8px;margin-top:12px}
+.clp-live{font-size:.63rem;font-weight:800;padding:3px 10px;border-radius:99px;
+  background:var(--good-soft);color:var(--good-ink);letter-spacing:.03em}
+.clp-h{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3)}
+.clp-tk{display:flex;align-items:center;gap:10px;margin-top:9px;font-size:.75rem}
+.clp-tk .d{color:var(--ink-3);flex:1;min-width:0}
+.clp-tok{font-family:ui-monospace,monospace;font-size:.72rem;font-weight:700;padding:2px 6px;
+  border-radius:5px;background:var(--violet-soft);color:var(--violet-ink);white-space:nowrap}
+.clp-rule{color:var(--accent-ink);font-weight:800}
+.clp-note{font-size:.74rem;color:var(--ink-3);line-height:1.6;margin-top:13px;
+  padding-top:12px;border-top:1px solid var(--line-2)}
+.clp-row{display:flex;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid var(--line-2);cursor:pointer}
+.clp-row:first-of-type{border-top:none}
+.clp-row:hover{background:var(--surface-2)}
+.clp-row.on{background:var(--accent-soft)}
+.clp-row .n{font-size:.82rem;font-weight:620}
+.clp-row .s{font-size:.72rem;color:var(--ink-3);margin-top:2px}
+.clp-preview{margin-top:14px}
+.clp-pre{margin:0;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.72rem;line-height:1.65;color:var(--ink-3);background:var(--surface);
+  border:1px solid var(--line-2);border-radius:12px;padding:13px 15px;max-height:340px;overflow:auto}
 </style>
 </head>
 <body>
@@ -2354,6 +2448,7 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
       <div class="page" id="page-assistant"></div>
       <div class="page" id="page-roadmap"></div>
       <div class="page" id="page-memory"></div>
+      <div class="page" id="page-promptlab"></div>
       <div class="page" id="page-tasks"></div>
       <div class="page" id="page-creators"></div>
       <div class="page" id="page-videos"></div>
@@ -3031,6 +3126,7 @@ const PAGES = [
   /* Roadmap is a back-office tool — Settings only, never the daily sidebar. */
   { id:'roadmap',   label:'Roadmap',   icon:'flag',   hidden:true },
   { id:'memory',    label:'Assistant memory', icon:'grad', hidden:true },
+  { id:'promptlab', label:'Clone prompt lab',   icon:'spark', hidden:true },
   /* Courses and Profit are complete and unchanged — they just don't belong in
      the daily sidebar. hidden:true keeps them out of the nav; they're reached
      from Settings → Back office, same as the Profit Cause Map. */
@@ -3301,7 +3397,7 @@ function navTo(page, opts={}){
   window.scrollTo({top:0});
 }
 function renderPage(page){
-  ({ overview:renderOverview, assistant:renderAssistant, tasks:renderTasks, creators:renderCreators, videos:renderVideos, outreach:renderOutreach,
+  ({ overview:renderOverview, assistant:renderAssistant, tasks:renderTasks, creators:renderCreators, videos:renderVideos, outreach:renderOutreach, promptlab:renderPromptLab,
      retainers:renderRetainers, briefs:renderBriefs, courses:renderCourses,
      profit:renderProfit, map:renderMap, roadmap:renderRoadmap, memory:renderMemory,
      flows:renderFlows, statics:renderStatics, settings:renderSettings })[page]();
@@ -4197,6 +4293,50 @@ let TM_KIND='signal';
 function tmKind(k){ TM_KIND=k;
   $('tmSig')?.classList.toggle('on',k==='signal');
   $('tmNoi')?.classList.toggle('on',k==='noise'); }
+
+/* Restored — these were lost when the dashboard replaced memberDashboard, which
+   left the list view's status menu and Done button calling nothing. */
+function completeTask(id){
+  const t=state.tasks.find(x=>x.id===id); if(!t) return;
+  t.status='Completed';
+  /* Recording WHEN is what makes on-time measurable — a due date alone cannot. */
+  t.at=TODAY_ISO;
+  tikiPush();
+  toast(TODAY_ISO<=t.due ? 'Done, on time' : 'Done — that one was late');
+  renderPage(state.page); renderSidebar();
+}
+function setTaskStatus(id,s){
+  const t=state.tasks.find(x=>x.id===id); if(!t) return;
+  t.status=s; closeAllDD();
+  if(s==='Completed') t.at=TODAY_ISO; else delete t.at;
+  tikiPush(); toast(`Status → ${s}`); renderPage(state.page); renderSidebar();
+}
+/* Three real weeks around today, not a hard-coded July. Signal and noise carry
+   the colour now that priority is gone. */
+function taskCalendar(all){
+  const start=new Date(TODAY.getTime()-((TODAY.getDay()+6)%7)*864e5 - 7*864e5);
+  const days=[...Array(28)].map((_,i)=>{ const d=new Date(start); d.setDate(d.getDate()+i); return d; });
+  const dows=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const fmt=d=>d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  return `<div class="card"><div class="card-h"><div class="t">${fmt(days[0])} – ${fmt(days[27])}</div></div>
+    <div class="card-b"><div class="cal">
+      ${dows.map(d=>`<div class="cal-dow">${d}</div>`).join('')}
+      ${days.map(d=>{
+        const iso=isoOf(d);
+        const isToday=iso===TODAY_ISO;
+        const dayTasks=all.filter(t=>t.due===iso);
+        return `<div class="cal-day ${isToday?'today':''}">
+          <div class="d">${d.getDate()}${d.getDate()===1?' '+d.toLocaleDateString('en-GB',{month:'short'}):''}</div>
+          ${dayTasks.map(t=>`<button class="cal-task ${isSignal(t)?'k-sig':'k-noi'}" onclick="openTaskDetail('${t.id}')"
+             title="${esc(t.name)}">${t.status==='Completed'?'✓ ':''}${esc(t.name)}</button>`).join('')}
+        </div>`;}).join('')}
+    </div>
+    <div class="legend-row" style="margin-top:12px">
+      <span class="li"><span class="sw" style="background:var(--accent-soft);border:1px solid var(--accent)"></span>Signal</span>
+      <span class="li"><span class="sw" style="background:var(--neutral-soft);border:1px solid var(--ink-3)"></span>Noise</span>
+    </div></div></div>`;
+}
+
 function openTaskModal(editId){
   const t=editId? state.tasks.find(x=>x.id===editId) : null;
   openModal(modalShell(t?'Edit Task':'Create Task',`
@@ -5435,6 +5575,11 @@ function renderSettingsInner(){
               <span class="iic" style="background:#5856d6">${ICONS.grad}</span>
               <div><div class="it">Assistant memory</div><div class="is">What it has been taught, and where it is still guessing</div></div>
               <span class="iv">${AI.learnings.length?`${AI.learnings.length} stored`:'nothing yet'}</span><span class="ich">›</span>
+            </div>
+            <div class="irow" onclick="navTo('promptlab')">
+              <span class="iic" style="background:#ff9500">${ICONS.spark}</span>
+              <div><div class="it">Clone prompt lab</div><div class="is">The wording sent to Nano Banana on every static — edit and version it</div></div>
+              <span class="iv">${esc(clpLive().name)}</span><span class="ich">›</span>
             </div>
             <div class="irow" onclick="navTo('roadmap')">
               <span class="iic" style="background:#ff9500">${ICONS.flag}</span>
@@ -11688,7 +11833,11 @@ function asxToggle(what){
   renderAssistant();
 }
 function asxSend(){
-  const ta=$('asxTa'); const q=(ta?.value||'').trim(); if(!q) return;
+  const ta=$('asxTa'); const q=(ta?.value||'').trim();
+  /* Cloning is the one mode where an empty box is legitimate — the panel above
+     already says everything, and the text is only "anything to change". */
+  if(CLONE.on){ clGenerate().then(()=>{ if(ta){ ta.value=''; ta.style.height='auto'; } }); return; }
+  if(!q) return;
   ta.value=''; ta.style.height='auto';
   /* With an image model switched on, the composer draws instead of answering.
      imgGenerate pushes the user's line itself, so it is not pushed twice. */
@@ -11702,15 +11851,366 @@ function asxKey(ev){
 }
 function asxAsk(q){ aiPush('me', esc(q)); if(AI.cloud!==false) aiCloudRespond(q); else aiTyping(()=>aiRespond(q)); }
 
+/* The assistant signs its answers with the app's own mark rather than a letter. */
+const RARRI_MARK = `<svg viewBox="0 0 48 48" fill="none"><defs><mask id="rarriAv"><rect width="48" height="48" fill="#fff"/><path d="M2 34 L48 14" stroke="#000" stroke-width="4.6"/></mask></defs><g mask="url(#rarriAv)" fill="#fff"><path d="M15 36 L20.5 12 h9.5 c5.6 0 8.6 3 7.6 7.6 -.7 3.4 -3.2 5.6 -6.8 6.4 l4.2 10 h-7.4 l-3.4 -9.2 h-1.6 L24.3 36 z M25.6 21.4 h3.2 c2.2 0 3.6 -1 3.9 -2.6 .3 -1.6 -.7 -2.5 -2.8 -2.5 h-3.2 z"/></g></svg>`;
 function asxThreadHTML(){
   return `<div class="asx-mid">${AI.msgs.map(m=>{
       if(m.who==='work') return `<div class="asx-turn asx-ai">${aiWorkHTML(m,'asx-work')}</div>`;
       if(m.who==='card') return `<div class="asx-turn">${m.html}</div>`;
       if(m.who==='me')   return `<div class="asx-turn asx-me"><div class="bub">${m.html}</div></div>`;
-      return `<div class="asx-turn asx-ai"><div class="who"><span class="av">R</span><span class="nm">Rarri</span></div>
+      return `<div class="asx-turn asx-ai"><div class="who"><span class="av">${RARRI_MARK}</span><span class="nm">Rarri</span></div>
         <div class="body">${m.html}</div></div>`;
     }).join('')}</div>`;
 }
+/* ============================================================================
+   CLONE AN AD
+   Their pipeline drew the product three times because it was handed a
+   comparison graphic as the "product" and a prompt that says replicate the
+   EXACT layout without ever stating how many products exist. So we do it
+   ourselves: layout from one reference image, product from another, pack count
+   as a hard rule, and the angle from the conversation you just had.
+   ========================================================================== */
+const CL_ASPECTS = [['1:1','Square'],['4:5','Portrait 4:5'],['9:16','Story 9:16'],['16:9','Wide 16:9']];
+const CL_COUNTS  = [1,2,4,6,8];
+let CLONE = {
+  on:false, adId:null, ad:null, prodId:null, imgIdx:0,
+  n:4, aspect:'1:1', model:'nano-banana-2', layers:true,
+  angle:'', angles:[], anglesLoading:false, busy:false, err:''
+};
+
+/* ---- the prompt, versioned and editable in the back office --------------- */
+const CLONE_PROMPT_V1 = `You are rebuilding a proven advertisement for a different product.
+
+THE LAYOUT
+Image 1 is the reference ad. Copy its composition, its crop, where the eye lands
+first, the relationship between headline and product, and its colour temperature.
+Do NOT copy its product, its brand marks, its logos or its words.
+
+THE PRODUCT
+Image 2 is the product: {{PRODUCT}}.
+Render it EXACTLY ONCE unless the reference layout itself shows a set.
+Match the packaging artwork, the label text and the proportions precisely — a
+viewer must recognise it as the same physical item. Never invent a second pack,
+a sachet, a bottle or a variant that is not visible in image 2.
+
+THE ANGLE
+{{ANGLE}}
+Speak to that person, not to a general shopper.
+
+THE COPY
+{{COPY_MODE}}
+
+HARD RULES
+- One product, shown once, unless the reference layout is explicitly a set.
+- No text that was not asked for. No lorem, no invented claims, no fake badges,
+  no review stars, no press logos.
+- No competitor products, logos or trade dress carried over from the reference.
+- Photographic lighting consistent between product and scene — nothing pasted on.
+- Leave clean, uncluttered space where the reference puts its headline.
+{{CHANGES}}`;
+const CLONE_PROMPTS = [{ id:'v1', name:'v1 — pack count as a rule', body:CLONE_PROMPT_V1, live:true, runs:0 }];
+const clLivePrompt = () => (CLONE_PROMPTS.find(p=>p.live)||CLONE_PROMPTS[0]).body;
+
+/* Text baked in vs text as layers. The second is the whole reason to build this
+   ourselves: a plate with no copy on it can take a new hook in ten seconds. */
+const CL_COPY_BAKED = `Write a short, specific headline for the angle above and set it in the
+same position and weight the reference uses. One headline, one supporting line, nothing else.`;
+const CL_COPY_CLEAN = `CRITICAL: render NO TEXT WHATSOEVER. No headline, no subhead, no badge,
+no packaging claims beyond what is physically printed on the product itself, no button, no
+watermark. Leave the headline area clean and uncluttered so type can be laid over it afterwards.`;
+
+function clBuildPrompt(){
+  const prod=GHP.list.find(p=>p.id===CLONE.prodId);
+  const angle=CLONE.angle.trim();
+  const changes=($('asxTa')?$('asxTa').value:'').trim();
+  return clLivePrompt()
+    .replace('{{PRODUCT}}', prod?prod.title:'the product shown')
+    .replace('{{ANGLE}}',  angle||'A clear, single-minded benefit for the everyday buyer.')
+    .replace('{{COPY_MODE}}', CLONE.layers?CL_COPY_CLEAN:CL_COPY_BAKED)
+    .replace('{{CHANGES}}', changes?('- '+changes):'');
+}
+
+function clToggle(){
+  CLONE.on=!CLONE.on;
+  if(CLONE.on){ swLoad(); ghProducts(); if(!CLONE.angles.length) clPullAngles(); }
+  renderAssistant();
+}
+function clSet(k,v){ CLONE[k]=v; clPaint(); }
+function clUseAngle(t){ CLONE.angle=t; clPaint(); }
+
+/* Repaint only the panel. Re-rendering the whole assistant would blow away the
+   caret in the composer, which is exactly where you are typing. */
+function clPaint(){
+  const el=$('clonePanel'); if(el) el.innerHTML=clPanelInner();
+  const b=$('clBtn'); if(b) b.classList.toggle('on', CLONE.on);
+}
+
+/* ---- angles, pulled out of the conversation ------------------------------ */
+async function clPullAngles(){
+  const said=AI.msgs.filter(m=>m.who==='ai'||m.who==='me')
+    .slice(-8).map(m=>String(m.html||'').replace(/<[^>]+>/g,' ')).join('\n').slice(-6000);
+  if(said.replace(/\s/g,'').length<80){ CLONE.angles=[]; clPaint(); return; }
+  CLONE.anglesLoading=true; clPaint();
+  try{
+    const q=`From the conversation below, pull out every distinct ADVERTISING ANGLE that was
+proposed or agreed — the audience and the reason they would buy, not the product features.
+Ignore anything that was rejected. Maximum five.
+Reply with STRICT JSON only, no prose and no code fences:
+{"angles":[{"label":"four to six words","brief":"one sentence naming the audience and the tension it resolves"}]}
+
+CONVERSATION
+${said}`;
+    const r=await tikiFetch('/functions/v1/assistant',{ method:'POST',
+      body:JSON.stringify({ snapshot:{}, history:[], question:q, model:'claude-haiku-4-5-20251001' }) });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    const text=(j.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');
+    const m=text.match(/\{[\s\S]*\}/); if(!m) throw new Error('no json');
+    CLONE.angles=(JSON.parse(m[0]).angles||[]).slice(0,5);
+    if(!CLONE.angle && CLONE.angles[0]) CLONE.angle=CLONE.angles[0].brief||CLONE.angles[0].label;
+  }catch(e){ CLONE.angles=[]; }
+  CLONE.anglesLoading=false; clPaint();
+}
+
+/* ---- generation ----------------------------------------------------------
+   kie.ai renders one image per task, so N variations is N tasks fired together
+   rather than one job asked for N. They come back independently, which is why
+   the card fills in as they land instead of waiting for the slowest. */
+async function clGenerate(){
+  if(CLONE.busy) return;
+  if(!CLONE.adId) return toast('Pick an inspiration first');
+  const prod=GHP.list.find(p=>p.id===CLONE.prodId);
+  const refs=[CLONE.ad.full||CLONE.ad.thumb].filter(Boolean);
+  if(prod&&prod.images[CLONE.imgIdx]) refs.push(prod.images[CLONE.imgIdx]);
+  if(refs.length<2) return toast('Pick a product image too — without it there is nothing to put in the ad');
+
+  const prompt=clBuildPrompt();
+  const changes=($('asxTa')?$('asxTa').value:'').trim();
+  const n=CLONE.n, cardId='cl'+Date.now().toString(36);
+  const label=CLONE.angle? (CLONE.angles.find(a=>(a.brief||a.label)===CLONE.angle)||{}).label || CLONE.angle.slice(0,48) : '';
+
+  aiPush('me', esc(changes || (label?`Build “${label}” as a static.`:'Build this as a static.')));
+  AI.msgs.push({ who:'card', html:clCardHTML(cardId, {
+    n, done:[], fails:0, model:CLONE.model, aspect:CLONE.aspect,
+    layers:CLONE.layers, brand:CLONE.ad.brand||'', angle:label }) });
+  aiRenderAll();
+
+  const st={ n, done:[], fails:0, model:CLONE.model, aspect:CLONE.aspect,
+             layers:CLONE.layers, brand:CLONE.ad.brand||'', angle:label, prompt, cardId };
+  CLONE_RUNS[cardId]=st;
+  const repaint=()=>{
+    const el=$(cardId); if(el) el.outerHTML=clCardHTML(cardId,st);
+    AI.msgs=AI.msgs.map(x=>(x.html&&x.html.includes(`id="${cardId}"`))?{who:'card',html:clCardHTML(cardId,st)}:x);
+  };
+
+  CLONE.busy=true; clPaint();
+  await Promise.all(Array.from({length:n},()=>clOneImage(prompt,refs,st,repaint)));
+  CLONE.busy=false; clPaint();
+  tikiPush();
+
+  if(st.done.length){
+    await clLand(st);
+    repaint();
+  }
+}
+const CLONE_RUNS={};
+
+async function clOneImage(prompt, refs, st, repaint){
+  try{
+    const r=await tikiFetch('/functions/v1/imagegen',{ method:'POST',
+      body:JSON.stringify({ action:'create', model:st.model, prompt,
+        aspect:st.aspect, resolution:'2K', images:refs }) });
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.taskId){ st.fails++; st.err=j.error||('HTTP '+r.status); repaint(); return; }
+    for(let i=0;i<70;i++){
+      await new Promise(res=>setTimeout(res, i<4?3000:4000));
+      const sr=await tikiFetch('/functions/v1/imagegen',{ method:'POST',
+        body:JSON.stringify({ action:'status', taskId:j.taskId }) });
+      const sj=await sr.json().catch(()=>({}));
+      if(sj.state==='fail'){ st.fails++; st.err=sj.failMsg||'the model rejected it'; repaint(); return; }
+      if(sj.state==='success'&&sj.urls&&sj.urls.length){ st.done.push(sj.urls[0]); repaint(); return; }
+    }
+    st.fails++; st.err='it took too long'; repaint();
+  }catch(e){ st.fails++; st.err=e.message||'unknown error'; repaint(); }
+}
+
+/* ---- the panel ----------------------------------------------------------- */
+function clPanelHTML(){
+  return `<div class="cl-pan ${CLONE.on?'':'hide'}" id="clonePanel">${CLONE.on?clPanelInner():''}</div>`;
+}
+function clPanelInner(){
+  const prod=GHP.list.find(p=>p.id===CLONE.prodId)||GHP.list[0];
+  if(prod&&!CLONE.prodId) CLONE.prodId=prod.id;
+  const cost=CLONE.n*(CLONE.model==='nano-banana-pro'?2:1);
+  return `
+    <div class="cl-h"><span class="cl-ic">◧</span>Clone an ad
+      <span class="cl-cr">${cost} credit${cost===1?'':'s'} · about a minute</span>
+      <button class="cl-x" onclick="clToggle()" title="Turn off">✕</button></div>
+    <div class="cl-b">
+
+      <div class="cl-f"><div class="cl-l">Inspiration</div><div class="cl-w">
+        ${SW.loading&&!SW.rows.length?`<div class="cl-hint">Reading your swipe file…</div>`
+        : SW.rows.length?`<div class="cl-strip">${SW.rows.slice(0,20).map(a=>`
+            <button class="cl-th ${CLONE.adId===a.id?'on':''}" title="${esc(a.brand||'')}"
+              onclick="CLONE.adId='${a.id}';CLONE.ad=SW.rows.find(x=>x.id==='${a.id}');clPaint()">
+              ${a.thumb?`<img src="${esc(a.thumb)}" loading="lazy" alt="">`:'<span>—</span>'}
+            </button>`).join('')}</div>
+          <div class="cl-hint">${CLONE.ad?`Copying <b>${esc(CLONE.ad.brand||'that ad')}</b>${
+            CLONE.ad.score!=null?` · performance ${CLONE.ad.score}`:''} — layout only, never their product or words.`
+            :'Pick the layout you want to borrow.'}</div>`
+        : `<div class="cl-hint">Nothing in your swipe file yet. Save ads in GetHookd under Discover Ads
+            and they appear here.</div>`}
+      </div></div>
+
+      <div class="cl-f"><div class="cl-l">Product</div><div class="cl-w">
+        ${GHP.list.length?`
+          ${GHP.list.length>1?`<select class="cl-sel" style="margin-bottom:8px"
+            onchange="CLONE.prodId=+this.value;CLONE.imgIdx=0;clPaint()">
+            ${GHP.list.map(p=>`<option value="${p.id}" ${CLONE.prodId===p.id?'selected':''}>${esc(p.title)}</option>`).join('')}
+          </select>`:''}
+          ${prod&&prod.images.length?`<div class="cl-strip">${prod.images.map((u,i)=>`
+            <button class="cl-th pr ${CLONE.imgIdx===i?'on':''}" onclick="CLONE.imgIdx=${i};clPaint()">
+              <img src="${esc(u)}" loading="lazy" alt="">
+              ${CLONE.imgIdx===i?'<span class="cl-used">USING</span>':''}</button>`).join('')}</div>
+            <div class="cl-warn">Pick a shot of one pack on its own. Feeding a comparison graphic is
+              what made the last attempt draw your product three times.</div>`
+          :`<div class="cl-hint">That product has no images on it yet.</div>`}`
+        :`<div class="cl-hint">No product found. Add one in GetHookd under Brand Assets → Products
+            and it appears here.</div>`}
+      </div></div>
+
+      <div class="cl-f"><div class="cl-l">Angle</div><div class="cl-w">
+        <div class="cl-angles">
+          ${CLONE.angles.map(a=>{
+            const v=esc(a.brief||a.label);
+            return `<button class="cl-ang ${CLONE.angle===(a.brief||a.label)?'on':''}"
+              title="${v}" onclick="clUseAngle(${JSON.stringify(a.brief||a.label).replace(/"/g,'&quot;')})">${esc(a.label||'Angle')}</button>`;
+          }).join('')}
+          <button class="cl-ang ghost" onclick="clPullAngles()">
+            ${CLONE.anglesLoading?'Reading the chat…':'⟲ From this chat'}</button>
+        </div>
+        ${CLONE.angle?`<div class="cl-hint">${esc(CLONE.angle)}</div>`
+          :`<div class="cl-hint">Talk an angle through above, then pull it in — it becomes the brief
+             the image is written to, not decoration.</div>`}
+      </div></div>
+
+      <div class="cl-f"><div class="cl-l">Output</div><div class="cl-w">
+        <div class="cl-ctrls">
+          <select class="cl-sel" onchange="CLONE.n=+this.value;clPaint()">
+            ${CL_COUNTS.map(n=>`<option value="${n}" ${CLONE.n===n?'selected':''}>${n} variation${n===1?'':'s'}</option>`).join('')}
+          </select>
+          <select class="cl-sel" onchange="CLONE.aspect=this.value;clPaint()">
+            ${CL_ASPECTS.map(([v,l])=>`<option value="${v}" ${CLONE.aspect===v?'selected':''}>${l}</option>`).join('')}
+          </select>
+          <select class="cl-sel" onchange="CLONE.model=this.value;clPaint()">
+            <option value="nano-banana-2" ${CLONE.model==='nano-banana-2'?'selected':''}>Nano Banana 2 · 1 cr</option>
+            <option value="nano-banana-pro" ${CLONE.model==='nano-banana-pro'?'selected':''}>Nano Banana Pro · 2 cr</option>
+          </select>
+          <select class="cl-sel" onchange="CLONE.layers=this.value==='1';clPaint()">
+            <option value="1" ${CLONE.layers?'selected':''}>Text as layers</option>
+            <option value="0" ${CLONE.layers?'':'selected'}>Text baked in</option>
+          </select>
+        </div>
+        <div class="cl-hint">${CLONE.layers
+          ? '<b>Text as layers</b> renders the plate with no copy on it and puts the headline over the top as real text — so a new hook is a retype, not another credit.'
+          : '<b>Text baked in</b> lets the model set the type itself. Faster to look at, impossible to edit afterwards.'}</div>
+      </div></div>
+
+    </div>`;
+}
+
+/* ---- the result card ----------------------------------------------------- */
+function clCardHTML(id, st){
+  const pend=Math.max(0, st.n - st.done.length - st.fails);
+  return `<div class="cl-card" id="${id}">
+    <div class="cl-ch">
+      <span class="cl-ic">◧</span>${esc(st.angle||'Static ad')}
+      <span class="cl-cm">${st.brand?`after ${esc(st.brand)} · `:''}${
+        st.model==='nano-banana-pro'?'Nano Banana Pro':'Nano Banana 2'} · ${esc(st.aspect)}</span>
+      ${pend?`<span class="cl-sp"></span>`
+        : st.done.length?`<span class="cl-pill">${st.landed?'In your brief':'Ready'}</span>`
+        : `<span class="cl-pill bad">Failed</span>`}
+    </div>
+    ${st.done.length?`<div class="cl-grid">${st.done.map(u=>`
+      <a class="cl-shot" href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt=""></a>`).join('')}
+      ${Array.from({length:pend},()=>'<div class="cl-shot ph"></div>').join('')}</div>`
+    : pend?`<div class="cl-grid">${Array.from({length:pend},()=>'<div class="cl-shot ph"></div>').join('')}</div>`:''}
+    <div class="cl-cf">${
+      pend? `Drawing ${pend} more…`
+      : st.done.length? (st.layers
+          ? 'Text is a separate layer on each — duplicate the page and retype the hook, free.'
+          : 'Copy is baked into the image on these.')
+        + (st.fails?` ${st.fails} failed.`:'')
+      : esc(st.err||'Nothing came back.')}
+      ${st.done.length&&st.landed?`<button class="cl-open" onclick="openBriefEditor('${st.briefId}')">Open in editor →</button>`:''}
+    </div>
+  </div>`;
+}
+
+/* ---- landing them in the editor -----------------------------------------
+   One brief called "Static ads", one page per ad, forever. A brief per
+   generation would give you forty documents and no contact sheet. */
+async function clLand(st){
+  let b=BRIEFS.find(x=>(x.name||'')==='Static ads');
+  if(!b){
+    b={ id:'b'+Date.now().toString(36), name:'Static ads',
+        brand: state.brand==='all'?'lytes':state.brand, status:'Draft',
+        sharedWith:[], updated:'Just now', elements:[], comments:[] };
+    BRIEFS.unshift(b);
+  }
+  const frames=b.elements.filter(e=>e.type==='frame');
+  let x = frames.length ? Math.max(...frames.map(f=>f.x+f.w))+70 : 80;
+  const W=560, ratio={'1:1':1,'4:5':1.25,'9:16':16/9,'16:9':9/16}[st.aspect]||1;
+  const H=Math.round(W*ratio);
+
+  /* Written once for the whole run — the copy belongs to the angle, not to the
+     individual render, and asking four times would give four different hooks. */
+  let copy=null;
+  if(st.layers) copy=await clWriteCopy(st);
+
+  for(const url of st.done){
+    const uid=()=>'e'+Math.random().toString(36).slice(2,9);
+    const src=url;
+    b.elements.push({ id:'f'+uid(), type:'frame', x, y:100, w:W, h:H+70,
+      title:(st.angle||'Static ad') });
+    b.elements.push({ id:uid(), type:'image', src, x:x+20, y:130, w:W-40, h:H-10,
+      alt:st.angle||'Generated static' });
+    if(st.layers&&copy){
+      b.elements.push({ id:uid(), type:'text', x:x+46, y:170, w:W-92, size:'h1', text:copy.headline });
+      b.elements.push({ id:uid(), type:'text', x:x+46, y:170+Math.round(H*0.16), w:W-92, size:'body', text:copy.sub });
+      if(copy.cta) b.elements.push({ id:uid(), type:'text', x:x+46, y:130+H-70, w:W-92, size:'body', text:copy.cta });
+    }
+    x += W+70;
+  }
+  st.landed=true; st.briefId=b.id;
+  b.updated='Just now';
+  tikiPush();
+}
+
+/* One headline, one supporting line, one button — written from the angle so it
+   matches the picture rather than describing it. */
+async function clWriteCopy(st){
+  const fallback={ headline:(st.angle||'Made for how you actually live').toUpperCase(), sub:'', cta:'SHOP NOW' };
+  try{
+    const q=`Write the copy for a single static ad.
+Angle: ${st.angle||'general benefit'}
+Product: ${(GHP.list.find(p=>p.id===CLONE.prodId)||{}).title||'the product'}
+Rules: the headline is at most six words and says something specific, not "stay hydrated".
+The supporting line is one sentence, at most twelve words. No exclamation marks, no emoji,
+no medical claims, no invented statistics.
+Reply with STRICT JSON only, no prose and no code fences:
+{"headline":"...","sub":"...","cta":"two or three words"}`;
+    const r=await tikiFetch('/functions/v1/assistant',{ method:'POST',
+      body:JSON.stringify({ snapshot:{}, history:[], question:q, model:'claude-haiku-4-5-20251001' }) });
+    if(!r.ok) return fallback;
+    const j=await r.json();
+    const text=(j.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');
+    const m=text.match(/\{[\s\S]*\}/); if(!m) return fallback;
+    const c=JSON.parse(m[0]);
+    return { headline:String(c.headline||fallback.headline), sub:String(c.sub||''), cta:String(c.cta||'Shop now') };
+  }catch(e){ return fallback; }
+}
+
 /* ============================================================================
    IMAGE GENERATION
    Turning a model on changes what the composer DOES: your message becomes the
@@ -11848,47 +12348,11 @@ function renderStatics(){
   swLoad(); ghProducts();          /* both free, both cached after the first hit */
   $('page-statics').innerHTML=`
     <div class="page-head"><div><h1>Static Ads</h1>
-      <p class="sub">Layouts already working for other brands — cloned around your own product.</p></div></div>
-    <div class="seg" style="width:max-content;margin-bottom:16px">
-      <button class="${SA.tab==='library'?'active':''}" onclick="SA.tab='library';swLoad();renderStatics()">
-        Library${SW.rows.length?` · ${SW.rows.length}`:''}</button>
-      <button class="${SA.tab==='clone'?'active':''}" onclick="SA.tab='clone';swLoad();ghProducts();renderStatics()">Clone an ad</button>
-      <button class="${SA.tab==='find'?'active':''}" onclick="SA.tab='find';renderStatics()">Find new ads</button>
-    </div>
-    ${SA.tab==='find'?saFindHTML():SA.tab==='clone'?clHTML():saLibraryHTML()}`;
+      <p class="sub">Your swipe file. Pick one and the assistant rebuilds it around your product.</p></div>
+      <div class="actions"><button class="btn btn-ghost btn-sm" onclick="swLoad(true)">Refresh</button></div></div>
+    ${saLibraryHTML()}`;
 }
 
-function saFindHTML(){
-  return `
-    <div class="sa-filters">
-      <input class="fi" id="saQ" placeholder="e.g. electrolytes, hydration, greens" value="${esc(SA.q)}"
-        onkeydown="if(event.key==='Enter')saSearch()">
-      <select class="fi" id="saCat"><option value="">Any layout</option>
-        ${SA_CATS.map(c=>`<option value="${c.id}" ${SA.cat==String(c.id)?'selected':''}>${c.t}</option>`).join('')}</select>
-      <select class="fi" id="saTier">
-        ${SA_TIERS.map(([v,l])=>`<option value="${v}" ${SA.tier===v?'selected':''}>${l}</option>`).join('')}</select>
-      <select class="fi" id="saGeo">
-        <option value="US,GB" ${SA.geo==='US,GB'?'selected':''}>US + UK</option>
-        <option value="GB" ${SA.geo==='GB'?'selected':''}>UK only</option>
-        <option value="US" ${SA.geo==='US'?'selected':''}>US only</option>
-        <option value="" ${SA.geo===''?'selected':''}>Anywhere</option></select>
-      <select class="fi" id="saDays">
-        ${[[0,'Any age'],[14,'Running 14+ days'],[30,'Running 30+ days'],[60,'Running 60+ days']]
-          .map(([v,l])=>`<option value="${v}" ${SA.days==v?'selected':''}>${l}</option>`).join('')}</select>
-      <button class="btn btn-primary" onclick="saSearch()" ${SA.loading?'disabled':''}>
-        ${SA.loading?'Searching…':'Search'}</button>
-    </div>
-    <div class="sa-cost">Statics only. A search costs credits per ad returned, so it only runs when you
-      press the button — never as you type.${SA.credits!=null?` <b>${SA.credits} credits left.</b>`:''}</div>
-    ${SA.err?`<div class="sa-err">${esc(SA.err)}</div>`:''}
-    ${SA.loading?`<div class="sa-empty">Searching the library…</div>`
-      : SA.results.length?`<div class="sa-grid">${SA.results.map(saCard).join('')}</div>`
-      : `<div class="sa-empty">Set your filters and press Search. Start narrow — "winning" plus one
-          layout gives you the strongest handful rather than a hundred to wade through.</div>`}`;
-}
-
-/* Everything the app needs later is kept on the saved row, so nothing has to be
-   fetched again to use it. */
 function saCard(a){
   const saved=STATIC_LIB.some(x=>x.id===a.id) || SW.rows.some(x=>x.id===a.id);
   return `<div class="sa-card">
@@ -11914,11 +12378,11 @@ function saLibraryHTML(){
   if(SW.err) return `<div class="sa-err">${esc(SW.err)}</div>
     <div class="sa-empty">Try again in a moment, or check the GetHookd key in Supabase.</div>`;
   const rows=[...SW.rows, ...STATIC_LIB.filter(a=>!SW.rows.some(x=>x.id===a.id))];
-  if(!rows.length) return `<div class="sa-empty">Nothing saved yet. Save ads to your swipe file in
-    GetHookd — or find them on the next tab — and they appear here. Reading the swipe file is free,
-    however often you do it.</div>`;
-  return `<div class="sa-cost">Your GetHookd swipe file, read live. Free to read, so this is the
-      cheapest way to keep a library. <button class="link-btn" onclick="swLoad(true)">Refresh</button></div>
+  if(!rows.length) return `<div class="sa-empty">Nothing saved yet. Find ads in GetHookd under
+    Discover Ads, save the ones you like to your swipe file, and they appear here within seconds.
+    Searching there costs nothing against the API budget; searching through here would.</div>`;
+  return `<div class="sa-cost">Your GetHookd swipe file, read live and free. Discover new ads over
+      there, save them, and they land here.</div>
     <div class="sa-grid">${rows.map(saCard).join('')}</div>`;
 }
 
@@ -11931,6 +12395,10 @@ function saNormalise(row){
     ref: 'AD-'+String(row.id ?? row.ad_id ?? '').slice(-6).toUpperCase(),
     brand: row.brand_name || row.brand?.name || row.page_name || '',
     thumb: row.thumbnail_url || row.resized_url || row.primary_image_url || media.thumbnail_url || media.url || '',
+    /* The thumbnail is fine to look at and useless to generate from — the model
+       needs to read the layout, so keep the full-size signed URL too. */
+    full: row.primary_image_url || row.download_url || media.download_url || media.url ||
+          row.resized_url || row.thumbnail_url || '',
     score: row.performance_score ?? row.score ?? null,
     cat: (row.creative_categories&&row.creative_categories[0]&&
           (row.creative_categories[0].title||row.creative_categories[0])) || '',
@@ -11971,27 +12439,11 @@ async function swLoad(force){
 }
 
 /* ============================================================================
-   CLONE
-   GetHookd's own pipeline, driven from here. It builds the prompt itself from
-   the inspiration layout plus the product record — competitors, differentiators
-   and market hooks included — which is why this beats handing a thumbnail to an
-   image model and hoping.
+   PRODUCTS, from the GetHookd workspace
+   We only borrow their product record — the packshots and the research they
+   scraped. The generating is ours.
    ========================================================================== */
 const GHP = { list:[], loaded:false, loading:false };
-const CLONE_JOBS = [];                       // persisted, newest first
-const CL_RATIOS = ['Square (1:1)','Portrait (9:16)','Landscape (16:9)'];
-const CL_MODELS = [
-  { slug:'nano-banana-2',   name:'Nano Banana 2',   cr:1, note:'Best text · the everyday choice' },
-  { slug:'nano-banana-pro', name:'Nano Banana Pro', cr:2, note:'Richer light and texture · slower' }
-];
-const CL_PRESETS = [
-  ['New model/persona','Use a different model — same layout, same energy, a face that suits our audience.'],
-  ['Change the colour','Recolour to our brand palette while keeping the layout and contrast relationships.'],
-  ['Change the background','Put it in a different background scene, keeping the product and text placement.']
-];
-let CL = { adId:null, ad:null, productId:null, imgIdx:0, vars:4,
-           ratio:'Square (1:1)', model:'nano-banana-2', prompt:'',
-           busy:false, err:'', watching:null };
 
 async function ghProducts(force){
   if(GHP.loading || (GHP.loaded && !force)) return;
@@ -12010,123 +12462,7 @@ async function ghProducts(force){
   GHP.loading=false; if(state.page==='statics') renderStatics();
 }
 
-function clPick(id){
-  const a=[...SW.rows,...SA.results,...STATIC_LIB].find(x=>x.id===String(id));
-  if(!a) return toast('Could not find that ad');
-  CL.adId=a.id; CL.ad=a; CL.err=''; SA.tab='clone';
-  ghProducts(); renderStatics();
-  toast(`Inspiration set — ${a.brand||'that ad'}`);
-}
-function clSet(k,v){ CL[k]=v; renderStatics(); }
-function clPreset(text){
-  const ta=$('clPrompt'); if(!ta) return;
-  ta.value = ta.value.trim() ? ta.value.trim()+'\n'+text : text;
-  CL.prompt=ta.value; ta.focus();
-}
 
-async function clGenerate(){
-  if(CL.busy) return;
-  if(!CL.adId) return toast('Pick an inspiration ad first');
-  const ta=$('clPrompt'); if(ta) CL.prompt=ta.value.trim();
-  const prod=GHP.list.find(p=>p.id===CL.productId);
-  CL.busy=true; CL.err=''; renderStatics();
-
-  const params={ ad_id:Number(CL.adId), variations_count:CL.vars,
-    aspect_ratio:CL.ratio, model_slug:CL.model };
-  if(CL.ad&&CL.ad.mediaId) params.media_id=CL.ad.mediaId;
-  if(CL.productId) params.product_id=CL.productId;
-  if(prod&&prod.images.length) params.product_image_index=Math.min(CL.imgIdx,prod.images.length-1);
-  if(CL.prompt) params.prompt=CL.prompt;
-
-  try{
-    const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
-      body:JSON.stringify({ action:'clone_create', params }) });
-    const j=await r.json().catch(()=>({}));
-    if(r.status===501) throw new Error('GETHOOKD_API is not set in Supabase');
-    if(r.status===402) throw new Error('Out of GetHookd credits');
-    if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
-    const d=j.data||{};
-    if(!d.id) throw new Error('GetHookd did not return a job id');
-    CLONE_JOBS.unshift({ id:d.id, ts:Date.now(), status:'in_progress', urls:[],
-      brand:(CL.ad&&CL.ad.brand)||'', thumb:(CL.ad&&CL.ad.thumb)||'',
-      vars:CL.vars, ratio:CL.ratio, model:CL.model, note:CL.prompt.slice(0,140) });
-    if(CLONE_JOBS.length>24) CLONE_JOBS.length=24;
-    tikiPush(); CL.busy=false; renderStatics();
-    clWatch(d.id);
-  }catch(e){ CL.err=e.message||'Generation failed'; CL.busy=false; renderStatics(); }
-}
-
-/* Poll rather than hang. Roughly a minute is normal; give it four before
-   calling it stuck, and say so rather than spinning forever. */
-async function clWatch(id){
-  for(let i=0;i<48;i++){
-    await new Promise(r=>setTimeout(r, i<3?6000:5000));
-    let j;
-    try{
-      const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
-        body:JSON.stringify({ action:'clone_get', id }) });
-      j=await r.json().catch(()=>({}));
-      if(!r.ok) continue;
-    }catch(e){ continue; }
-    const pr=((j.data||{}).prompts||[])[0]||{};
-    const job=CLONE_JOBS.find(x=>x.id===id); if(!job) return;
-    if(pr.status==='failed'){
-      job.status='failed'; job.err=pr.error||'the model rejected it';
-      tikiPush(); if(state.page==='statics') renderStatics(); return;
-    }
-    if(pr.status==='completed'){
-      job.status='done';
-      job.urls=(pr.media||[]).map(m=>m.url).filter(Boolean);
-      job.expires=Date.now()+12*60*1000;   /* their signatures are short-lived */
-      tikiPush(); if(state.page==='statics') renderStatics();
-      toast(`${job.urls.length} variation${job.urls.length===1?'':'s'} ready`);
-      return;
-    }
-    if(state.page==='statics' && i%2===0) renderStatics();
-  }
-  const job=CLONE_JOBS.find(x=>x.id===id);
-  if(job&&job.status==='in_progress'){ job.status='slow'; tikiPush(); renderStatics(); }
-}
-async function clRefresh(id){ toast('Checking…'); clWatch(id); }
-
-/* Their image URLs are signed and expire within the hour, so putting the URL
-   into a brief would leave a broken box by teatime. Pull the bytes through the
-   proxy and embed them, and the brief keeps the picture for good. */
-async function clToBrief(url){
-  toast('Adding to your brief…');
-  try{
-    const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
-      body:JSON.stringify({ action:'grab', params:{ url } }) });
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok||!j.dataUrl) throw new Error(j.error||'could not fetch the image');
-    imgToBrief(j.dataUrl);
-  }catch(e){ toast('Could not add it — '+(e.message||'unknown error')); }
-}
-
-async function saSearch(){
-  SA.q=$('saQ').value.trim(); SA.cat=$('saCat').value; SA.tier=$('saTier').value;
-  SA.geo=$('saGeo').value; SA.days=+$('saDays').value;
-  SA.loading=true; SA.err=''; renderStatics();
-  try{
-    /* The REST endpoint names these differently from the MCP wrapper: per_page,
-       formats, location, days_active. Sending the MCP names got them rejected. */
-    const params={ query:SA.q, formats:'image', per_page:18, status:'active',
-      performance_scores:SA.tier, collapse_variants:true };
-    if(SA.cat) params.creative_categories=SA.cat;
-    if(SA.geo) params.location=SA.geo;
-    if(SA.days) params.days_active=SA.days;
-    const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
-      body:JSON.stringify({ action:'search', params }) });
-    const j=await r.json().catch(()=>({}));
-    if(r.status===501) throw new Error('GETHOOKD_API is not set in Supabase');
-    if(r.status===402) throw new Error('Out of GetHookd credits');
-    if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
-    SA.results=(j.data||[]).map(saNormalise).filter(a=>a.id);
-    if(j.remaining_credits!=null) SA.credits=j.remaining_credits;
-    if(!SA.results.length) SA.err='Nothing matched. Try a wider tier or drop the layout filter.';
-  }catch(e){ SA.err=e.message||'Search failed'; SA.results=[]; }
-  SA.loading=false; renderStatics();
-}
 /* Saving is free on their side, so the swipe file IS the library rather than a
    second copy of it. Write through, then keep a local pin as well so the card
    does not disappear if their read is slow or the key is missing. */
@@ -12148,130 +12484,119 @@ async function saSave(id){
 async function saForget(id){
   const i=STATIC_LIB.findIndex(x=>x.id===id); if(i>=0) STATIC_LIB.splice(i,1);
   const k=SW.rows.findIndex(x=>x.id===id); if(k>=0) SW.rows.splice(k,1);
-  if(CL.adId===id){ CL.adId=null; CL.ad=null; }
+  if(CLONE.adId===id){ CLONE.adId=null; CLONE.ad=null; }
   tikiPush(); renderStatics(); toast('Removed');
   try{ await tikiFetch('/functions/v1/adlib',{ method:'POST',
     body:JSON.stringify({ action:'swipe_remove', id }) }); }catch(e){}
 }
-function saCopyRef(ref){
-  navigator.clipboard?.writeText(ref).then(()=>toast(`${ref} copied`)).catch(()=>toast(ref));
+
+/* Choosing an inspiration is the start of a conversation, not a form — so it
+   hands over to the assistant with the ad attached and the panel already open. */
+function clPick(id){
+  const a=[...SW.rows,...SA.results,...STATIC_LIB].find(x=>x.id===String(id));
+  if(!a) return toast('Could not find that ad');
+  CLONE.adId=a.id; CLONE.ad=a; CLONE.on=true; CLONE.err='';
+  ghProducts();
+  navTo('assistant');
+  setTimeout(()=>{ clPaint(); toast(`Inspiration set — ${a.brand||'that ad'}`); },80);
 }
 
-/* ---- the clone builder ---------------------------------------------------
-   Laid out in the order the decision is actually made: what am I copying, whose
-   product goes in it, how many and what shape, and only then any instruction. */
-function clHTML(){
-  const prod=GHP.list.find(p=>p.id===CL.productId);
-  const model=CL_MODELS.find(m=>m.slug===CL.model)||CL_MODELS[0];
-  const cost=(model.cr*CL.vars);
-  const pool=[...SW.rows,...SA.results].filter((a,i,arr)=>arr.findIndex(x=>x.id===a.id)===i);
 
-  return `
-  <div class="card cl-card"><div class="card-b">
+/* ============================================================================
+   CLONE PROMPT LAB
+   The prompt is the product here — it is the only reason to build this rather
+   than press their button. So it is editable, versioned, and only one is live.
+   ========================================================================== */
+const CL_TOKENS = [
+  ['{{PRODUCT}}',  'the product name from GetHookd'],
+  ['{{ANGLE}}',    'the angle you picked in the chat'],
+  ['{{COPY_MODE}}','filled automatically by the layers switch'],
+  ['{{CHANGES}}',  'whatever you typed in the composer']
+];
+function clpLive(){ return CLONE_PROMPTS.find(p=>p.live)||CLONE_PROMPTS[0]; }
+function clpSetLive(id){
+  CLONE_PROMPTS.forEach(p=>p.live=(p.id===id));
+  tikiPush(); renderPromptLab(); toast('That version is now live');
+}
+function clpNew(){
+  const from=clpLive();
+  const n=CLONE_PROMPTS.length+1;
+  CLONE_PROMPTS.unshift({ id:'v'+Date.now().toString(36), name:'v'+n+' — untitled',
+    body:from.body, live:false, runs:0, ts:Date.now() });
+  tikiPush(); renderPromptLab(); toast('Copied — edit it, then set it live');
+}
+function clpSave(id){
+  const p=CLONE_PROMPTS.find(x=>x.id===id); if(!p) return;
+  p.body=$('clpBody').value; p.name=$('clpName').value||p.name;
+  tikiPush(); renderPromptLab(); toast('Saved');
+}
+function clpDelete(id){
+  const p=CLONE_PROMPTS.find(x=>x.id===id); if(!p) return;
+  if(p.live) return toast('That one is live — set another live first');
+  if(!confirm(`Delete “${p.name}”?`)) return;
+  CLONE_PROMPTS.splice(CLONE_PROMPTS.indexOf(p),1);
+  tikiPush(); renderPromptLab();
+}
+function clpEdit(id){ state.clpEdit=id; renderPromptLab(); }
 
-    <div class="cl-row">
-      <div class="cl-lab">Inspiration</div>
-      ${CL.ad?`<div class="cl-insp">
-          <div class="cl-thumb">${CL.ad.thumb?`<img src="${esc(CL.ad.thumb)}" alt="">`:''}</div>
-          <div style="flex:1;min-width:0">
-            <div class="cl-n">${esc(CL.ad.brand||'Unknown brand')}</div>
-            <div class="cl-s">${CL.ad.score!=null?`Performance ${CL.ad.score}`:''}${
-              CL.ad.days?` · ${CL.ad.days} days live`:''}</div>
+function renderPromptLab(){
+  const editing=CLONE_PROMPTS.find(p=>p.id===state.clpEdit)||clpLive();
+  const hl=t=>esc(t)
+    .replace(/\{\{[A-Z_]+\}\}/g,m=>`<span class="clp-tok">${m}</span>`)
+    .replace(/^(THE [A-Z ]+|HARD RULES|CRITICAL[^\n]*)$/gm,m=>`<span class="clp-rule">${m}</span>`);
+  $('page-promptlab').innerHTML=`
+    <div class="page-head">
+      <div><h1>Clone prompt lab</h1><div class="desc">
+        The wording sent to Nano Banana with every clone. One version is live at a time.</div></div>
+      <div class="actions">
+        <button class="btn btn-ghost btn-sm" onclick="navTo('settings')">← Back office</button>
+        <button class="btn btn-primary btn-sm" onclick="clpNew()">＋ New version</button>
+      </div>
+    </div>
+
+    <div class="clp-wrap">
+      <div class="card">
+        <div class="card-b">
+          <input class="clp-name" id="clpName" value="${esc(editing.name)}">
+          <textarea class="clp-ta" id="clpBody" spellcheck="false">${esc(editing.body)}</textarea>
+          <div class="clp-acts">
+            <button class="btn btn-primary btn-sm" onclick="clpSave('${editing.id}')">Save</button>
+            ${editing.live?'<span class="clp-live">Live</span>'
+              :`<button class="btn btn-soft btn-sm" onclick="clpSetLive('${editing.id}')">Set live</button>`}
+            <button class="btn btn-ghost btn-sm" style="margin-left:auto;color:var(--crit-ink)"
+              onclick="clpDelete('${editing.id}')">Delete</button>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="CL.ad=null;CL.adId=null;renderStatics()">Change</button>
-        </div>`
-      : pool.length?`<div class="cl-pick">${pool.slice(0,14).map(a=>`
-          <button class="cl-opt" onclick="clPick('${a.id}')" title="${esc(a.brand||'')}">
-            ${a.thumb?`<img src="${esc(a.thumb)}" loading="lazy" alt="">`:'<span>—</span>'}
-          </button>`).join('')}</div>`
-      : `<div class="cl-empty">Nothing in your library yet — save some ads to your GetHookd swipe
-          file, or use Find new ads, then come back.</div>`}
-    </div>
-
-    <div class="cl-row">
-      <div class="cl-lab">Product</div>
-      ${GHP.list.length?`
-        <select class="fi" style="max-width:280px" onchange="CL.productId=+this.value;CL.imgIdx=0;renderStatics()">
-          ${GHP.list.map(p=>`<option value="${p.id}" ${CL.productId===p.id?'selected':''}>${esc(p.title)}</option>`).join('')}
-        </select>
-        ${prod&&prod.images.length?`<div class="cl-imgs">${prod.images.map((u,i)=>`
-          <button class="cl-img ${CL.imgIdx===i?'on':''}" onclick="CL.imgIdx=${i};renderStatics()">
-            <img src="${esc(u)}" loading="lazy" alt="">
-            ${CL.imgIdx===i?'<span class="cl-used">Used by AI</span>':''}
-          </button>`).join('')}</div>
-          <div class="cl-hint">Click an image to choose which one the model works from.</div>`:''}`
-      : `<div class="cl-empty">No product found in GetHookd. Add one under Brand Assets → Products
-          and it appears here.</div>`}
-    </div>
-
-    <div class="cl-row">
-      <div class="cl-lab">Output</div>
-      <div class="cl-ctrls">
-        <select class="fi" onchange="CL.vars=+this.value;renderStatics()">
-          ${[1,2,3,4,6,8,10].map(n=>`<option value="${n}" ${CL.vars===n?'selected':''}>${n} variation${n===1?'':'s'}</option>`).join('')}
-        </select>
-        <select class="fi" onchange="CL.ratio=this.value;renderStatics()">
-          ${CL_RATIOS.map(r=>`<option ${CL.ratio===r?'selected':''}>${r}</option>`).join('')}
-        </select>
-        <select class="fi" onchange="CL.model=this.value;renderStatics()">
-          ${CL_MODELS.map(m=>`<option value="${m.slug}" ${CL.model===m.slug?'selected':''}>${m.name} · ${m.cr} cr/variation</option>`).join('')}
-        </select>
+        </div>
       </div>
-      <div class="cl-hint">${esc(model.note)}</div>
-    </div>
 
-    <div class="cl-row">
-      <div class="cl-lab">Anything to change <span style="font-weight:500;color:var(--ink-3)">· optional</span></div>
-      <textarea id="clPrompt" class="cl-ta" rows="3" placeholder="Leave empty and it clones the layout with your product. Or say what to change…"
-        oninput="CL.prompt=this.value">${esc(CL.prompt)}</textarea>
-      <div class="cl-chips">${CL_PRESETS.map(([l,t])=>
-        `<button class="cl-chip" onclick="clPreset(${JSON.stringify(t).replace(/"/g,'&quot;')})">${l}</button>`).join('')}</div>
-    </div>
+      <div>
+        <div class="card" style="margin-bottom:14px"><div class="card-b">
+          <div class="clp-h">Tokens</div>
+          ${CL_TOKENS.map(([t,d])=>`<div class="clp-tk">
+            <span class="clp-tok">${t}</span><span class="d">${d}</span></div>`).join('')}
+          <div class="clp-note">Anything else you write is sent literally. The two reference images
+            are always attached in the same order: the ad first, the product second — the prompt
+            should keep calling them image 1 and image 2.</div>
+        </div></div>
 
-    ${CL.err?`<div class="sa-err" style="margin:0 0 12px">${esc(CL.err)}</div>`:''}
-    <div class="cl-go">
-      <div class="cl-cost">${CL.adId?`${cost} credit${cost===1?'':'s'} · about a minute`:'Pick an inspiration to start'}</div>
-      <button class="btn btn-primary" onclick="clGenerate()" ${(!CL.adId||CL.busy)?'disabled':''}>
-        ${CL.busy?'Starting…':'Generate variations'}</button>
-    </div>
-  </div></div>
+        <div class="card"><div class="card-b flush">
+          <div class="clp-h" style="padding:0 16px 8px">Versions</div>
+          ${CLONE_PROMPTS.map(p=>`<div class="clp-row ${p.id===editing.id?'on':''}" onclick="clpEdit('${p.id}')">
+            <div style="flex:1;min-width:0"><div class="n">${esc(p.name)}</div>
+              <div class="s">${p.runs||0} run${(p.runs||0)===1?'':'s'}</div></div>
+            ${p.live?'<span class="clp-live">Live</span>':''}
+          </div>`).join('')}
+        </div></div>
 
-  ${CLONE_JOBS.length?`<div class="section-title" style="margin-top:20px">Generations</div>
-    ${CLONE_JOBS.map(clJobHTML).join('')}`:''}`;
-}
-
-function clJobHTML(j){
-  const when=relTime({ts:j.ts});
-  const head=`<div class="cl-jh">
-      <div class="cl-thumb sm">${j.thumb?`<img src="${esc(j.thumb)}" alt="">`:''}</div>
-      <div style="flex:1;min-width:0">
-        <div class="cl-n">${esc(j.brand||'Clone')} · ${j.vars} × ${esc(j.ratio)}</div>
-        <div class="cl-s">${esc(when)}${j.note?` · ${esc(j.note)}`:''}</div>
+        <div class="clp-preview">
+          <div class="clp-h" style="margin-bottom:8px">As it will be sent</div>
+          <pre class="clp-pre">${hl(editing.body
+            .replace('{{PRODUCT}}','YerbaLytes')
+            .replace('{{COPY_MODE}}','[layers switch decides]')
+            .replace('{{CHANGES}}','[your composer line]'))}</pre>
+        </div>
       </div>
-      ${j.status==='done'?`<span class="badge bg-good">Ready</span>`
-        :j.status==='failed'?`<span class="badge bg-crit">Failed</span>`
-        :j.status==='slow'?`<span class="badge bg-warn">Taking a while</span>`
-        :`<span class="cl-spin"></span>`}
     </div>`;
-  let body='';
-  if(j.status==='done'&&j.urls.length){
-    body=`<div class="cl-out">${j.urls.map(u=>`<div class="cl-res">
-      <img src="${esc(u)}" loading="lazy" alt="">
-      <div class="cl-acts">
-        <button class="btn btn-primary btn-sm" style="flex:1" onclick="clToBrief('${esc(u)}')">Add to brief</button>
-        <a class="btn btn-soft btn-sm" href="${esc(u)}" target="_blank" rel="noopener">Open</a>
-      </div></div>`).join('')}</div>
-      <div class="cl-hint" style="padding:0 14px 12px">These links expire within the hour — “Add to brief”
-        keeps a permanent copy, so use it on anything worth keeping.</div>`;
-  } else if(j.status==='failed'){
-    body=`<div class="cl-hint" style="padding:0 14px 13px;color:var(--crit-ink)">${esc(j.err||'It did not come back.')}</div>`;
-  } else if(j.status==='slow'){
-    body=`<div class="cl-acts" style="padding:0 14px 13px">
-      <button class="btn btn-soft btn-sm" onclick="clRefresh(${j.id})">Check again</button></div>`;
-  } else {
-    body=`<div class="cl-hint" style="padding:0 14px 13px">Drawing ${j.vars} variation${j.vars===1?'':'s'}…</div>`;
-  }
-  return `<div class="card cl-job"><div class="card-b" style="padding:13px 14px 0">${head}</div>${body}</div>`;
 }
 
 /* ============================================================================
@@ -13524,6 +13849,7 @@ function renderAssistant(){
 }
 /* The folder button IS the state indicator — there is no banner. */
 function projPaintBtn(){
+  const cb=$('clBtn'); if(cb) cb.classList.toggle('on', CLONE.on);
   const im=$('imgMenu'); if(im) im.innerHTML=imgMenuHTML();
   const ib=$('imgBtn'), il=$('imgBtnLbl');
   if(ib){ ib.classList.toggle('on', !!state.imgModel);
@@ -13541,8 +13867,10 @@ function projPaintBtn(){
 }
 
 function asxComposerHTML(){
-  return `<div class="asx-box">
-    <textarea class="asx-ta" id="asxTa" rows="1" placeholder="Ask about the account, or tell me what to do…"
+  return `${clPanelHTML()}<div class="asx-box">
+    <textarea class="asx-ta" id="asxTa" rows="1" placeholder="${CLONE.on
+      ? 'Anything to change — background, model, colour, mood…'
+      : 'Ask about the account, or tell me what to do…'}"
       onkeydown="asxKey(event)"></textarea>
     <div class="asx-crow">
       <div class="asx-plus">
@@ -13577,6 +13905,11 @@ function asxComposerHTML(){
         </button>
         <div class="dd-menu pj-menu" id="pjMenu"></div>
       </div>
+      <button class="asx-ib pj-btn cl-btn ${CLONE.on?'on':''}" id="clBtn" onclick="clToggle()"
+        title="Clone an ad — rebuild a proven layout around your product">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="8" height="16" rx="2"/><rect x="14" y="4" width="7" height="16" rx="2"/><path d="M14 9h7M14 14h7"/></svg>
+        <span>${CLONE.on?'Cloning':''}</span>
+      </button>
       <button class="asx-send" onclick="asxSend()" title="Send (Enter)">↑</button>
     </div>
   </div>`;
@@ -14783,7 +15116,7 @@ function collectTikiState(){
      in the back office is the thing that actually runs. */
   /* v13 adds projects — instructions and knowledge the assistant works inside. */
   /* v15 adds the saved static-ad library. */
-  return { v:18, dshCols:state.dshCols||{}, statics:STATIC_LIB, clones:CLONE_JOBS, imgModel:state.imgModel||'', imgRatio:state.imgRatio||'4:5', aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  return { v:19, dshCols:state.dshCols||{}, statics:STATIC_LIB, clonePrompts:CLONE_PROMPTS, imgModel:state.imgModel||'', imgRatio:state.imgRatio||'4:5', aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
@@ -14923,7 +15256,7 @@ function applyTikiState(d){
   replaceArr(CHATS,d.chats); replaceArr(PROFIT_VENDORS,d.profitVendors);
   if(Array.isArray(d.personal)) PERSONAL_OUTREACH=d.personal;
   if(Array.isArray(d.statics)) replaceArr(STATIC_LIB,d.statics);
-  if(Array.isArray(d.clones)) replaceArr(CLONE_JOBS,d.clones);
+  if(Array.isArray(d.clonePrompts)&&d.clonePrompts.length) replaceArr(CLONE_PROMPTS,d.clonePrompts);
   if(d.dshCols && typeof d.dshCols==='object') state.dshCols=d.dshCols;
   /* USERS has just been replaced wholesale — anything holding a user id is
      now suspect until it has been re-checked against the new list. */
