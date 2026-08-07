@@ -2352,6 +2352,25 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
 .clp-pre{margin:0;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
   font-size:.72rem;line-height:1.65;color:var(--ink-3);background:var(--surface);
   border:1px solid var(--line-2);border-radius:12px;padding:13px 15px;max-height:340px;overflow:auto}
+
+/* The panel is a control surface, not a page — it gets a ceiling and scrolls
+   inside itself, and the composer lifts clear of the dock while it is open. */
+.cl-b{max-height:min(40vh,360px);overflow-y:auto;overscroll-behavior:contain;
+  scrollbar-width:thin;scrollbar-color:var(--line) transparent;gap:11px}
+.cl-b::-webkit-scrollbar{width:7px}
+.cl-b::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px}
+.cl-b::-webkit-scrollbar-track{background:transparent}
+.cl-h{position:sticky;top:0;z-index:2;background:color-mix(in srgb,var(--accent) 6%,var(--surface));
+  border-bottom:1px solid var(--line-2)}
+.cl-l{width:74px;font-size:.65rem;padding-top:7px}
+.cl-th{width:52px;height:52px}
+.cl-hint,.cl-warn{margin-top:6px;font-size:.7rem}
+.cl-sel{height:30px;font-size:.75rem}
+.cl-ang{font-size:.72rem;padding:5px 10px}
+body.cloning .asx-comp{padding-bottom:96px}
+body.cloning .asx-hero{padding-bottom:96px;justify-content:flex-start;padding-top:4vh;overflow-y:auto}
+body.cloning .asx-thread{padding-bottom:0}
+@media(max-height:760px){.cl-b{max-height:min(34vh,280px)}}
 </style>
 </head>
 <body>
@@ -11932,6 +11951,7 @@ function clBuildPrompt(){
 
 function clToggle(){
   CLONE.on=!CLONE.on;
+  document.body.classList.toggle('cloning', CLONE.on);
   if(CLONE.on){ swLoad(); ghProducts(); if(!CLONE.angles.length) clPullAngles(); }
   renderAssistant();
 }
@@ -12075,6 +12095,9 @@ function clPanelInner(){
             <div class="cl-warn">Pick a shot of one pack on its own. Feeding a comparison graphic is
               what made the last attempt draw your product three times.</div>`
           :`<div class="cl-hint">That product has no images on it yet.</div>`}`
+        : GHP.loading?`<div class="cl-hint">Loading your products…</div>`
+        : GHP.err?`<div class="cl-warn">Couldn't load your products — ${esc(GHP.err)}
+            <button class="cl-ang ghost" style="margin-left:6px" onclick="GHP.loaded=false;ghProducts(true)">Try again</button></div>`
         :`<div class="cl-hint">No product found. Add one in GetHookd under Brand Assets → Products
             and it appears here.</div>`}
       </div></div>
@@ -12443,23 +12466,28 @@ async function swLoad(force){
    We only borrow their product record — the packshots and the research they
    scraped. The generating is ours.
    ========================================================================== */
-const GHP = { list:[], loaded:false, loading:false };
+const GHP = { list:[], loaded:false, loading:false, err:'' };
 
 async function ghProducts(force){
   if(GHP.loading || (GHP.loaded && !force)) return;
-  GHP.loading=true;
+  GHP.loading=true; GHP.err='';
   try{
     const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
       body:JSON.stringify({ action:'products' }) });
     const j=await r.json().catch(()=>({}));
-    if(r.ok){
-      GHP.list=(j.data||[]).map(p=>({ id:p.id, title:p.title,
-        images:(p.images||[]).map(i=>i.url).filter(Boolean) }));
-      GHP.loaded=true;
-      if(!CL.productId && GHP.list.length) CL.productId=GHP.list[0].id;
-    }
-  }catch(e){ /* the picker just stays empty; not worth an error banner */ }
-  GHP.loading=false; if(state.page==='statics') renderStatics();
+    if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+    GHP.list=(j.data||[]).map(p=>({ id:p.id, title:p.title,
+      images:(p.images||[]).map(i=>i.url||i.path).filter(Boolean) }));
+    GHP.loaded=true;
+    if(typeof CLONE!=='undefined' && !CLONE.prodId && GHP.list.length) CLONE.prodId=GHP.list[0].id;
+  }catch(e){
+    /* "No product found" is a lie when the call simply failed — and it sent me
+       looking in the wrong place. Say which it is. */
+    GHP.err=e.message||'could not reach GetHookd';
+  }
+  GHP.loading=false;
+  if(state.page==='statics') renderStatics();
+  if(state.page==='assistant') clPaint();
 }
 
 
@@ -13797,6 +13825,7 @@ function renderRoadmap(){
 
 function renderAssistant(){
   const chat=aiChat();
+  document.body.classList.toggle('cloning', CLONE.on);
   /* Focus mode belonged to the sidebar era. The sidebar is gone, so the flag is
      retired here rather than left to strand someone in a saved state. */
   state.asxNav=false; document.body.classList.remove('sb-hidden');
