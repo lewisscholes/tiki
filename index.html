@@ -2379,6 +2379,18 @@ body.cloning .asx-hero h3{font-size:1.5rem;margin-bottom:4px}
 body.cloning .asx-hero .hsub{display:none}
 body.cloning .asx-thread{padding-bottom:0}
 @media(max-height:820px){.cl-b{max-height:min(34vh,300px)}}
+
+/* Static Ads' copy of the cloner — same panel, different chrome. */
+.sa-clone{margin-bottom:0}
+.sa-clone .cl-b{max-height:none;overflow:visible}
+.sa-clone .cl-h{position:static;background:transparent;border-bottom:1px solid var(--line-2)}
+.sa-cl-foot{border-top:1px solid var(--line-2);padding:13px 14px 14px}
+.cl-ta2{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 13px;font-family:inherit;
+  font-size:.85rem;line-height:1.55;resize:vertical;outline:none;background:var(--surface);color:var(--ink)}
+.cl-ta2:focus{border-color:var(--accent)}
+.sa-cl-go{display:flex;align-items:center;gap:12px;margin-top:11px}
+.sa-cl-go .btn{margin-left:auto}
+#clRuns .cl-card{margin-bottom:12px}
 </style>
 </head>
 <body>
@@ -11946,10 +11958,16 @@ const CL_COPY_CLEAN = `CRITICAL: render NO TEXT WHATSOEVER. No headline, no subh
 no packaging claims beyond what is physically printed on the product itself, no button, no
 watermark. Leave the headline area clean and uncluttered so type can be laid over it afterwards.`;
 
+/* The panel lives in two places — the assistant composer and the Static Ads
+   page — so "anything to change" is whichever box is actually on screen. */
+function clChangesText(){
+  const el=$('clChanges')||$('asxTa');
+  return el ? el.value.trim() : '';
+}
 function clBuildPrompt(){
   const prod=GHP.list.find(p=>p.id===CLONE.prodId);
   const angle=CLONE.angle.trim();
-  const changes=($('asxTa')?$('asxTa').value:'').trim();
+  const changes=clChangesText();
   return clLivePrompt()
     .replace('{{PRODUCT}}', prod?prod.title:'the product shown')
     .replace('{{ANGLE}}',  angle||'A clear, single-minded benefit for the everyday buyer.')
@@ -12013,7 +12031,7 @@ async function clGenerate(){
   if(refs.length<2) return toast('Pick a product image too — without it there is nothing to put in the ad');
 
   const prompt=clBuildPrompt();
-  const changes=($('asxTa')?$('asxTa').value:'').trim();
+  const changes=clChangesText();
   const n=CLONE.n, cardId='cl'+Date.now().toString(36);
   const label=CLONE.angle? (CLONE.angles.find(a=>(a.brief||a.label)===CLONE.angle)||{}).label || CLONE.angle.slice(0,48) : '';
 
@@ -12025,8 +12043,10 @@ async function clGenerate(){
 
   const st={ n, done:[], fails:0, model:CLONE.model, aspect:CLONE.aspect,
              layers:CLONE.layers, brand:CLONE.ad.brand||'', angle:label, prompt, cardId };
-  CLONE_RUNS[cardId]=st;
+  CLONE_RUNS[cardId]=st; CLONE_ORDER.unshift(cardId); if(CLONE_ORDER.length>12) CLONE_ORDER.length=12;
   const repaint=()=>{
+    /* The id is unique, so this updates whichever DOM the card is currently in
+       — the assistant thread or the Static Ads page — without knowing which. */
     const el=$(cardId); if(el) el.outerHTML=clCardHTML(cardId,st);
     AI.msgs=AI.msgs.map(x=>(x.html&&x.html.includes(`id="${cardId}"`))?{who:'card',html:clCardHTML(cardId,st)}:x);
   };
@@ -12042,6 +12062,7 @@ async function clGenerate(){
   }
 }
 const CLONE_RUNS={};
+const CLONE_ORDER=[];   /* newest first — the ids are unique, so one repaint serves both hosts */
 
 async function clOneImage(prompt, refs, st, repaint){
   try{
@@ -12073,7 +12094,7 @@ function clPanelInner(){
   return `
     <div class="cl-h"><span class="cl-ic">◧</span>Clone an ad
       <span class="cl-cr">${cost} credit${cost===1?'':'s'} · about a minute</span>
-      <button class="cl-x" onclick="clToggle()" title="Turn off">✕</button></div>
+      ${state.page==='statics'?'':'<button class="cl-x" onclick="clToggle()" title="Turn off">✕</button>'}</div>
     <div class="cl-b">
 
       <div class="cl-f"><div class="cl-l">Inspiration</div><div class="cl-w">
@@ -12377,45 +12398,49 @@ let SA = { q:'', cat:'', tier:'winning', geo:'US,GB', days:30, results:[], loadi
 
 function renderStatics(){
   swWarm(); ghProducts();          /* both free; the strip paints from cache first */
+  if(!SA.tab || SA.tab==='find') SA.tab='library';
   $('page-statics').innerHTML=`
     <div class="page-head"><div><h1>Static Ads</h1>
-      <p class="sub">Your swipe file. Pick one and the assistant rebuilds it around your product.</p></div>
+      <p class="sub">Your swipe file, and the cloner. The same panel the assistant uses.</p></div>
       <div class="actions"><button class="btn btn-ghost btn-sm" onclick="SW.loaded=false;swLoad(true)">Refresh</button></div></div>
-    ${saLibraryHTML()}`;
+    <div class="seg" style="width:max-content;margin-bottom:16px">
+      <button class="${SA.tab==='library'?'active':''}" onclick="SA.tab='library';renderStatics()">
+        Library${SW.rows.length?` · ${SW.rows.length}`:''}</button>
+      <button class="${SA.tab==='clone'?'active':''}" onclick="SA.tab='clone';renderStatics()">Clone an ad</button>
+    </div>
+    ${SA.tab==='clone'?saCloneHTML():saLibraryHTML()}`;
 }
 
-function saCard(a){
-  const saved=STATIC_LIB.some(x=>x.id===a.id) || SW.rows.some(x=>x.id===a.id);
-  return `<div class="sa-card">
-    <div class="sa-img">${a.thumb?`<img src="${esc(a.thumb)}" loading="lazy" alt="">`:'<span>no preview</span>'}</div>
-    <div class="sa-meta">
-      <div class="sa-brand">${esc(a.brand||'Unknown brand')}</div>
-      <div class="sa-tags">
-        ${a.score!=null?`<span class="sa-tag score">${a.score}</span>`:''}
-        ${a.cat?`<span class="sa-tag">${esc(a.cat)}</span>`:''}
-        ${a.days?`<span class="sa-tag">${a.days}d live</span>`:''}
+/* The Static Ads copy of the cloner. Deliberately the SAME panel function as the
+   assistant — two renderings of one control would drift apart within a week.
+   All that differs is the box you type into and the button you press. */
+function saCloneHTML(){
+  const cost=CLONE.n*(CLONE.model==='nano-banana-pro'?2:1);
+  return `
+    <div class="card sa-clone"><div class="card-b" style="padding:0">
+      <div class="cl-pan" style="border:none;margin:0;background:transparent;box-shadow:none">
+        ${clPanelInner()}
       </div>
-      <div style="display:flex;gap:6px;margin-top:8px">
-        <button class="btn btn-primary btn-sm" style="flex:1" onclick="clPick('${a.id}')">Clone this</button>
-        ${saved
-          ? `<button class="btn btn-ghost btn-sm" onclick="saForget('${a.id}')" title="Remove from your swipe file">✕</button>`
-          : `<button class="btn btn-soft btn-sm" onclick="saSave('${a.id}')" title="Save to your swipe file · free">＋</button>`}
+      <div class="sa-cl-foot">
+        <textarea id="clChanges" class="cl-ta2" rows="2"
+          placeholder="Anything to change — background, model, colour, mood…">${esc(CLONE.prompt||'')}</textarea>
+        <div class="sa-cl-go">
+          <span class="cl-cr">${CLONE.adId?`${cost} credit${cost===1?'':'s'} · about a minute`:'Pick an inspiration to start'}</span>
+          <button class="btn btn-primary" onclick="saCloneGo()" ${(!CLONE.adId||CLONE.busy)?'disabled':''}>
+            ${CLONE.busy?'Generating…':`Generate ${CLONE.n} ad${CLONE.n===1?'':'s'}`}</button>
+        </div>
       </div>
-    </div></div>`;
+    </div></div>
+    ${CLONE_ORDER.length?`<div class="section-title" style="margin-top:20px">Generations</div>
+      <div id="clRuns">${CLONE_ORDER.map(id=>clCardHTML(id,CLONE_RUNS[id])).join('')}</div>`:''}`;
+}
+function saCloneGo(){
+  const ta=$('clChanges'); if(ta) CLONE.prompt=ta.value;
+  clGenerate().then(()=>{ if(state.page==='statics') renderStatics(); });
+  /* Paint the pending card straight away rather than waiting on the first poll. */
+  setTimeout(()=>{ if(state.page==='statics'&&SA.tab==='clone') renderStatics(); }, 60);
 }
 
-function saLibraryHTML(){
-  if(SW.loading&&!SW.rows.length) return `<div class="sa-empty">Reading your swipe file…</div>`;
-  if(SW.err) return `<div class="sa-err">${esc(SW.err)}</div>
-    <div class="sa-empty">Try again in a moment, or check the GetHookd key in Supabase.</div>`;
-  const rows=[...SW.rows, ...STATIC_LIB.filter(a=>!SW.rows.some(x=>x.id===a.id))];
-  if(!rows.length) return `<div class="sa-empty">Nothing saved yet. Find ads in GetHookd under
-    Discover Ads, save the ones you like to your swipe file, and they appear here within seconds.
-    Searching there costs nothing against the API budget; searching through here would.</div>`;
-  return `<div class="sa-cost">Your GetHookd swipe file, read live and free. Discover new ads over
-      there, save them, and they land here.</div>
-    <div class="sa-grid">${rows.map(saCard).join('')}</div>`;
-}
 
 /* Their row shape varies by plan and mode, so read defensively and keep only
    what we actually use. */
@@ -12555,6 +12580,44 @@ async function saForget(id){
   try{ await tikiFetch('/functions/v1/adlib',{ method:'POST',
     body:JSON.stringify({ action:'swipe_remove', id }) }); }catch(e){}
 }
+
+/* One card shape everywhere — the library, and anywhere else an ad is listed. */
+function saCard(a){
+  const saved=STATIC_LIB.some(x=>x.id===a.id) || SW.rows.some(x=>x.id===a.id);
+  return `<div class="sa-card">
+    <div class="sa-img">${a.thumb?`<img src="${esc(a.thumb)}" loading="lazy" alt="">`:'<span>no preview</span>'}</div>
+    <div class="sa-meta">
+      <div class="sa-brand">${esc(a.brand||'Unknown brand')}</div>
+      <div class="sa-tags">
+        ${a.score!=null?`<span class="sa-tag score">${a.score}</span>`:''}
+        ${a.cat?`<span class="sa-tag">${esc(a.cat)}</span>`:''}
+        ${a.days?`<span class="sa-tag">${a.days}d live</span>`:''}
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn btn-primary btn-sm" style="flex:1" onclick="clPick('${a.id}')">Clone this</button>
+        ${saved
+          ? `<button class="btn btn-ghost btn-sm" onclick="saForget('${a.id}')" title="Remove from your swipe file">✕</button>`
+          : `<button class="btn btn-soft btn-sm" onclick="saSave('${a.id}')" title="Save to your swipe file · free">＋</button>`}
+      </div>
+    </div></div>`;
+}
+
+function saLibraryHTML(){
+  if(SW.loading&&!SW.rows.length) return `<div class="sa-empty">Reading your swipe file…</div>`;
+  if(SW.err&&!SW.rows.length) return `<div class="sa-err">${esc(SW.err)}</div>
+    <div class="sa-empty">Try again in a moment, or check the GetHookd key in Supabase.</div>`;
+  const rows=[...SW.rows, ...STATIC_LIB.filter(a=>!SW.rows.some(x=>x.id===a.id))];
+  if(!rows.length) return `<div class="sa-empty">Nothing saved yet. Find ads in GetHookd under
+    Discover Ads, save the ones you like to your swipe file, and they appear here within seconds.
+    Searching there costs nothing against the API budget; searching through here would.</div>`;
+  return `<div class="sa-cost">Your GetHookd swipe file, read live and free. Discover new ads over
+      there, save them, and they land here.</div>
+    <div class="sa-grid">${rows.map(saCard).join('')}</div>`;
+}
+
+/* Saving is free on their side, so the swipe file IS the library rather than a
+   second copy of it. Write through, then keep a local pin as well so the card
+   does not disappear if their read is slow or the key is missing. */
 
 /* Choosing an inspiration is the start of a conversation, not a form — so it
    hands over to the assistant with the ad attached and the panel already open. */
