@@ -2367,10 +2367,18 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
 .cl-hint,.cl-warn{margin-top:6px;font-size:.7rem}
 .cl-sel{height:30px;font-size:.75rem}
 .cl-ang{font-size:.72rem;padding:5px 10px}
+/* The hero is a centred flex column, so a plain block child gets squashed to a
+   line the moment the column runs out of room. It has to opt out of shrinking
+   and claim the same width as the composer. */
+.cl-pan{flex:0 0 auto;width:100%;max-width:780px;margin-left:auto;margin-right:auto;align-self:center}
+.asx-hero .cl-pan{max-width:660px}
 body.cloning .asx-comp{padding-bottom:96px}
-body.cloning .asx-hero{padding-bottom:96px;justify-content:flex-start;padding-top:4vh;overflow-y:auto}
+body.cloning .asx-hero{padding-bottom:96px;justify-content:flex-start;padding-top:3vh;overflow-y:auto}
+body.cloning .asx-hero .asx-orb{display:none}
+body.cloning .asx-hero h3{font-size:1.5rem;margin-bottom:4px}
+body.cloning .asx-hero .hsub{display:none}
 body.cloning .asx-thread{padding-bottom:0}
-@media(max-height:760px){.cl-b{max-height:min(34vh,280px)}}
+@media(max-height:820px){.cl-b{max-height:min(34vh,300px)}}
 </style>
 </head>
 <body>
