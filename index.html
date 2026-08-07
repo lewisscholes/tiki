@@ -11960,7 +11960,7 @@ function clBuildPrompt(){
 function clToggle(){
   CLONE.on=!CLONE.on;
   document.body.classList.toggle('cloning', CLONE.on);
-  if(CLONE.on){ swLoad(); ghProducts(); if(!CLONE.angles.length) clPullAngles(); }
+  if(CLONE.on){ swWarm(); ghProducts(); if(!CLONE.angles.length) clPullAngles(); }
   renderAssistant();
 }
 function clSet(k,v){ CLONE[k]=v; clPaint(); }
@@ -12376,11 +12376,11 @@ let SA = { q:'', cat:'', tier:'winning', geo:'US,GB', days:30, results:[], loadi
            err:'', credits:null, tab:'library' };
 
 function renderStatics(){
-  swLoad(); ghProducts();          /* both free, both cached after the first hit */
+  swWarm(); ghProducts();          /* both free; the strip paints from cache first */
   $('page-statics').innerHTML=`
     <div class="page-head"><div><h1>Static Ads</h1>
       <p class="sub">Your swipe file. Pick one and the assistant rebuilds it around your product.</p></div>
-      <div class="actions"><button class="btn btn-ghost btn-sm" onclick="swLoad(true)">Refresh</button></div></div>
+      <div class="actions"><button class="btn btn-ghost btn-sm" onclick="SW.loaded=false;swLoad(true)">Refresh</button></div></div>
     ${saLibraryHTML()}`;
 }
 
@@ -12453,10 +12453,22 @@ function saNormalise(row){
    would have rotted within the hour.
    ========================================================================== */
 const SW = { rows:[], loading:false, err:'', loaded:false };
+/* Their image URLs are signed with a short expiry, so a cached copy is worth
+   showing immediately but not worth trusting for long. Forty minutes keeps the
+   strip instant on the second visit without ever serving a dead thumbnail. */
+const SW_CACHE_TTL = 40*60*1000;
+
+/* Anything that paints a swipe-file strip has to be told when one arrives. The
+   Static Ads page and the clone panel both do, and forgetting the second is why
+   the panel sat empty until some other click forced a redraw. */
+function swPaint(){
+  if(state.page==='statics') renderStatics();
+  if(state.page==='assistant' && typeof CLONE!=='undefined' && CLONE.on) clPaint();
+}
 
 async function swLoad(force){
   if(SW.loading || (SW.loaded && !force)) return;
-  SW.loading=true; SW.err=''; if(state.page==='statics') renderStatics();
+  SW.loading=true; SW.err=''; swPaint();
   try{
     const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
       body:JSON.stringify({ action:'swipefile', params:{ per_page:60 } }) });
@@ -12465,8 +12477,26 @@ async function swLoad(force){
     if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
     SW.rows=(j.data||[]).map(saNormalise).filter(a=>a.id);
     SW.loaded=true;
+    /* Cached so the next visit paints before the network answers. */
+    state.swCache={ ts:Date.now(), rows:SW.rows };
+    tikiPush();
+    /* The chosen inspiration is a snapshot with URLs that have since expired —
+       refresh it from the new list rather than leaving a broken thumbnail. */
+    if(typeof CLONE!=='undefined' && CLONE.adId){
+      const fresh=SW.rows.find(x=>x.id===CLONE.adId);
+      if(fresh) CLONE.ad=fresh;
+    }
   }catch(e){ SW.err=e.message||'Could not read your swipe file'; }
-  SW.loading=false; if(state.page==='statics') renderStatics();
+  SW.loading=false; swPaint();
+}
+
+/* Paint from the cache first, then go and check. */
+function swWarm(){
+  const c=state.swCache;
+  if(!SW.rows.length && c && Array.isArray(c.rows) && (Date.now()-(c.ts||0))<SW_CACHE_TTL){
+    SW.rows=c.rows;
+  }
+  swLoad();
 }
 
 /* ============================================================================
@@ -15153,7 +15183,7 @@ function collectTikiState(){
      in the back office is the thing that actually runs. */
   /* v13 adds projects — instructions and knowledge the assistant works inside. */
   /* v15 adds the saved static-ad library. */
-  return { v:19, dshCols:state.dshCols||{}, statics:STATIC_LIB, clonePrompts:CLONE_PROMPTS, imgModel:state.imgModel||'', imgRatio:state.imgRatio||'4:5', aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  return { v:20, dshCols:state.dshCols||{}, swCache:state.swCache||null, statics:STATIC_LIB, clonePrompts:CLONE_PROMPTS, imgModel:state.imgModel||'', imgRatio:state.imgRatio||'4:5', aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
@@ -15294,6 +15324,7 @@ function applyTikiState(d){
   if(Array.isArray(d.personal)) PERSONAL_OUTREACH=d.personal;
   if(Array.isArray(d.statics)) replaceArr(STATIC_LIB,d.statics);
   if(Array.isArray(d.clonePrompts)&&d.clonePrompts.length) replaceArr(CLONE_PROMPTS,d.clonePrompts);
+  if(d.swCache&&Array.isArray(d.swCache.rows)) state.swCache=d.swCache;
   if(d.dshCols && typeof d.dshCols==='object') state.dshCols=d.dshCols;
   /* USERS has just been replaced wholesale — anything holding a user id is
      now suspect until it has been re-checked against the new list. */
@@ -15461,6 +15492,8 @@ async function tikiEnter(inviteType){
   navTo('tasks');
   setInterval(tikiPush, 4000);
   bootLoadData();
+  /* Free, and it is the one list you always want warm. */
+  setTimeout(swWarm, 1200);
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') tikiPush(); });
   /* Profile completion is mandatory for everyone — invited users also set a password. */
   if(inviteType || !USERS[ME]?.onboarded) openOnboarding(!!inviteType);
