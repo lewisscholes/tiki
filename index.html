@@ -3164,6 +3164,53 @@ function toggleSidebar(force){
   sb.classList.toggle('open',open); ov.classList.toggle('show',open);
 }
 
+/* ============================================================================
+   WHERE YOU WERE
+   A refresh should put you back where you were standing, not at the front door.
+   Kept on the device, never in the shared state — Rod reloading his machine has
+   nothing to do with which page I am on.
+   ========================================================================== */
+const VIEW_KEY='rarriView';
+function viewSave(){
+  if(!TIKI_LOADED) return;
+  try{
+    localStorage.setItem(VIEW_KEY, JSON.stringify({
+      page: state.page,
+      briefId: state.briefId || null,
+      taskView: state.taskView || null,
+      saTab: (typeof SA!=='undefined' && SA.tab) || null,
+      outreachTab: state.outreachTab || null,
+      aiChatId: state.aiChatId || null,
+      ts: Date.now()
+    }));
+  }catch(e){ /* private mode, quota, whatever — losing the pointer is harmless */ }
+}
+/* Returns true if it put you somewhere, so the caller knows not to pick a
+   default. Anything stale, hidden or since-deleted falls through instead. */
+function viewRestore(){
+  let v=null;
+  try{ v=JSON.parse(localStorage.getItem(VIEW_KEY)||'null'); }catch(e){}
+  if(!v || !v.page) return false;
+  /* A day later you are starting a new day's work, not resuming Tuesday. */
+  if(Date.now()-(v.ts||0) > 14*3600*1000) return false;
+  const p=PAGES.find(x=>x.id===v.page);
+  if(!p || p.soon) return false;
+
+  if(v.taskView)    state.taskView=v.taskView;
+  if(v.saTab && typeof SA!=='undefined') SA.tab=v.saTab;
+  if(v.outreachTab) state.outreachTab=v.outreachTab;
+  if(v.aiChatId && AI_CHATS.some(c=>c.id===v.aiChatId)) state.aiChatId=v.aiChatId;
+
+  /* A brief is the page people most want to come back to, and the one where
+     landing on the index instead is most annoying. */
+  if(v.page==='briefs' && v.briefId && BRIEFS.some(b=>b.id===v.briefId)){
+    openBriefEditor(v.briefId);
+    return true;
+  }
+  navTo(v.page, v.taskView?{taskView:v.taskView}:{});
+  return true;
+}
+
 /* ============ NAV / ROUTER ============ */
 const PAGES = [
   { id:'overview',  label:'Overview',  icon:'dollar' },
@@ -15658,9 +15705,9 @@ async function localOffer(){
        This browser has a copy from <b>${esc(when)}</b> that never reached the server —
        most likely saving was failing at the time.</p>
      <p style="font-size:.88rem;line-height:1.6;color:var(--ink-2);margin-top:10px">
-       Restoring replaces what is on screen with that copy. If you would rather
-       keep what the server has, discard it — but download it first if you are
-       unsure, because discarding cannot be undone.</p>`,
+       Restoring replaces <b>everything</b> with that copy — so if a teammate has
+       saved work since, theirs goes too. Downloading is the safe move if you are
+       not sure: the file can always be merged in afterwards.</p>`,
     `<button class="btn btn-ghost" onclick="localDownload()">Download it</button>
      <button class="btn btn-ghost" style="color:var(--crit-ink)" onclick="localDiscard()">Discard</button>
      <button class="btn btn-primary" onclick="localRestore()">Restore it</button>`));
@@ -15797,8 +15844,11 @@ async function tikiEnter(inviteType){
      Now: paint first, land on a page, then fetch in the background.
      ---------------------------------------------------------------------- */
   rerenderAll(); renderNotifs();
-  navTo('tasks');
+  /* Back to the page — and the brief — you were on before the reload. */
+  if(!viewRestore()) navTo('tasks');
   setInterval(tikiPush, 4000);
+  setInterval(viewSave, 2000);
+  window.addEventListener('pagehide', viewSave);
   /* Separate timer on purpose: the safety net must not depend on the thing it
      is insuring against. */
   setInterval(localSnapshot, 5000);
