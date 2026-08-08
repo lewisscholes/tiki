@@ -2394,6 +2394,21 @@ body.cloning .asx-thread{padding-bottom:0}
 .sa-cl-go{display:flex;align-items:center;gap:12px;margin-top:11px}
 .sa-cl-go .btn{margin-left:auto}
 #clRuns .cl-card{margin-bottom:12px}
+
+/* Not a dot. A failed save is the most expensive thing this app can do quietly. */
+.save-alarm{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:120;
+  display:flex;align-items:center;gap:12px;max-width:min(760px,94vw);
+  background:var(--crit-ink);color:#fff;border-radius:14px;padding:11px 14px;
+  box-shadow:0 18px 40px -14px rgba(0,0,0,.45);font-size:.83rem;line-height:1.45}
+.save-alarm b{font-weight:700}
+.save-alarm .sa-dot{width:9px;height:9px;border-radius:50%;background:#fff;flex:none;
+  animation:sapulse 1.1s ease-in-out infinite}
+@keyframes sapulse{0%,100%{opacity:1}50%{opacity:.25}}
+.save-alarm button{flex:none;border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.14);
+  color:#fff;font-family:inherit;font-size:.78rem;font-weight:650;padding:6px 11px;border-radius:9px;cursor:pointer}
+.save-alarm button:hover{background:rgba(255,255,255,.26)}
+.save-alarm button.ghost{border-color:rgba(255,255,255,.3)}
+@media(max-width:700px){.save-alarm{flex-wrap:wrap}}
 </style>
 </head>
 <body>
@@ -8657,6 +8672,67 @@ function brfBind(b){
     brfApplyTransform();
   }, {passive:false});
 }
+/* ============================================================================
+   BRIEF MEDIA — pictures live in Storage, never in the state
+   The state JSON is posted whole on every save. Five photos held as base64
+   took it to 10.86 MB and saving stopped dead, silently, for sixteen hours and
+   a day of somebody's work. Bytes go to a bucket; the brief keeps a URL.
+   Filenames are the SHA-256 of the content, so the same picture used twice
+   costs nothing the second time and a re-upload overwrites itself.
+   ========================================================================== */
+const BRF_BUCKET='brief-media';
+
+async function brfPutMedia(blob, mime){
+  const buf=await blob.arrayBuffer();
+  const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))]
+    .map(b=>b.toString(16).padStart(2,'0')).join('');
+  const ext={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif'}[mime]||'png';
+  const path=`${hash}.${ext}`;
+  const url=`${TIKI_CFG.url}/storage/v1/object/public/${BRF_BUCKET}/${path}`;
+  const r=await tikiFetch(`/storage/v1/object/${BRF_BUCKET}/${path}`,{ method:'POST',
+    headers:{ 'Content-Type':mime, 'x-upsert':'true' }, body:blob });
+  /* 409 means those exact bytes are already up there, which is a success. */
+  if(!r.ok && r.status!==409){
+    const t=await r.text().catch(()=>'');
+    throw new Error(`upload failed (${r.status}) ${t.slice(0,120)}`);
+  }
+  return url;
+}
+
+/* Takes a data: URL or any fetchable URL and returns a Storage URL. Anything
+   already living in our bucket is handed straight back. */
+async function brfHostImage(src){
+  if(!src || typeof src!=='string') return src;
+  if(src.includes(`/storage/v1/object/public/${BRF_BUCKET}/`)) return src;
+  let blob, mime;
+  if(src.startsWith('data:')){
+    const m=/^data:([^;,]+);base64,/.exec(src);
+    mime=(m&&m[1].toLowerCase())||'image/png';
+    const bin=atob(src.slice(src.indexOf(',')+1));
+    const u8=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i);
+    blob=new Blob([u8],{type:mime});
+  } else {
+    const r=await fetch(src);
+    if(!r.ok) throw new Error('could not fetch that image');
+    blob=await r.blob();
+    mime=blob.type||'image/png';
+  }
+  return brfPutMedia(blob, mime);
+}
+
+/* The version used on the hot paths: if Storage is unreachable we would rather
+   put the picture in the brief as base64 than lose it — but we say so, because
+   that is the thing that broke everything last time. */
+async function brfHostOrInline(src){
+  try{ return await brfHostImage(src); }
+  catch(e){
+    toast('Saved the image into the brief itself — Storage was unreachable');
+    console.warn('brfHostImage failed', e);
+    return src;
+  }
+}
+
 /* ---- photos ----------------------------------------------------------
    Briefs live inside the whole-state JSON that syncs every few seconds, so a
    raw phone photo (4-8 MB, and a third bigger again once base64'd) would bloat
@@ -8688,7 +8764,7 @@ async function brfBgRemove(id){
     /* Keep the original so it can always be put back — and so a second attempt
        starts from clean pixels rather than cutting into a cut-out. */
     if(!el.srcOrig) el.srcOrig = el.src;
-    el.src=j.image;
+    el.src = await brfHostOrInline(j.image);
     tikiPush(); toast('Background removed');
   }catch(e){
     toast('Could not cut it out — '+(e.message||'unknown error'));
@@ -8739,10 +8815,12 @@ function brfAddImage(file, x, y){
         const w=380, h=Math.max(60,Math.round(380*ch/cw));
         const b=briefById(state.briefId);
         const id='i'+Date.now()%100000+Math.floor(Math.random()*90+10);
-        b.elements.push({id,type:'image',x:Math.round(x),y:Math.round(y),w,h,src,alt:file.name.replace(/\.[^.]+$/,''),natural:{w:cw,h:ch}});
+        /* Placed immediately so the canvas feels instant, then the src is
+           swapped for the Storage URL once the bytes are up. */
+        const el={id,type:'image',x:Math.round(x),y:Math.round(y),w,h,src,alt:file.name.replace(/\.[^.]+$/,''),natural:{w:cw,h:ch}};
+        b.elements.push(el);
         state.brf.sel=id;
-        if(src.length>1.6e6) toast('That photo is large — it will still sync, just slower');
-        tikiPush();
+        brfHostOrInline(src).then(u=>{ el.src=u; tikiPush(); if(state.briefId===b.id) renderBriefEditor(); });
         resolve();
       };
       img.src=fr.result;
@@ -12209,6 +12287,17 @@ function clCardHTML(id, st){
 /* ---- landing them in the editor -----------------------------------------
    One brief called "Static ads", one page per ad, forever. A brief per
    generation would give you forty documents and no contact sheet. */
+/* GetHookd and kie.ai both sign their image URLs with a short expiry and serve
+   them without CORS headers, so the browser can neither keep them nor read
+   them. Pull the bytes through our proxy, then park them in our own bucket. */
+async function clHost(url){
+  if(url.includes(`/storage/v1/object/public/${BRF_BUCKET}/`)) return url;
+  const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
+    body:JSON.stringify({ action:'grab', params:{ url } }) });
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j.dataUrl) throw new Error(j.error||'could not fetch the image');
+  return brfHostOrInline(j.dataUrl);
+}
 async function clLand(st){
   let b=BRIEFS.find(x=>(x.name||'')==='Static ads');
   if(!b){
@@ -12229,7 +12318,9 @@ async function clLand(st){
 
   for(const url of st.done){
     const uid=()=>'e'+Math.random().toString(36).slice(2,9);
-    const src=url;
+    /* Their link dies within the hour; ours does not. */
+    let src=url;
+    try{ src=await clHost(url); }catch(e){ console.warn('could not host', e); }
     b.elements.push({ id:'f'+uid(), type:'frame', x, y:100, w:W, h:H+70,
       title:(st.angle||'Static ad') });
     b.elements.push({ id:uid(), type:'image', src, x:x+20, y:130, w:W-40, h:H-10,
@@ -15204,6 +15295,48 @@ function syncStatus(cls, txt){
   /* The sidebar is hidden in the glass shell, so the same state has to show
      somewhere the eye actually goes — a single dot in the top bar. */
   const d=$('rSync'); if(d){ d.className='rsync '+(cls||''); d.title=txt; }
+  if(cls==='error') SAVE_FAILS++; else if(cls!=='saving') SAVE_FAILS=0;
+  saveAlarm();
+}
+
+/* ============================================================================
+   THE ALARM
+   A dimmed dot in the corner was the only sign that saving had stopped. It
+   stayed like that for sixteen hours and cost a day of work. Three consecutive
+   failures — twelve seconds — and the whole app says so, in words, until it
+   saves again.
+   ========================================================================== */
+let SAVE_FAILS=0;
+function saveAlarm(){
+  const bad = SAVE_FAILS>=3;
+  let el=$('saveAlarm');
+  if(!bad){ if(el) el.remove(); document.body.classList.remove('save-bad'); return; }
+  document.body.classList.add('save-bad');
+  if(!el){
+    el=document.createElement('div'); el.id='saveAlarm'; el.className='save-alarm';
+    document.body.appendChild(el);
+  }
+  const mins=SAVE_LAST_OK ? Math.round((Date.now()-SAVE_LAST_OK)/60000) : null;
+  el.innerHTML=`<span class="sa-dot"></span>
+    <div><b>Your work is not being saved.</b>
+      ${mins!=null?`Last saved ${mins<1?'less than a minute':mins+' minute'+(mins===1?'':'s')} ago.`:'Nothing has saved this session.'}
+      Keep this tab open — closing it loses anything since then.</div>
+    <button onclick="tikiPush()">Retry now</button>
+    <button class="ghost" onclick="brfEmergencyExport()">Download a copy</button>`;
+}
+let SAVE_LAST_OK=0;
+
+/* The escape hatch. If saving is broken, you can still get the work out of the
+   browser rather than being told afterwards that it only ever lived there. */
+function brfEmergencyExport(){
+  try{
+    const blob=new Blob([JSON.stringify(collectTikiState())],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`rarri-rescue-${new Date().toISOString().slice(0,16).replace(/[:T]/g,'-')}.json`;
+    a.click();
+    toast('Downloaded — send that file over and it can be put back');
+  }catch(e){ toast('Could not export — '+(e.message||'unknown error')); }
 }
 async function tikiSignIn(){
   const email=$('gateEmail').value.trim(), pw=$('gatePw').value;
@@ -15452,6 +15585,108 @@ async function tikiPull(){
     tikiLastPushed=JSON.stringify(collectTikiState());
   } else { TIKI_REV=0; tikiLastPushed=''; }   // first run — seed data will be pushed
 }
+/* ============================================================================
+   THE LOCAL COPY
+   Everything above assumes the network works. This assumes it does not. Every
+   few seconds the state is written to the browser's own storage, entirely
+   separately from saving. If a save fails, a tab is closed or a laptop dies,
+   the work is still on the machine and the next load offers it back.
+
+   IndexedDB rather than localStorage: localStorage caps around 5 MB and throws
+   when full, which is precisely the failure we are insuring against.
+   ========================================================================== */
+const LOCAL_DB='rarriLocal', LOCAL_STORE='snap';
+let LOCAL_LAST='';
+
+function localDB(){
+  return new Promise((res,rej)=>{
+    const rq=indexedDB.open(LOCAL_DB,1);
+    rq.onupgradeneeded=()=>{ const db=rq.result;
+      if(!db.objectStoreNames.contains(LOCAL_STORE)) db.createObjectStore(LOCAL_STORE); };
+    rq.onsuccess=()=>res(rq.result);
+    rq.onerror=()=>rej(rq.error);
+  });
+}
+async function localPut(rec){
+  const db=await localDB();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(LOCAL_STORE,'readwrite');
+    tx.objectStore(LOCAL_STORE).put(rec,'state');
+    tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error);
+  });
+}
+async function localGet(){
+  const db=await localDB();
+  return new Promise((res)=>{
+    const tx=db.transaction(LOCAL_STORE,'readonly');
+    const rq=tx.objectStore(LOCAL_STORE).get('state');
+    rq.onsuccess=()=>res(rq.result||null); rq.onerror=()=>res(null);
+  });
+}
+async function localClear(){
+  try{ const db=await localDB();
+    const tx=db.transaction(LOCAL_STORE,'readwrite');
+    tx.objectStore(LOCAL_STORE).delete('state'); }catch(e){}
+}
+
+/* Runs on its own timer, deliberately independent of tikiPush — if pushing is
+   the thing that is broken, this must keep working. */
+async function localSnapshot(){
+  if(!TIKI_LOADED) return;
+  try{
+    const s=JSON.stringify(collectTikiState());
+    if(s===LOCAL_LAST) return;
+    LOCAL_LAST=s;
+    await localPut({ ts:Date.now(), saved:SAVE_LAST_OK||0, who:ME, json:s });
+  }catch(e){ /* never let the safety net take the app down with it */ }
+}
+
+/* On load: if the machine holds work newer than what the server gave us, say so
+   rather than silently discarding it. */
+async function localOffer(){
+  let rec=null;
+  try{ rec=await localGet(); }catch(e){ return; }
+  if(!rec||!rec.json) return;
+  /* Only interesting if it was never saved — a snapshot taken after the last
+     successful save is work the server never received. */
+  const unsaved = (rec.ts||0) - (rec.saved||0) > 8000;
+  if(!unsaved) return localClear();
+  if(rec.json===JSON.stringify(collectTikiState())) return localClear();
+  const when=new Date(rec.ts).toLocaleString('en-GB',{weekday:'short',hour:'2-digit',minute:'2-digit'});
+  openModal(modalShell('Unsaved work found on this computer',
+    `<p style="font-size:.88rem;line-height:1.6;color:var(--ink-2)">
+       This browser has a copy from <b>${esc(when)}</b> that never reached the server —
+       most likely saving was failing at the time.</p>
+     <p style="font-size:.88rem;line-height:1.6;color:var(--ink-2);margin-top:10px">
+       Restoring replaces what is on screen with that copy. If you would rather
+       keep what the server has, discard it — but download it first if you are
+       unsure, because discarding cannot be undone.</p>`,
+    `<button class="btn btn-ghost" onclick="localDownload()">Download it</button>
+     <button class="btn btn-ghost" style="color:var(--crit-ink)" onclick="localDiscard()">Discard</button>
+     <button class="btn btn-primary" onclick="localRestore()">Restore it</button>`));
+}
+let LOCAL_PENDING=null;
+async function localDownload(){
+  const rec=await localGet(); if(!rec) return;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([rec.json],{type:'application/json'}));
+  a.download=`rarri-local-${new Date(rec.ts).toISOString().slice(0,16).replace(/[:T]/g,'-')}.json`;
+  a.click(); toast('Downloaded');
+}
+async function localRestore(){
+  const rec=await localGet(); if(!rec) return closeModal();
+  try{
+    applyTikiState(JSON.parse(rec.json));
+    closeModal(); await localClear();
+    tikiPush(); rerenderAll(); renderNotifs();
+    toast('Restored — and saved to the server');
+  }catch(e){ toast('Could not restore that copy'); }
+}
+async function localDiscard(){
+  if(!confirm('Discard the local copy? This cannot be undone.')) return;
+  await localClear(); closeModal(); toast('Discarded');
+}
+
 let TIKI_LOADED=false;   // no successful pull yet -> pushing would destroy data
 async function tikiPush(){
   if(tikiSaving) return;
@@ -15471,7 +15706,7 @@ async function tikiPush(){
       const rows=await r.json().catch(()=>[]);
       if(rows.length){
         TIKI_REV=Number(rows[0].rev)||TIKI_REV+1;
-        tikiLastPushed=s;
+        tikiLastPushed=s; SAVE_LAST_OK=Date.now(); SAVE_FAILS=0;
         syncStatus('', 'Synced · '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}));
         rtBroadcastState();          // tell every other device to catch up
       } else {
@@ -15536,6 +15771,9 @@ async function tikiEnter(inviteType){
     brfAutoTaskSweep();   /* unanswered comments reach the board without a click */
     const ran=tikiMigrate();
     if(ran.length){ tikiPush(); console.info('Applied migrations:', ran.join(', ')); }
+    /* Anything this machine has that the server never received is offered back
+       before you start working on top of it. */
+    setTimeout(()=>{ localOffer().catch(()=>{}); }, 900);
     syncStatus('', 'Synced · '+tikiSession.email.split('@')[0]);
   }
   catch(e){
@@ -15561,6 +15799,9 @@ async function tikiEnter(inviteType){
   rerenderAll(); renderNotifs();
   navTo('tasks');
   setInterval(tikiPush, 4000);
+  /* Separate timer on purpose: the safety net must not depend on the thing it
+     is insuring against. */
+  setInterval(localSnapshot, 5000);
   bootLoadData();
   /* Free, and it is the one list you always want warm. */
   setTimeout(swWarm, 1200);
