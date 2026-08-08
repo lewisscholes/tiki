@@ -2474,11 +2474,6 @@ body.cloning .asx-thread{padding-bottom:0}
   border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
 .kit-chip button{border:none;background:none;color:var(--ink-3);cursor:pointer;font-size:.62rem;padding:0;font-family:inherit}
 
-.cl-vs{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:.75rem;color:var(--ink-2);cursor:pointer}
-.cl-vs input{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
-.cl-vsrow{border-top:1px solid var(--line-2);margin-top:2px}
-.cl-vsh{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
-  color:var(--ink-3);padding:11px 14px 9px}
 
 .kit-hex{display:block;width:88px;margin-top:2px;font-size:.68rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
   color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:6px;
@@ -2498,6 +2493,9 @@ body.cloning .asx-thread{padding-bottom:0}
   padding:4px 9px;border-radius:99px;cursor:pointer}
 .cl-rule:hover{border-color:var(--accent);background:var(--accent-soft)}
 .cl-res.rated .cl-rate{opacity:1}
+
+.cl-made{font-size:.72rem;color:var(--ink-2);font-weight:620;padding:8px 9px 0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -12456,9 +12454,7 @@ function clLearned(){
 let CLONE = {
   on:false, adId:null, ad:null, prodId:null, imgIdx:0,
   n:4, aspect:'1:1', model:'nano-banana-2', layers:false,
-  angle:'', angles:[], anglesLoading:false, busy:false, err:'',
-  /* Run GetHookd's generator alongside ours on the same inputs. */
-  versus:false
+  angle:'', angles:[], anglesLoading:false, busy:false, err:''
 };
 
 /* ---- the prompt, versioned and editable in the back office --------------- */
@@ -12684,7 +12680,7 @@ async function clGenerate(){
 
   const st={ n, done:[], fails:0, model:CLONE.model, aspect:CLONE.aspect,
              layers:CLONE.layers, brand:CLONE.ad.brand||'', angle:label, prompt, cardId,
-             changes, vs:CLONE.versus?{state:'running',urls:[]}:null };
+             changes };
   CLONE_RUNS[cardId]=st; CLONE_ORDER.unshift(cardId); if(CLONE_ORDER.length>12) CLONE_ORDER.length=12;
   const repaint=()=>{
     const html=clCardHTML(cardId,st);
@@ -12693,13 +12689,15 @@ async function clGenerate(){
        screen. Doing it the other way round is how a finished job carried on
        claiming it was drawing. */
     AI.msgs=AI.msgs.map(x=>(x.html&&x.html.includes(`id="${cardId}"`))?{who:'card',html}:x);
-    const el=$(cardId);
-    if(el) el.outerHTML=html;
-    else if(state.page==='statics'&&SA.tab==='clone'){ const r=$('clRuns'); if(r) r.innerHTML=CLONE_ORDER.map(x=>clCardHTML(x,CLONE_RUNS[x])).join(''); }
+    /* The same card is rendered in the assistant thread AND on the Static Ads
+       page. getElementById returns whichever comes first in the document, so
+       updating "the" node left the other one insisting it was still drawing.
+       Update every copy. */
+    const nodes=document.querySelectorAll(`[data-run="${cardId}"]`);
+    if(nodes.length) nodes.forEach(el=>{ el.outerHTML=html; });
   };
 
   const jobs=Array.from({length:n},()=>clOneImage(prompt,refs,st,repaint));
-  if(CLONE.versus) jobs.push(clVersus(st, repaint));
   /* allSettled, not all: one rejection must not strand the other three, nor
      leave the button saying "Generating…" for the rest of the afternoon. */
   try{ await Promise.allSettled(jobs); }
@@ -12722,65 +12720,6 @@ async function tikiFetchT(path, opts, ms){
   const t=setTimeout(()=>ac.abort(), ms||30000);
   try{ return await tikiFetch(path, {...(opts||{}), signal:ac.signal}); }
   finally{ clearTimeout(t); }
-}
-
-/* ---- the side-by-side ----------------------------------------------------
-   Same inspiration, same product, same angle — theirs and ours. The only
-   honest way to settle which prompt is better is to run them on one input. */
-async function clVersus(st, repaint){
-  st.vs={ state:'running', urls:[] };
-  repaint();
-  try{
-    const params={ ad_id:Number(CLONE.adId), variations_count:1,
-      aspect_ratio:{'1:1':'Square (1:1)','9:16':'Portrait (9:16)','16:9':'Landscape (16:9)','4:5':'Square (1:1)'}[st.aspect]||'Square (1:1)',
-      model_slug:st.model };
-    if(CLONE.ad&&CLONE.ad.mediaId) params.media_id=CLONE.ad.mediaId;
-    if(CLONE.prodId) params.product_id=CLONE.prodId;
-    const prod=GHP.list.find(p=>p.id===CLONE.prodId);
-    if(prod&&prod.images.length) params.product_image_index=Math.min(CLONE.imgIdx,prod.images.length-1);
-
-    const r=await tikiFetchT('/functions/v1/adlib',{ method:'POST',
-      body:JSON.stringify({ action:'clone_create', params }) }, 45000);
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok||!j.data?.id) throw new Error(j.error||('HTTP '+r.status));
-    const id=j.data.id;
-
-    for(let i=0;i<40;i++){
-      await new Promise(res=>setTimeout(res, i<3?6000:5000));
-      const gr=await tikiFetchT('/functions/v1/adlib',{ method:'POST',
-        body:JSON.stringify({ action:'clone_get', id }) }, 20000);
-      const gj=await gr.json().catch(()=>({}));
-      if(!gr.ok) continue;
-      const pr=((gj.data||{}).prompts||[])[0]||{};
-      if(pr.status==='failed'){ st.vs={ state:'failed', err:pr.error||'their model refused it' }; repaint(); return; }
-      if(pr.status==='completed'){
-        st.vs={ state:'done', urls:(pr.media||[])
-          .filter(m=>!m.is_image_reference&&!m.is_product_reference).map(m=>m.url).filter(Boolean) };
-        repaint(); tikiPush(); return;
-      }
-    }
-    st.vs={ state:'failed', err:'it took too long' }; repaint();
-  }catch(e){ st.vs={ state:'failed', err:e.message||'unknown error' }; repaint(); }
-}
-
-/* A generation only exists while the tab that started it is open. Reload
-   mid-run and the saved chat keeps a card that claims to still be drawing, for
-   ever, because nothing is left to finish it. Every load clears those out. */
-function clSweepStranded(){
-  const dead = html => typeof html==='string' && html.includes('class="cl-sp"');
-  const note = `<div class="cl-card"><div class="cl-ch"><span class="cl-ic">◧</span>Static ad
-      <span class="cl-cm">interrupted</span><span class="cl-pill bad">Stopped</span></div>
-    <div class="cl-cf">The page reloaded while this was drawing, so it was abandoned.
-      Nothing was charged for images that never arrived.</div></div>`;
-  let n=0;
-  const fix = msgs => (msgs||[]).map(m=>{
-    if(m && m.who==='card' && dead(m.html)){ n++; return { who:'card', html:note }; }
-    return m;
-  });
-  AI.msgs = fix(AI.msgs);
-  AI_CHATS.forEach(c=>{ if(Array.isArray(c.msgs)) c.msgs=fix(c.msgs); });
-  if(n){ tikiPush(); console.info(`cleared ${n} stranded generation card${n===1?'':'s'}`); }
-  return n;
 }
 
 async function clOneImage(prompt, refs, st, repaint){
@@ -12885,9 +12824,6 @@ function clPanelInner(){
             <option value="0" ${CLONE.layers?'':'selected'}>Text baked in</option>
           </select>
         </div>
-        <label class="cl-vs"><input type="checkbox" ${CLONE.versus?'checked':''}
-          onchange="CLONE.versus=this.checked;clSyncChrome()">
-          <span>Also run GetHookd's version, to compare</span></label>
         <div class="cl-hint" id="clModeHint">${CLONE.layers
           ? '<b>Text as layers</b> gives you a plate with no words on it and lays the headline over the top as editable text. Good for spinning hooks, but it will look less like the reference — the typography is half of what you are copying.'
           : '<b>Text baked in</b> reproduces the reference\'s typography as well as its layout. This is the one that actually looks like the ad.'}</div>
@@ -12899,7 +12835,7 @@ function clPanelInner(){
 /* ---- the result card ----------------------------------------------------- */
 function clCardHTML(id, st){
   const pend=Math.max(0, st.n - st.done.length - st.fails);
-  return `<div class="cl-card" id="${id}">
+  return `<div class="cl-card" id="${id}" data-run="${id}">
     <div class="cl-ch">
       <span class="cl-ic">◧</span>${esc(st.angle||'Static ad')}
       <span class="cl-cm">${st.brand?`after ${esc(st.brand)} · `:''}${
@@ -12928,13 +12864,6 @@ function clCardHTML(id, st){
         </div></div>`;}).join('')}
       ${Array.from({length:pend},()=>'<div class="cl-shot ph"></div>').join('')}</div>`
     : pend?`<div class="cl-grid">${Array.from({length:pend},()=>'<div class="cl-shot ph"></div>').join('')}</div>`:''}
-    ${st.vs?`<div class="cl-vsrow">
-      <div class="cl-vsh">GetHookd's attempt · same inspiration, same product</div>
-      ${st.vs.state==='running'?'<div class="cl-hint" style="padding:0 14px 12px">Running…</div>'
-        : st.vs.state==='failed'?`<div class="cl-hint" style="padding:0 14px 12px;color:var(--crit-ink)">${esc(st.vs.err||'failed')}</div>`
-        : `<div class="cl-grid">${(st.vs.urls||[]).map(u=>`
-            <a class="cl-shot" href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt=""></a>`).join('')}</div>`}
-    </div>`:''}
     <div class="cl-cf">${
       pend? `Drawing ${pend} more…`
       : st.done.length? (st.layers
@@ -13176,7 +13105,6 @@ function renderStatics(){
    assistant — two renderings of one control would drift apart within a week.
    All that differs is the box you type into and the button you press. */
 function saCloneHTML(){
-  ghClones();
   const cost=CLONE.n*(CLONE.model==='nano-banana-pro'?2:1);
   return `
     <div class="card sa-clone"><div class="card-b" style="padding:0">
@@ -13195,55 +13123,46 @@ function saCloneHTML(){
     </div></div>
     ${CLONE_ORDER.length?`<div class="section-title" style="margin-top:20px">Generations</div>
       <div id="clRuns">${CLONE_ORDER.map(id=>clCardHTML(id,CLONE_RUNS[id])).join('')}</div>`:''}
-    <div class="section-title" style="margin-top:20px">Made in GetHookd
-      <button class="link-btn" style="margin-left:8px" onclick="GHCL.loaded=false;ghClones(true)">Refresh</button></div>
-    ${ghClonesHTML()}`;
+    <div class="section-title" style="margin-top:20px">Your static ads</div>
+    ${madeHTML()}`;
 }
-/* ---- generations made in GetHookd's own app ------------------------------
-   Yesterday's best ad was made over there, so it never appeared here and looked
-   lost. It is one free-ish call to list them, and they belong in the same place
-   as ours — where they came from is an implementation detail. */
-const GHCL={ list:[], loading:false, loaded:false, err:'' };
-async function ghClones(force){
-  if(GHCL.loading || (GHCL.loaded && !force)) return;
-  GHCL.loading=true; GHCL.err='';
-  if(state.page==='statics'&&SA.tab==='clone') renderStatics();
-  try{
-    const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
-      body:JSON.stringify({ action:'clone_list', params:{ per_page:20 } }) });
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
-    GHCL.list=(j.data||[]).map(row=>{
-      const pr=(row.prompts||[])[0]||{};
-      return { id:row.id, title:row.title||'Clone', at:row.created_at||'',
-        status:pr.status||'', model:pr.model_slug||'',
-        urls:(pr.media||[]).filter(m=>!m.is_image_reference&&!m.is_product_reference)
-                           .map(m=>m.url).filter(Boolean) };
-    }).filter(x=>x.urls.length);
-    GHCL.loaded=true;
-  }catch(e){ GHCL.err=e.message||'could not read them'; }
-  GHCL.loading=false;
-  if(state.page==='statics'&&SA.tab==='clone') renderStatics();
+/* ---- everything we have made ---------------------------------------------
+   Read straight off the "Static ads" brief rather than kept as a second list.
+   One source of truth: delete a page in the editor and it leaves here too,
+   which a parallel array would never manage. */
+function madeAds(){
+  const b=BRIEFS.find(x=>(x.name||'')==='Static ads');
+  if(!b) return [];
+  const frames=(b.elements||[]).filter(e=>e.type==='frame');
+  const inFrame=e=>frames.find(f=>e.x>=f.x-40&&e.x<=f.x+f.w+40&&e.y>=f.y-40&&e.y<=f.y+f.h+40);
+  return (b.elements||[]).filter(e=>e.type==='image'&&e.src)
+    .map(e=>({ id:e.id, src:e.src, title:(inFrame(e)||{}).title||e.alt||'Static ad', briefId:b.id }))
+    .reverse();          /* newest first — they are appended left to right */
 }
-function ghClonesHTML(){
-  if(GHCL.loading&&!GHCL.list.length) return `<div class="cl-hint" style="padding:0 2px 6px">Looking…</div>`;
-  if(GHCL.err) return `<div class="cl-warn" style="padding:0 2px 6px">${esc(GHCL.err)}</div>`;
-  if(!GHCL.list.length) return `<div class="cl-hint" style="padding:0 2px 6px">Nothing generated in GetHookd yet.</div>`;
-  return `<div class="cl-grid" style="padding:0">${GHCL.list.flatMap(c=>c.urls.map(u=>`
+function madeHTML(){
+  const ads=madeAds();
+  if(!ads.length) return `<div class="cl-hint" style="padding:0 2px 6px">
+    Nothing yet. Generate one above and it lands here and in the editor.</div>`;
+  return `<div class="cl-grid" style="padding:0">${ads.map(a=>`
     <div class="cl-res">
-      <a class="cl-shot" href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" loading="lazy" alt=""></a>
+      <a class="cl-shot" href="${esc(a.src)}" target="_blank" rel="noopener">
+        <img src="${esc(a.src)}" loading="lazy" alt="${esc(a.title)}"></a>
+      <div class="cl-made">${esc(a.title)}</div>
       <div class="cl-acts"><button class="btn btn-primary btn-sm" style="flex:1"
-        onclick="ghCloneToBrief('${esc(u)}','${esc(c.title)}')">Add to brief</button></div>
-    </div>`)).join('')}</div>
-  <div class="cl-hint" style="padding:6px 2px 0">Made in GetHookd. Their links expire within the
-    hour — adding one to a brief keeps a permanent copy.</div>`;
+        onclick="madeOpen('${a.briefId}','${a.id}')">Open in editor</button></div>
+    </div>`).join('')}</div>`;
 }
-async function ghCloneToBrief(url, title){
-  toast('Adding to your brief…');
-  try{
-    const src=await clHost(url);
-    imgToBrief(src);
-  }catch(e){ toast('Could not add it — '+(e.message||'unknown error')); }
+function madeOpen(briefId, elId){
+  openBriefEditor(briefId);
+  /* Land on the ad itself rather than wherever the canvas happened to be. */
+  setTimeout(()=>{
+    const b=briefById(briefId), el=(b&&b.elements||[]).find(x=>x.id===elId);
+    if(!el) return;
+    state.brf.sel=elId;
+    state.brf.panX = 120 - el.x*state.brf.zoom;
+    state.brf.panY = 90  - el.y*state.brf.zoom;
+    renderBriefEditor();
+  }, 120);
 }
 
 function saCloneGo(){
