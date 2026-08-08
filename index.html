@@ -12722,6 +12722,26 @@ async function tikiFetchT(path, opts, ms){
   finally{ clearTimeout(t); }
 }
 
+/* A generation only exists while the tab that started it is open. Reload
+   mid-run and the saved chat keeps a card that claims to still be drawing, for
+   ever, because nothing is left to finish it. Every load clears those out. */
+function clSweepStranded(){
+  const dead = html => typeof html==='string' && html.includes('class="cl-sp"');
+  const note = `<div class="cl-card"><div class="cl-ch"><span class="cl-ic">◧</span>Static ad
+      <span class="cl-cm">interrupted</span><span class="cl-pill bad">Stopped</span></div>
+    <div class="cl-cf">The page reloaded while this was drawing, so it was abandoned.
+      Nothing was charged for images that never arrived.</div></div>`;
+  let n=0;
+  const fix = msgs => (msgs||[]).map(m=>{
+    if(m && m.who==='card' && dead(m.html)){ n++; return { who:'card', html:note }; }
+    return m;
+  });
+  AI.msgs = fix(AI.msgs);
+  AI_CHATS.forEach(c=>{ if(Array.isArray(c.msgs)) c.msgs=fix(c.msgs); });
+  if(n){ tikiPush(); console.info(`cleared ${n} stranded generation card${n===1?'':'s'}`); }
+  return n;
+}
+
 async function clOneImage(prompt, refs, st, repaint){
   try{
     const r=await tikiFetchT('/functions/v1/imagegen',{ method:'POST',
