@@ -9028,8 +9028,8 @@ async function brfPutMedia(blob, mime){
   const ext={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif'}[mime]||'png';
   const path=`${hash}.${ext}`;
   const url=`${TIKI_CFG.url}/storage/v1/object/public/${BRF_BUCKET}/${path}`;
-  const r=await tikiFetch(`/storage/v1/object/${BRF_BUCKET}/${path}`,{ method:'POST',
-    headers:{ 'Content-Type':mime, 'x-upsert':'true' }, body:blob });
+  const r=await tikiFetchT(`/storage/v1/object/${BRF_BUCKET}/${path}`,{ method:'POST',
+    headers:{ 'Content-Type':mime, 'x-upsert':'true' }, body:blob }, 60000);
   /* 409 means those exact bytes are already up there, which is a success. */
   if(!r.ok && r.status!==409){
     const t=await r.text().catch(()=>'');
@@ -12576,12 +12576,32 @@ async function clGenerate(){
   if(CLONE.busy) return;
   if(!CLONE.adId) return toast('Pick an inspiration first');
   const prod=GHP.list.find(p=>p.id===CLONE.prodId);
-  const refs=[CLONE.ad.full||CLONE.ad.thumb].filter(Boolean);
-  if(prod&&prod.images[CLONE.imgIdx]) refs.push(prod.images[CLONE.imgIdx]);
-  if(refs.length<2) return toast('Pick a product image too — without it there is nothing to put in the ad');
+  const rawRefs=[CLONE.ad.full||CLONE.ad.thumb].filter(Boolean);
+  if(prod&&prod.images[CLONE.imgIdx]) rawRefs.push(prod.images[CLONE.imgIdx]);
+  if(rawRefs.length<2) return toast('Pick a product image too — without it there is nothing to put in the ad');
+
+  /* kie.ai works out the file type from the URL, and GetHookd's inspiration
+     links are "/download?expires=…" with no extension — which came back as
+     "File type not supported" and killed the run. Copying both references into
+     our own bucket first gives them a real .png/.jpg name and a content type,
+     and incidentally means the links cannot expire mid-generation. */
+  CLONE.busy=true; clPaint();
+  let refs;
+  try{
+    refs=await Promise.all(rawRefs.map(u=>clHost(u)));
+  }catch(e){
+    CLONE.busy=false; clPaint();
+    return toast('Could not prepare the reference images — '+(e.message||'unknown error'));
+  }
+  if(refs.some(u=>!u || /^data:/.test(u))){
+    CLONE.busy=false; clPaint();
+    return toast('Storage is unreachable, so the model cannot read the references. Try again shortly.');
+  }
 
   const prompt=clBuildPrompt();
   const changes=clChangesText();
+  /* Everything below this point runs; nothing else can bail out leaving the
+     button stuck on "Generating…". */
   const n=CLONE.n, cardId='cl'+Date.now().toString(36);
   const label=CLONE.angle? (CLONE.angles.find(a=>(a.brief||a.label)===CLONE.angle)||{}).label || CLONE.angle.slice(0,48) : '';
 
@@ -12596,17 +12616,23 @@ async function clGenerate(){
              changes, vs:CLONE.versus?{state:'running',urls:[]}:null };
   CLONE_RUNS[cardId]=st; CLONE_ORDER.unshift(cardId); if(CLONE_ORDER.length>12) CLONE_ORDER.length=12;
   const repaint=()=>{
-    /* The id is unique, so this updates whichever DOM the card is currently in
-       — the assistant thread or the Static Ads page — without knowing which. */
-    const el=$(cardId); if(el) el.outerHTML=clCardHTML(cardId,st);
-    AI.msgs=AI.msgs.map(x=>(x.html&&x.html.includes(`id="${cardId}"`))?{who:'card',html:clCardHTML(cardId,st)}:x);
+    const html=clCardHTML(cardId,st);
+    /* Keep the message list right FIRST, so a re-render of the thread cannot
+       resurrect a stale card. Then update the node if it happens to be on
+       screen. Doing it the other way round is how a finished job carried on
+       claiming it was drawing. */
+    AI.msgs=AI.msgs.map(x=>(x.html&&x.html.includes(`id="${cardId}"`))?{who:'card',html}:x);
+    const el=$(cardId);
+    if(el) el.outerHTML=html;
+    else if(state.page==='statics'&&SA.tab==='clone'){ const r=$('clRuns'); if(r) r.innerHTML=CLONE_ORDER.map(x=>clCardHTML(x,CLONE_RUNS[x])).join(''); }
   };
 
-  CLONE.busy=true; clPaint();
   const jobs=Array.from({length:n},()=>clOneImage(prompt,refs,st,repaint));
   if(CLONE.versus) jobs.push(clVersus(st, repaint));
-  await Promise.all(jobs);
-  CLONE.busy=false; clPaint();
+  /* allSettled, not all: one rejection must not strand the other three, nor
+     leave the button saying "Generating…" for the rest of the afternoon. */
+  try{ await Promise.allSettled(jobs); }
+  finally{ CLONE.busy=false; clPaint(); }
   tikiPush();
 
   if(st.done.length){
@@ -12616,6 +12642,16 @@ async function clGenerate(){
 }
 const CLONE_RUNS={};
 const CLONE_ORDER=[];   /* newest first — the ids are unique, so one repaint serves both hosts */
+
+/* fetch has no default timeout, so a request that is never answered hangs for
+   ever — which is exactly what left a card spinning on "Drawing 1 more…" with
+   nothing to stop it. Everything on the generation path goes through this. */
+async function tikiFetchT(path, opts, ms){
+  const ac=new AbortController();
+  const t=setTimeout(()=>ac.abort(), ms||30000);
+  try{ return await tikiFetch(path, {...(opts||{}), signal:ac.signal}); }
+  finally{ clearTimeout(t); }
+}
 
 /* ---- the side-by-side ----------------------------------------------------
    Same inspiration, same product, same angle — theirs and ours. The only
@@ -12632,16 +12668,16 @@ async function clVersus(st, repaint){
     const prod=GHP.list.find(p=>p.id===CLONE.prodId);
     if(prod&&prod.images.length) params.product_image_index=Math.min(CLONE.imgIdx,prod.images.length-1);
 
-    const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
-      body:JSON.stringify({ action:'clone_create', params }) });
+    const r=await tikiFetchT('/functions/v1/adlib',{ method:'POST',
+      body:JSON.stringify({ action:'clone_create', params }) }, 45000);
     const j=await r.json().catch(()=>({}));
     if(!r.ok||!j.data?.id) throw new Error(j.error||('HTTP '+r.status));
     const id=j.data.id;
 
     for(let i=0;i<40;i++){
       await new Promise(res=>setTimeout(res, i<3?6000:5000));
-      const gr=await tikiFetch('/functions/v1/adlib',{ method:'POST',
-        body:JSON.stringify({ action:'clone_get', id }) });
+      const gr=await tikiFetchT('/functions/v1/adlib',{ method:'POST',
+        body:JSON.stringify({ action:'clone_get', id }) }, 20000);
       const gj=await gr.json().catch(()=>({}));
       if(!gr.ok) continue;
       const pr=((gj.data||{}).prompts||[])[0]||{};
@@ -12656,23 +12692,47 @@ async function clVersus(st, repaint){
   }catch(e){ st.vs={ state:'failed', err:e.message||'unknown error' }; repaint(); }
 }
 
+/* A generation only exists while the tab that started it is open. Reload
+   mid-run and the saved chat keeps a card that claims to still be drawing, for
+   ever, because nothing is left to finish it. Every load clears those out. */
+function clSweepStranded(){
+  const dead = html => typeof html==='string' && html.includes('class="cl-sp"');
+  const note = `<div class="cl-card"><div class="cl-ch"><span class="cl-ic">◧</span>Static ad
+      <span class="cl-cm">interrupted</span><span class="cl-pill bad">Stopped</span></div>
+    <div class="cl-cf">The page reloaded while this was drawing, so it was abandoned.
+      Nothing was charged for images that never arrived.</div></div>`;
+  let n=0;
+  const fix = msgs => (msgs||[]).map(m=>{
+    if(m && m.who==='card' && dead(m.html)){ n++; return { who:'card', html:note }; }
+    return m;
+  });
+  AI.msgs = fix(AI.msgs);
+  AI_CHATS.forEach(c=>{ if(Array.isArray(c.msgs)) c.msgs=fix(c.msgs); });
+  if(n){ tikiPush(); console.info(`cleared ${n} stranded generation card${n===1?'':'s'}`); }
+  return n;
+}
+
 async function clOneImage(prompt, refs, st, repaint){
   try{
-    const r=await tikiFetch('/functions/v1/imagegen',{ method:'POST',
+    const r=await tikiFetchT('/functions/v1/imagegen',{ method:'POST',
       body:JSON.stringify({ action:'create', model:st.model, prompt,
-        aspect:st.aspect, resolution:'2K', images:refs }) });
+        aspect:st.aspect, resolution:'2K', images:refs }) }, 45000);
     const j=await r.json().catch(()=>({}));
     if(!r.ok||!j.taskId){ st.fails++; st.err=j.error||('HTTP '+r.status); repaint(); return; }
     for(let i=0;i<70;i++){
       await new Promise(res=>setTimeout(res, i<4?3000:4000));
-      const sr=await tikiFetch('/functions/v1/imagegen',{ method:'POST',
-        body:JSON.stringify({ action:'status', taskId:j.taskId }) });
+      const sr=await tikiFetchT('/functions/v1/imagegen',{ method:'POST',
+        body:JSON.stringify({ action:'status', taskId:j.taskId }) }, 20000);
       const sj=await sr.json().catch(()=>({}));
       if(sj.state==='fail'){ st.fails++; st.err=sj.failMsg||'the model rejected it'; repaint(); return; }
       if(sj.state==='success'&&sj.urls&&sj.urls.length){ st.done.push(sj.urls[0]); repaint(); return; }
     }
     st.fails++; st.err='it took too long'; repaint();
-  }catch(e){ st.fails++; st.err=e.message||'unknown error'; repaint(); }
+  }catch(e){
+    st.fails++;
+    st.err = e.name==='AbortError' ? 'the request timed out' : (e.message||'unknown error');
+    repaint();
+  }
 }
 
 /* ---- the panel ----------------------------------------------------------- */
@@ -12814,8 +12874,8 @@ function clCardHTML(id, st){
    them. Pull the bytes through our proxy, then park them in our own bucket. */
 async function clHost(url){
   if(url.includes(`/storage/v1/object/public/${BRF_BUCKET}/`)) return url;
-  const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
-    body:JSON.stringify({ action:'grab', params:{ url } }) });
+  const r=await tikiFetchT('/functions/v1/adlib',{ method:'POST',
+    body:JSON.stringify({ action:'grab', params:{ url } }) }, 45000);
   const j=await r.json().catch(()=>({}));
   if(!r.ok||!j.dataUrl) throw new Error(j.error||'could not fetch the image');
   return brfHostOrInline(j.dataUrl);
@@ -16366,6 +16426,7 @@ async function tikiEnter(inviteType){
       if(document.visibilityState==='visible'){ rtWorkspaceConnect(); tikiRefetch('Checking for changes'); }
     });
     brfAutoTaskSweep();   /* unanswered comments reach the board without a click */
+    clSweepStranded();    /* no card may claim to be drawing when nothing is */
     const ran=tikiMigrate();
     if(ran.length){ tikiPush(); console.info('Applied migrations:', ran.join(', ')); }
     /* Anything this machine has that the server never received is offered back
