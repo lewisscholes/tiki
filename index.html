@@ -2448,6 +2448,37 @@ body.cloning .asx-thread{padding-bottom:0}
 .cl-rate button.on.up{background:var(--good-ink);opacity:1}
 .cl-rate button.on.down{background:var(--crit-ink);opacity:1}
 .cl-res:has(.cl-rate button.on) .cl-rate{opacity:1}
+
+/* ---- brand kit, second pass ---------------------------------------------- */
+.kit-cols{display:flex;gap:10px;flex-wrap:wrap;margin-top:11px;align-items:flex-start}
+.kit-slot{width:96px}
+.kit-box{display:block;height:52px;border-radius:11px;border:1px solid var(--line-2);cursor:pointer;
+  position:relative;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(0,0,0,.04)}
+.kit-box input[type=color]{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:none;cursor:pointer;padding:0}
+.kit-meta{margin-top:6px;line-height:1.25}
+.kit-meta .role{display:block;font-size:.68rem;font-weight:750;color:var(--ink-2)}
+.kit-meta .hex{display:block;font-size:.63rem;color:var(--ink-3);font-family:ui-monospace,monospace}
+.kit-ops{display:flex;gap:3px;margin-top:5px}
+.kit-ops button{width:20px;height:20px;border-radius:6px;border:1px solid var(--line);background:var(--surface);
+  color:var(--ink-3);font-size:.6rem;cursor:pointer;font-family:inherit;padding:0;line-height:1}
+.kit-ops button:hover{border-color:var(--accent);color:var(--accent)}
+.kit-add{width:96px;height:52px;border-radius:11px;border:1.5px dashed var(--line);background:none;
+  color:var(--ink-3);font-size:.72rem;font-weight:640;cursor:pointer;font-family:inherit;padding:0 6px}
+.kit-add:hover{border-color:var(--accent);color:var(--accent)}
+.kit-opt{font-size:.62rem;font-weight:700;color:var(--ink-3);background:var(--surface-2);
+  padding:2px 7px;border-radius:99px;margin-left:6px;vertical-align:middle}
+.kit-fontops{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.kit-link{background:none;border:none;color:var(--accent-ink);font-family:inherit;font-size:.75rem;
+  font-weight:650;cursor:pointer;padding:0}
+.kit-chip{display:inline-flex;align-items:center;gap:6px;font-size:.74rem;padding:4px 9px;border-radius:99px;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
+.kit-chip button{border:none;background:none;color:var(--ink-3);cursor:pointer;font-size:.62rem;padding:0;font-family:inherit}
+
+.cl-vs{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:.75rem;color:var(--ink-2);cursor:pointer}
+.cl-vs input{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
+.cl-vsrow{border-top:1px solid var(--line-2);margin-top:2px}
+.cl-vsh{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--ink-3);padding:11px 14px 9px}
 </style>
 </head>
 <body>
@@ -8086,30 +8117,67 @@ function kitSet(field, val){
   if(state.page==='settings') renderSettingsInner();
   if(state.briefId) renderBriefSidePanel();
 }
+const KIT_SLOTS=['Primary','Secondary','Third','Fourth','Fifth','Sixth','Seventh','Eighth'];
+const KIT_SEED=['#7ec96f','#12305c','#f5c542','#ffffff','#1d1d1f','#e8f2ff','#d1495b','#0f766e'];
 function kitAddColour(){
-  const k=brandKit();
-  const v=(prompt('Brand colour as a hex code, e.g. #7ec96f','#')||'').trim();
-  if(!/^#[0-9a-f]{6}$/i.test(v)) return v?toast('That is not a six-digit hex code'):null;
-  if(!k.colours) k.colours=[];
-  if(k.colours.some(c=>c.toLowerCase()===v.toLowerCase())) return toast('Already in the palette');
-  if(k.colours.length>=8) return toast('Eight is plenty — a palette this long stops being one');
-  k.colours.push(v.toLowerCase());
+  const k=brandKit(); if(!k.colours) k.colours=[];
+  if(k.colours.length>=8) return toast('Eight is plenty — beyond that it stops being a palette');
+  k.colours.push(KIT_SEED[k.colours.length]||'#888888');
   tikiPush(); renderSettingsInner();
+  /* Open the new swatch straight away — adding a slot and then hunting for it
+     is two steps where there should be one. */
+  setTimeout(()=>$('kitCol'+(k.colours.length-1))?.click(), 60);
+}
+function kitColourAt(i, hex){
+  const k=brandKit();
+  if(!/^#[0-9a-f]{6}$/i.test(hex)) return;
+  k.colours[i]=hex.toLowerCase();
+  const lbl=$('kitHex'+i); if(lbl) lbl.textContent=hex.toLowerCase();
+  const box=$('kitBox'+i); if(box) box.style.background=hex;
+  clearTimeout(window._kitT); window._kitT=setTimeout(tikiPush, 400);
 }
 function kitDropColour(i){
   const k=brandKit(); k.colours.splice(i,1); tikiPush(); renderSettingsInner();
 }
-function kitMakePrimary(i){
-  const k=brandKit(); const [c]=k.colours.splice(i,1); k.colours.unshift(c);
-  tikiPush(); renderSettingsInner(); toast('That is now the primary');
+function kitMove(i, dir){
+  const k=brandKit(), j=i+dir;
+  if(j<0||j>=k.colours.length) return;
+  [k.colours[i],k.colours[j]]=[k.colours[j],k.colours[i]];
+  tikiPush(); renderSettingsInner();
 }
 function kitNotes(v){ const k=brandKit(); k.notes=v.slice(0,240); tikiPush(); }
+
+/* Twenty-four curated families cover most of it, but a brand font is a brand
+   font — so any Google family can be added by name. */
+function kitAddFont(){
+  const name=(prompt('Font family name, exactly as Google Fonts spells it\n\ne.g. Cabinet Grotesk, Instrument Sans, Schibsted Grotesk','')||'').trim();
+  if(!name) return;
+  if(GOOGLE_FONTS.some(([f])=>f.toLowerCase()===name.toLowerCase())) return toast('Already in the list');
+  const k=brandKit();
+  if(!k.custom) k.custom=[];
+  if(k.custom.some(f=>f.toLowerCase()===name.toLowerCase())) return toast('Already added');
+  k.custom.push(name);
+  gfLoad(name);
+  tikiPush(); renderSettingsInner();
+  /* Whether it exists is Google's call, not ours — so say what to look for
+     rather than pretending we validated it. */
+  toast(`Added. If the preview does not change, Google has no family by that name.`);
+}
+function kitDropFont(name){
+  const k=brandKit();
+  k.custom=(k.custom||[]).filter(f=>f!==name);
+  if(k.head===name) k.head='';
+  if(k.body===name) k.body='';
+  tikiPush(); renderSettingsInner();
+}
+/* Curated plus anything added by hand. */
+const kitFontOptions = () => [...(brandKit().custom||[]), ...GOOGLE_FONTS.map(([f])=>f)];
 
 function kitPanelHTML(){
   const k=brandKit(), cols=k.colours||[];
   const sel=(cur,field)=>`<select class="kit-sel" onchange="kitSet('${field}',this.value)">
       <option value="">System default</option>
-      ${GOOGLE_FONTS.map(([f])=>`<option value="${esc(f)}" ${cur===f?'selected':''}>${esc(f)}</option>`).join('')}
+      ${kitFontOptions().map(f=>`<option value="${esc(f)}" ${cur===f?'selected':''}>${esc(f)}</option>`).join('')}
     </select>`;
   return `
     <div class="inset-cap">Brand kit</div>
@@ -8123,6 +8191,11 @@ function kitPanelHTML(){
             <label>Headings ${sel(k.head,'head')}</label>
             <label>Body ${sel(k.body,'body')}</label>
           </div>
+          <div class="kit-fontops">
+            <button class="kit-link" onclick="kitAddFont()">＋ Add a font by name</button>
+            ${(k.custom||[]).map(f=>`<span class="kit-chip" style="font-family:'${esc(f)}',sans-serif">${esc(f)}
+              <button onclick="kitDropFont('${esc(f).replace(/'/g,"\\'")}')">✕</button></span>`).join('')}
+          </div>
           ${(k.head||k.body)?`<div class="kit-prev">
             ${k.head?`<span style="font-family:'${esc(k.head)}',sans-serif;font-size:1.3rem;font-weight:800">Clean energy, no crash</span>`:''}
             ${k.body?`<span style="font-family:'${esc(k.body)}',sans-serif;font-size:.85rem">Yerba mate and electrolytes in one sachet.</span>`:''}
@@ -8134,24 +8207,35 @@ function kitPanelHTML(){
         <span class="iic" style="background:#8b3dff">${ICONS.image||ICONS.eye}</span>
         <div style="flex:1;min-width:0">
           <div class="it">Colours</div>
-          <div class="is">Generated ads are told to use only these. The first is the primary.</div>
+          <div class="is">Generated ads may use only these. Order matters — the first is your primary.</div>
           <div class="kit-cols">
-            ${cols.map((c,i)=>`<div class="kit-col ${i===0?'primary':''}" style="background:${c}" title="${c}">
-              <span class="hex">${c}</span>
-              <button class="x" title="Remove" onclick="kitDropColour(${i})">✕</button>
-              ${i?`<button class="star" title="Make primary" onclick="kitMakePrimary(${i})">★</button>`:''}
+            ${cols.map((c,i)=>`<div class="kit-slot">
+              <label class="kit-box" id="kitBox${i}" style="background:${c}">
+                <input type="color" id="kitCol${i}" value="${c}"
+                  oninput="kitColourAt(${i}, this.value)">
+              </label>
+              <div class="kit-meta">
+                <span class="role">${KIT_SLOTS[i]||('Colour '+(i+1))}</span>
+                <span class="hex" id="kitHex${i}">${c}</span>
+              </div>
+              <div class="kit-ops">
+                ${i?`<button title="Move up" onclick="kitMove(${i},-1)">↑</button>`:''}
+                ${i<cols.length-1?`<button title="Move down" onclick="kitMove(${i},1)">↓</button>`:''}
+                <button title="Remove" onclick="kitDropColour(${i})">✕</button>
+              </div>
             </div>`).join('')}
-            <button class="kit-add" onclick="kitAddColour()">＋</button>
+            <button class="kit-add" onclick="kitAddColour()">＋ Add colour</button>
           </div>
-          ${cols.length?'':'<div class="kit-warn">No colours set, so clones come back in the reference brand\'s palette — which is what makes them look like somebody else\'s ad.</div>'}
+          ${cols.length?'':'<div class="kit-warn">Nothing set yet, so clones come back in the reference brand\'s colours — which is what makes them look like somebody else\'s ad.</div>'}
         </div>
       </div>
 
       <div class="irow" style="cursor:default;align-items:flex-start">
         <span class="iic" style="background:#1baf7a">${ICONS.grad}</span>
         <div style="flex:1;min-width:0">
-          <div class="it">House style</div>
-          <div class="is">One line the image model gets every time — anything it should always or never do</div>
+          <div class="it">Always &amp; never <span class="kit-opt">optional</span></div>
+          <div class="is">One sentence added to every generation. Use it for the rules you would
+            otherwise repeat each time — lighting, backgrounds, how the pack should sit.</div>
           <input class="kit-notes" value="${esc(k.notes||'')}" maxlength="240"
             placeholder="e.g. bright daylight, never dark backgrounds, product always upright"
             onchange="kitNotes(this.value)">
@@ -8175,6 +8259,7 @@ function gfWarm(){
   const k=brandKit();
   if(k.head) gfLoad(k.head);
   if(k.body) gfLoad(k.body);
+  (k.custom||[]).forEach(gfLoad);
 }
 /* The brand's own fonts sit at the top of the editor's picker, named, so nobody
    has to remember which of six generic labels is "ours". */
@@ -12269,7 +12354,9 @@ function clLearned(){
 let CLONE = {
   on:false, adId:null, ad:null, prodId:null, imgIdx:0,
   n:4, aspect:'1:1', model:'nano-banana-2', layers:false,
-  angle:'', angles:[], anglesLoading:false, busy:false, err:''
+  angle:'', angles:[], anglesLoading:false, busy:false, err:'',
+  /* Run GetHookd's generator alongside ours on the same inputs. */
+  versus:false
 };
 
 /* ---- the prompt, versioned and editable in the back office --------------- */
@@ -12475,7 +12562,7 @@ async function clGenerate(){
 
   const st={ n, done:[], fails:0, model:CLONE.model, aspect:CLONE.aspect,
              layers:CLONE.layers, brand:CLONE.ad.brand||'', angle:label, prompt, cardId,
-             changes };
+             changes, vs:CLONE.versus?{state:'running',urls:[]}:null };
   CLONE_RUNS[cardId]=st; CLONE_ORDER.unshift(cardId); if(CLONE_ORDER.length>12) CLONE_ORDER.length=12;
   const repaint=()=>{
     /* The id is unique, so this updates whichever DOM the card is currently in
@@ -12485,7 +12572,9 @@ async function clGenerate(){
   };
 
   CLONE.busy=true; clPaint();
-  await Promise.all(Array.from({length:n},()=>clOneImage(prompt,refs,st,repaint)));
+  const jobs=Array.from({length:n},()=>clOneImage(prompt,refs,st,repaint));
+  if(CLONE.versus) jobs.push(clVersus(st, repaint));
+  await Promise.all(jobs);
   CLONE.busy=false; clPaint();
   tikiPush();
 
@@ -12496,6 +12585,45 @@ async function clGenerate(){
 }
 const CLONE_RUNS={};
 const CLONE_ORDER=[];   /* newest first — the ids are unique, so one repaint serves both hosts */
+
+/* ---- the side-by-side ----------------------------------------------------
+   Same inspiration, same product, same angle — theirs and ours. The only
+   honest way to settle which prompt is better is to run them on one input. */
+async function clVersus(st, repaint){
+  st.vs={ state:'running', urls:[] };
+  repaint();
+  try{
+    const params={ ad_id:Number(CLONE.adId), variations_count:1,
+      aspect_ratio:{'1:1':'Square (1:1)','9:16':'Portrait (9:16)','16:9':'Landscape (16:9)','4:5':'Square (1:1)'}[st.aspect]||'Square (1:1)',
+      model_slug:st.model };
+    if(CLONE.ad&&CLONE.ad.mediaId) params.media_id=CLONE.ad.mediaId;
+    if(CLONE.prodId) params.product_id=CLONE.prodId;
+    const prod=GHP.list.find(p=>p.id===CLONE.prodId);
+    if(prod&&prod.images.length) params.product_image_index=Math.min(CLONE.imgIdx,prod.images.length-1);
+
+    const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
+      body:JSON.stringify({ action:'clone_create', params }) });
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.data?.id) throw new Error(j.error||('HTTP '+r.status));
+    const id=j.data.id;
+
+    for(let i=0;i<40;i++){
+      await new Promise(res=>setTimeout(res, i<3?6000:5000));
+      const gr=await tikiFetch('/functions/v1/adlib',{ method:'POST',
+        body:JSON.stringify({ action:'clone_get', id }) });
+      const gj=await gr.json().catch(()=>({}));
+      if(!gr.ok) continue;
+      const pr=((gj.data||{}).prompts||[])[0]||{};
+      if(pr.status==='failed'){ st.vs={ state:'failed', err:pr.error||'their model refused it' }; repaint(); return; }
+      if(pr.status==='completed'){
+        st.vs={ state:'done', urls:(pr.media||[])
+          .filter(m=>!m.is_image_reference&&!m.is_product_reference).map(m=>m.url).filter(Boolean) };
+        repaint(); tikiPush(); return;
+      }
+    }
+    st.vs={ state:'failed', err:'it took too long' }; repaint();
+  }catch(e){ st.vs={ state:'failed', err:e.message||'unknown error' }; repaint(); }
+}
 
 async function clOneImage(prompt, refs, st, repaint){
   try{
@@ -12595,6 +12723,9 @@ function clPanelInner(){
             <option value="0" ${CLONE.layers?'':'selected'}>Text baked in</option>
           </select>
         </div>
+        <label class="cl-vs"><input type="checkbox" ${CLONE.versus?'checked':''}
+          onchange="CLONE.versus=this.checked;clSyncChrome()">
+          <span>Also run GetHookd's version, to compare</span></label>
         <div class="cl-hint" id="clModeHint">${CLONE.layers
           ? '<b>Text as layers</b> gives you a plate with no words on it and lays the headline over the top as editable text. Good for spinning hooks, but it will look less like the reference — the typography is half of what you are copying.'
           : '<b>Text baked in</b> reproduces the reference\'s typography as well as its layout. This is the one that actually looks like the ad.'}</div>
@@ -12625,6 +12756,13 @@ function clCardHTML(id, st){
         </div></div>`;}).join('')}
       ${Array.from({length:pend},()=>'<div class="cl-shot ph"></div>').join('')}</div>`
     : pend?`<div class="cl-grid">${Array.from({length:pend},()=>'<div class="cl-shot ph"></div>').join('')}</div>`:''}
+    ${st.vs?`<div class="cl-vsrow">
+      <div class="cl-vsh">GetHookd's attempt · same inspiration, same product</div>
+      ${st.vs.state==='running'?'<div class="cl-hint" style="padding:0 14px 12px">Running…</div>'
+        : st.vs.state==='failed'?`<div class="cl-hint" style="padding:0 14px 12px;color:var(--crit-ink)">${esc(st.vs.err||'failed')}</div>`
+        : `<div class="cl-grid">${(st.vs.urls||[]).map(u=>`
+            <a class="cl-shot" href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt=""></a>`).join('')}</div>`}
+    </div>`:''}
     <div class="cl-cf">${
       pend? `Drawing ${pend} more…`
       : st.done.length? (st.layers
