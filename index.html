@@ -2412,6 +2412,42 @@ body.cloning .asx-thread{padding-bottom:0}
 
 .cl-th img,.cl-th span{pointer-events:none}
 .cl-th{-webkit-tap-highlight-color:transparent}
+
+/* ---- brand kit ----------------------------------------------------------- */
+.kit-fonts{display:flex;gap:12px;flex-wrap:wrap;margin-top:9px}
+.kit-fonts label{font-size:.72rem;color:var(--ink-3);font-weight:650;display:flex;align-items:center;gap:7px}
+.kit-sel{height:30px;border:1px solid var(--line);border-radius:8px;padding:0 8px;font-family:inherit;
+  font-size:.78rem;background:var(--surface);color:var(--ink);outline:none;cursor:pointer}
+.kit-prev{display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;margin-top:11px;padding:11px 13px;
+  background:var(--surface-2);border-radius:11px;color:var(--ink)}
+.kit-cols{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.kit-col{width:74px;height:56px;border-radius:11px;position:relative;border:1px solid var(--line-2);
+  display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
+.kit-col.primary{outline:2px solid var(--accent);outline-offset:2px}
+.kit-col .hex{font-size:.58rem;font-weight:700;color:#fff;background:rgba(0,0,0,.42);
+  width:100%;text-align:center;padding:2px 0;font-family:ui-monospace,monospace}
+.kit-col .x,.kit-col .star{position:absolute;top:3px;width:17px;height:17px;border-radius:50%;border:none;
+  background:rgba(0,0,0,.42);color:#fff;font-size:.6rem;cursor:pointer;display:none;
+  align-items:center;justify-content:center;padding:0;line-height:1}
+.kit-col .x{right:3px} .kit-col .star{left:3px}
+.kit-col:hover .x,.kit-col:hover .star{display:flex}
+.kit-add{width:74px;height:56px;border-radius:11px;border:1.5px dashed var(--line);background:none;
+  color:var(--ink-3);font-size:1.1rem;cursor:pointer;font-family:inherit}
+.kit-add:hover{border-color:var(--accent);color:var(--accent)}
+.kit-warn{font-size:.73rem;color:var(--warn-ink);line-height:1.5;margin-top:9px}
+.kit-notes{width:100%;margin-top:9px;height:32px;border:1px solid var(--line);border-radius:9px;
+  padding:0 11px;font-family:inherit;font-size:.79rem;background:var(--surface);color:var(--ink);outline:none}
+.kit-notes:focus{border-color:var(--accent)}
+
+.cl-res{position:relative;border-radius:11px;overflow:hidden}
+.cl-rate{position:absolute;right:6px;bottom:6px;display:flex;gap:4px;opacity:0;transition:.15s}
+.cl-res:hover .cl-rate,.cl-rate:focus-within{opacity:1}
+.cl-rate button{width:26px;height:26px;border-radius:8px;border:none;cursor:pointer;font-size:.7rem;
+  background:rgba(16,24,40,.62);color:#fff;backdrop-filter:blur(6px);font-family:inherit;line-height:1}
+.cl-rate button:hover{background:rgba(16,24,40,.85)}
+.cl-rate button.on.up{background:var(--good-ink);opacity:1}
+.cl-rate button.on.down{background:var(--crit-ink);opacity:1}
+.cl-res:has(.cl-rate button.on) .cl-rate{opacity:1}
 </style>
 </head>
 <body>
@@ -5676,6 +5712,7 @@ function renderSettingsInner(){
               </span>
             </div>
           </div>
+          ${kitPanelHTML()}
           <div class="inset-cap">Tools</div>
           <div class="inset">
             <div class="irow" onclick="navTo('memory')">
@@ -8013,6 +8050,142 @@ function brfKeydown(e){
    editable node, so the ✕ leaked into the content and a re-render could destroy
    an uncommitted edit. Content is now committed on every keystroke, so there is
    no window in which typed text exists only in the DOM. */
+/* ============================================================================
+   BRAND KIT
+   The fonts and colours everything else defers to. Without it a clone comes back
+   in the reference brand's palette, which is worse than useless — it looks like
+   somebody else's ad with our product dropped in.
+
+   Web fonts are the app's one external dependency. They load lazily, only the
+   families actually chosen, and if Google is unreachable the stack falls back to
+   the system font — briefs look plain rather than broken.
+   ========================================================================== */
+const GOOGLE_FONTS = [
+  ['Inter','sans-serif'],['Manrope','sans-serif'],['Poppins','sans-serif'],
+  ['Montserrat','sans-serif'],['Work Sans','sans-serif'],['DM Sans','sans-serif'],
+  ['Outfit','sans-serif'],['Figtree','sans-serif'],['Plus Jakarta Sans','sans-serif'],
+  ['Space Grotesk','sans-serif'],['Archivo','sans-serif'],['Archivo Black','sans-serif'],
+  ['Anton','sans-serif'],['Bebas Neue','sans-serif'],['Oswald','sans-serif'],
+  ['Barlow Condensed','sans-serif'],['Playfair Display','serif'],['Fraunces','serif'],
+  ['Lora','serif'],['Source Serif 4','serif'],['Libre Baskerville','serif'],
+  ['Instrument Serif','serif'],['Bricolage Grotesque','sans-serif'],['Sora','sans-serif']
+];
+const DEFAULT_KIT = { head:'', body:'', colours:[], notes:'' };
+function brandKit(){
+  if(!state.kits) state.kits={};
+  const k = state.brand==='all' ? defaultBrand() : state.brand;
+  if(!state.kits[k]) state.kits[k]={...DEFAULT_KIT, colours:[]};
+  return state.kits[k];
+}
+
+/* ---- the settings page for it ------------------------------------------- */
+function kitSet(field, val){
+  const k=brandKit(); k[field]=val;
+  if(field==='head'||field==='body') gfLoad(val);
+  tikiPush();
+  if(state.page==='settings') renderSettingsInner();
+  if(state.briefId) renderBriefSidePanel();
+}
+function kitAddColour(){
+  const k=brandKit();
+  const v=(prompt('Brand colour as a hex code, e.g. #7ec96f','#')||'').trim();
+  if(!/^#[0-9a-f]{6}$/i.test(v)) return v?toast('That is not a six-digit hex code'):null;
+  if(!k.colours) k.colours=[];
+  if(k.colours.some(c=>c.toLowerCase()===v.toLowerCase())) return toast('Already in the palette');
+  if(k.colours.length>=8) return toast('Eight is plenty — a palette this long stops being one');
+  k.colours.push(v.toLowerCase());
+  tikiPush(); renderSettingsInner();
+}
+function kitDropColour(i){
+  const k=brandKit(); k.colours.splice(i,1); tikiPush(); renderSettingsInner();
+}
+function kitMakePrimary(i){
+  const k=brandKit(); const [c]=k.colours.splice(i,1); k.colours.unshift(c);
+  tikiPush(); renderSettingsInner(); toast('That is now the primary');
+}
+function kitNotes(v){ const k=brandKit(); k.notes=v.slice(0,240); tikiPush(); }
+
+function kitPanelHTML(){
+  const k=brandKit(), cols=k.colours||[];
+  const sel=(cur,field)=>`<select class="kit-sel" onchange="kitSet('${field}',this.value)">
+      <option value="">System default</option>
+      ${GOOGLE_FONTS.map(([f])=>`<option value="${esc(f)}" ${cur===f?'selected':''}>${esc(f)}</option>`).join('')}
+    </select>`;
+  return `
+    <div class="inset-cap">Brand kit</div>
+    <div class="inset" style="margin-bottom:20px">
+      <div class="irow" style="cursor:default;align-items:flex-start">
+        <span class="iic" style="background:#0071e3">${ICONS.eye}</span>
+        <div style="flex:1;min-width:0">
+          <div class="it">Fonts</div>
+          <div class="is">Used for new text in briefs, and for the copy laid over generated ads</div>
+          <div class="kit-fonts">
+            <label>Headings ${sel(k.head,'head')}</label>
+            <label>Body ${sel(k.body,'body')}</label>
+          </div>
+          ${(k.head||k.body)?`<div class="kit-prev">
+            ${k.head?`<span style="font-family:'${esc(k.head)}',sans-serif;font-size:1.3rem;font-weight:800">Clean energy, no crash</span>`:''}
+            ${k.body?`<span style="font-family:'${esc(k.body)}',sans-serif;font-size:.85rem">Yerba mate and electrolytes in one sachet.</span>`:''}
+          </div>`:''}
+        </div>
+      </div>
+
+      <div class="irow" style="cursor:default;align-items:flex-start">
+        <span class="iic" style="background:#8b3dff">${ICONS.image||ICONS.eye}</span>
+        <div style="flex:1;min-width:0">
+          <div class="it">Colours</div>
+          <div class="is">Generated ads are told to use only these. The first is the primary.</div>
+          <div class="kit-cols">
+            ${cols.map((c,i)=>`<div class="kit-col ${i===0?'primary':''}" style="background:${c}" title="${c}">
+              <span class="hex">${c}</span>
+              <button class="x" title="Remove" onclick="kitDropColour(${i})">✕</button>
+              ${i?`<button class="star" title="Make primary" onclick="kitMakePrimary(${i})">★</button>`:''}
+            </div>`).join('')}
+            <button class="kit-add" onclick="kitAddColour()">＋</button>
+          </div>
+          ${cols.length?'':'<div class="kit-warn">No colours set, so clones come back in the reference brand\'s palette — which is what makes them look like somebody else\'s ad.</div>'}
+        </div>
+      </div>
+
+      <div class="irow" style="cursor:default;align-items:flex-start">
+        <span class="iic" style="background:#1baf7a">${ICONS.grad}</span>
+        <div style="flex:1;min-width:0">
+          <div class="it">House style</div>
+          <div class="is">One line the image model gets every time — anything it should always or never do</div>
+          <input class="kit-notes" value="${esc(k.notes||'')}" maxlength="240"
+            placeholder="e.g. bright daylight, never dark backgrounds, product always upright"
+            onchange="kitNotes(this.value)">
+        </div>
+      </div>
+    </div>`;
+}
+
+const GF_LOADED=new Set();
+function gfLoad(family){
+  if(!family || GF_LOADED.has(family)) return;
+  GF_LOADED.add(family);
+  const l=document.createElement('link');
+  l.rel='stylesheet';
+  l.href=`https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g,'+')}:wght@400;500;600;700;800&display=swap`;
+  /* A font that will not load must not take the page with it. */
+  l.onerror=()=>console.warn('font unavailable:', family);
+  document.head.appendChild(l);
+}
+function gfWarm(){
+  const k=brandKit();
+  if(k.head) gfLoad(k.head);
+  if(k.body) gfLoad(k.body);
+}
+/* The brand's own fonts sit at the top of the editor's picker, named, so nobody
+   has to remember which of six generic labels is "ours". */
+function brfFontList(){
+  const k=brandKit(), out=[];
+  if(k.head) out.push(['brand-head', `${k.head} · heading`, `'${k.head}',Inter,system-ui,sans-serif`]);
+  if(k.body && k.body!==k.head) out.push(['brand-body', `${k.body} · body`, `'${k.body}',Inter,system-ui,sans-serif`]);
+  return out.concat(BRF_FONTS);
+}
+const brandColours = () => (brandKit().colours||[]).filter(c=>/^#[0-9a-f]{6}$/i.test(c));
+
 const BRF_FONTS = [
   ['sans',   'Default',      "'Inter','Segoe UI',system-ui,-apple-system,sans-serif"],
   ['serif',  'Serif',        "Georgia,'Times New Roman',serif"],
@@ -8021,7 +8194,7 @@ const BRF_FONTS = [
   ['round',  'Rounded',      "'Trebuchet MS','Segoe UI',Verdana,sans-serif"],
   ['impact', 'Display',      "Impact,'Haettenschweiler','Arial Black',sans-serif"],
 ];
-const brfFontStack = key => (BRF_FONTS.find(f=>f[0]===key)||BRF_FONTS[0])[2];
+const brfFontStack = key => (brfFontList().find(f=>f[0]===key)||BRF_FONTS[0])[2];
 /* Legacy elements carried a named size; map it once so old briefs keep working. */
 const LEGACY_SIZE = { h1:26, body:15, small:12 };
 const brfFontSize = e => Number(e.fontSize) || LEGACY_SIZE[e.size] || 15;
@@ -8917,7 +9090,7 @@ function brfTextPanel(b, el){
 
       <select style="width:100%;margin-bottom:10px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;font-size:.8rem"
         onchange="brfTextSet('${id}','font',this.value)">
-        ${BRF_FONTS.map(f=>`<option value="${f[0]}" ${(el.font||'sans')===f[0]?'selected':''} style="font-family:${f[2]}">${f[1]}</option>`).join('')}
+        ${brfFontList().map(f=>`<option value="${f[0]}" ${(el.font||'sans')===f[0]?'selected':''} style="font-family:${f[2]}">${f[1]}</option>`).join('')}
       </select>
 
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
@@ -8955,7 +9128,7 @@ function brfTextPanel(b, el){
 
       <div class="sd-h" style="margin-top:14px">Colour</div>
       <div class="sw-grid">
-        ${BRF_TEXT_COLOURS.map(c=>`<div class="sw ${cur===c?'on':''}" style="background:${c}" title="${c}"
+        ${[...brandColours(), ...BRF_TEXT_COLOURS].map(c=>`<div class="sw ${cur===c.toLowerCase()?'on':''}" style="background:${c}" title="${c}"
           onclick="brfTextSet('${id}','colour','${c}')"></div>`).join('')}
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
@@ -12046,6 +12219,53 @@ function asxThreadHTML(){
    ========================================================================== */
 const CL_ASPECTS = [['1:1','Square'],['4:5','Portrait 4:5'],['9:16','Story 9:16'],['16:9','Wide 16:9']];
 const CL_COUNTS  = [1,2,4,6,8];
+/* ============================================================================
+   FEEDBACK
+   Rating an output is only worth doing if something reads the ratings. Every
+   generation records the settings and the instruction that produced it; a
+   thumbs-up promotes that instruction into the next prompt as a house note.
+   No model training, no black box — just remembering what you said the last
+   time you liked the result.
+   ========================================================================== */
+const CLONE_FEEDBACK = [];   // {url, up, angle, changes, model, aspect, layers, adBrand, ts}
+
+function clRate(cardId, idx, up){
+  const st=CLONE_RUNS[cardId]; if(!st) return;
+  const url=st.done[idx]; if(!url) return;
+  const existing=CLONE_FEEDBACK.find(f=>f.url===url);
+  if(existing){
+    /* Clicking the same thumb again takes the rating back. */
+    if(existing.up===up) CLONE_FEEDBACK.splice(CLONE_FEEDBACK.indexOf(existing),1);
+    else existing.up=up;
+  } else {
+    CLONE_FEEDBACK.unshift({ url, up, angle:st.angle||'', changes:st.changes||'',
+      model:st.model, aspect:st.aspect, layers:!!st.layers, adBrand:st.brand||'', ts:Date.now() });
+    if(CLONE_FEEDBACK.length>200) CLONE_FEEDBACK.length=200;
+  }
+  tikiPush();
+  const el=$(cardId); if(el) el.outerHTML=clCardHTML(cardId,st);
+  AI.msgs=AI.msgs.map(x=>(x.html&&x.html.includes(`id="${cardId}"`))?{who:'card',html:clCardHTML(cardId,st)}:x);
+  toast(up?'Noted — I will lean on that':'Noted — I will steer away from that');
+}
+const clRating = url => (CLONE_FEEDBACK.find(f=>f.url===url)||{}).up;
+
+/* What the ratings actually buy you, in words the model can use. */
+function clLearned(){
+  const liked=CLONE_FEEDBACK.filter(f=>f.up), disliked=CLONE_FEEDBACK.filter(f=>!f.up);
+  if(!liked.length && !disliked.length) return '';
+  const notes=[];
+  const phrases=[...new Set(liked.map(f=>f.changes).filter(t=>t && t.length>3))].slice(0,4);
+  if(phrases.length) notes.push('These instructions produced results we kept: '+phrases.map(t=>`"${t}"`).join('; '));
+  const avoid=[...new Set(disliked.map(f=>f.changes).filter(t=>t && t.length>3))].slice(0,3);
+  if(avoid.length) notes.push('These did not work: '+avoid.map(t=>`"${t}"`).join('; '));
+  /* Only claim a model preference once there is enough to claim it. */
+  const byModel={};
+  liked.forEach(f=>{ byModel[f.model]=(byModel[f.model]||0)+1; });
+  const best=Object.entries(byModel).sort((a,b)=>b[1]-a[1])[0];
+  if(best && best[1]>=3) notes.push(`Most of what we keep comes out of ${best[0]}.`);
+  return notes.length ? '\n\nWHAT HAS WORKED BEFORE\n' + notes.map(n=>'- '+n).join('\n') : '';
+}
+
 let CLONE = {
   on:false, adId:null, ad:null, prodId:null, imgIdx:0,
   n:4, aspect:'1:1', model:'nano-banana-2', layers:false,
@@ -12057,8 +12277,11 @@ const CLONE_PROMPT_V1 = `You are rebuilding a proven advertisement for a differe
 
 THE LAYOUT
 Image 1 is the reference ad. Copy its composition, its crop, where the eye lands
-first, the relationship between headline and product, and its colour temperature.
-Do NOT copy its product, its brand marks, its logos or its words.
+first, and the relationship between headline and product.
+Do NOT copy its product, its brand marks, its logos, its words or its colours.
+
+THE PALETTE
+{{PALETTE}}
 
 THE PRODUCT
 Image 2 is the product: {{PRODUCT}}.
@@ -12075,6 +12298,8 @@ THE COPY
 {{COPY_MODE}}
 
 HARD RULES
+- The reference decides the STRUCTURE. The palette above decides the COLOUR.
+  Borrowing their colours makes it their ad with our product in it.
 - One product, shown once, unless the reference layout is explicitly a set.
 - No text that was not asked for. No lorem, no invented claims, no fake badges,
   no review stars, no press logos.
@@ -12111,11 +12336,21 @@ function clBuildPrompt(){
   const prod=GHP.list.find(p=>p.id===CLONE.prodId);
   const angle=CLONE.angle.trim();
   const changes=clChangesText();
+  const pal=brandColours();
+  const kit=brandKit();
+  const palette = pal.length
+    ? `Use ONLY these brand colours for backgrounds, type, panels and accents:\n`
+      + pal.map((c,i)=>`  ${c}${i===0?'  (primary — the one the eye should land on)':''}`).join('\n')
+      + `\nNeutrals — white, black and greys — are always allowed. Nothing else.`
+      + (kit.notes?`\nHouse style: ${kit.notes}`:'')
+    : `Keep the reference's palette; no brand colours have been set. (Settings → Brand kit fixes that.)`;
   return clLivePrompt()
+    .replace('{{PALETTE}}', palette)
     .replace('{{PRODUCT}}', prod?prod.title:'the product shown')
     .replace('{{ANGLE}}',  angle||'A clear, single-minded benefit for the everyday buyer.')
     .replace('{{COPY_MODE}}', CLONE.layers?CL_COPY_CLEAN:CL_COPY_BAKED)
-    .replace('{{CHANGES}}', changes?('- '+changes):'');
+    .replace('{{CHANGES}}', changes?('- '+changes):'')
+    + clLearned();
 }
 
 function clToggle(){
@@ -12239,7 +12474,8 @@ async function clGenerate(){
   aiRenderAll();
 
   const st={ n, done:[], fails:0, model:CLONE.model, aspect:CLONE.aspect,
-             layers:CLONE.layers, brand:CLONE.ad.brand||'', angle:label, prompt, cardId };
+             layers:CLONE.layers, brand:CLONE.ad.brand||'', angle:label, prompt, cardId,
+             changes };
   CLONE_RUNS[cardId]=st; CLONE_ORDER.unshift(cardId); if(CLONE_ORDER.length>12) CLONE_ORDER.length=12;
   const repaint=()=>{
     /* The id is unique, so this updates whichever DOM the card is currently in
@@ -12379,8 +12615,14 @@ function clCardHTML(id, st){
         : st.done.length?`<span class="cl-pill">${st.landed?'In your brief':'Ready'}</span>`
         : `<span class="cl-pill bad">Failed</span>`}
     </div>
-    ${st.done.length?`<div class="cl-grid">${st.done.map(u=>`
-      <a class="cl-shot" href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt=""></a>`).join('')}
+    ${st.done.length?`<div class="cl-grid">${st.done.map((u,i)=>{
+      const r=clRating(u);
+      return `<div class="cl-res">
+        <a class="cl-shot" href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt=""></a>
+        <div class="cl-rate">
+          <button class="${r===true?'on up':''}" title="Keep doing this" onclick="clRate('${id}',${i},true)">▲</button>
+          <button class="${r===false?'on down':''}" title="Not this" onclick="clRate('${id}',${i},false)">▼</button>
+        </div></div>`;}).join('')}
       ${Array.from({length:pend},()=>'<div class="cl-shot ph"></div>').join('')}</div>`
     : pend?`<div class="cl-grid">${Array.from({length:pend},()=>'<div class="cl-shot ph"></div>').join('')}</div>`:''}
     <div class="cl-cf">${
@@ -12903,6 +13145,7 @@ function clPick(id){
    than press their button. So it is editable, versioned, and only one is live.
    ========================================================================== */
 const CL_TOKENS = [
+  ['{{PALETTE}}',  'your brand colours, from Settings → Brand kit'],
   ['{{PRODUCT}}',  'the product name from GetHookd'],
   ['{{ANGLE}}',    'the angle you picked in the chat'],
   ['{{COPY_MODE}}','filled automatically by the layers switch'],
@@ -12986,6 +13229,7 @@ function renderPromptLab(){
         <div class="clp-preview">
           <div class="clp-h" style="margin-bottom:8px">As it will be sent</div>
           <pre class="clp-pre">${hl(editing.body
+            .replace('{{PALETTE}}', brandColours().length?('Use ONLY these brand colours…\n  '+brandColours().join('\n  ')):'[no brand colours set]')
             .replace('{{PRODUCT}}','YerbaLytes')
             .replace('{{COPY_MODE}}','[layers switch decides]')
             .replace('{{CHANGES}}','[your composer line]'))}</pre>
@@ -15554,7 +15798,7 @@ function collectTikiState(){
      in the back office is the thing that actually runs. */
   /* v13 adds projects — instructions and knowledge the assistant works inside. */
   /* v15 adds the saved static-ad library. */
-  return { v:20, dshCols:state.dshCols||{}, swCache:state.swCache||null, statics:STATIC_LIB, clonePrompts:CLONE_PROMPTS, imgModel:state.imgModel||'', imgRatio:state.imgRatio||'4:5', aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  return { v:21, dshCols:state.dshCols||{}, swCache:state.swCache||null, kits:state.kits||{}, clfb:CLONE_FEEDBACK, statics:STATIC_LIB, clonePrompts:CLONE_PROMPTS, imgModel:state.imgModel||'', imgRatio:state.imgRatio||'4:5', aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
@@ -15651,8 +15895,22 @@ const MIGRATIONS = [
   { id:'2026-08-merge-founder',   fn:mig_mergeDuplicateFounder },
   { id:'2026-08-task-title-field',fn:mig_taskTitleField },
   { id:'2026-08-notif-timestamps',fn:mig_notifTimestamps },
-  { id:'2026-08-signal-noise',    fn:mig_signalNoise }
+  { id:'2026-08-signal-noise',    fn:mig_signalNoise },
+  { id:'2026-08-brand-palette',   fn:mig_brandPalette }
 ];
+
+/* The prompt list is saved state, so an older copy would keep overriding the
+   built-in one and the palette instruction would never reach the model. Add the
+   new version, and make it live unless somebody has written their own. */
+function mig_brandPalette(){
+  if(!Array.isArray(state.__x)) { /* no-op guard, keeps the signature honest */ }
+  if(CLONE_PROMPTS.some(p=>p.id==='v2-palette')) return true;
+  const edited = CLONE_PROMPTS.some(p=>p.id!=='v1' && p.live);
+  CLONE_PROMPTS.unshift({ id:'v2-palette', name:'v2 — brand palette, typography kept',
+    body:CLONE_PROMPT_V1, live:!edited, runs:0, ts:Date.now() });
+  if(!edited) CLONE_PROMPTS.forEach(p=>{ if(p.id!=='v2-palette') p.live=false; });
+  return true;
+}
 
 /* Seven statuses collapse to three, and every task gains a signal/noise mark.
    Old priority is the only honest signal we have for the split: Urgent and High
@@ -15696,6 +15954,8 @@ function applyTikiState(d){
   if(Array.isArray(d.statics)) replaceArr(STATIC_LIB,d.statics);
   if(Array.isArray(d.clonePrompts)&&d.clonePrompts.length) replaceArr(CLONE_PROMPTS,d.clonePrompts);
   if(d.swCache&&Array.isArray(d.swCache.rows)) state.swCache=d.swCache;
+  if(d.kits&&typeof d.kits==='object') state.kits=d.kits;
+  if(Array.isArray(d.clfb)) replaceArr(CLONE_FEEDBACK,d.clfb);
   if(d.dshCols && typeof d.dshCols==='object') state.dshCols=d.dshCols;
   /* USERS has just been replaced wholesale — anything holding a user id is
      now suspect until it has been re-checked against the new list. */
@@ -15976,6 +16236,7 @@ async function tikiEnter(inviteType){
   bootLoadData();
   /* Free, and it is the one list you always want warm. */
   setTimeout(swWarm, 1200);
+  gfWarm();
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') tikiPush(); });
   /* Profile completion is mandatory for everyone — invited users also set a password. */
   if(inviteType || !USERS[ME]?.onboarded) openOnboarding(!!inviteType);
