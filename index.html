@@ -2479,6 +2479,12 @@ body.cloning .asx-thread{padding-bottom:0}
 .cl-vsrow{border-top:1px solid var(--line-2);margin-top:2px}
 .cl-vsh{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
   color:var(--ink-3);padding:11px 14px 9px}
+
+.kit-hex{display:block;width:88px;margin-top:2px;font-size:.68rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:6px;
+  padding:3px 6px;outline:none;text-transform:lowercase}
+.kit-hex:focus{border-color:var(--accent);color:var(--ink)}
+.kit-hex.bad{border-color:var(--crit-ink);color:var(--crit-ink)}
 </style>
 </head>
 <body>
@@ -8124,17 +8130,40 @@ function kitAddColour(){
   if(k.colours.length>=8) return toast('Eight is plenty — beyond that it stops being a palette');
   k.colours.push(KIT_SEED[k.colours.length]||'#888888');
   tikiPush(); renderSettingsInner();
-  /* Open the new swatch straight away — adding a slot and then hunting for it
-     is two steps where there should be one. */
-  setTimeout(()=>$('kitCol'+(k.colours.length-1))?.click(), 60);
+  /* Select the new hex field straight away, so a pasted code lands where it
+     should without hunting for the box. */
+  setTimeout(()=>$('kitHex'+(k.colours.length-1))?.select(), 60);
 }
 function kitColourAt(i, hex){
   const k=brandKit();
   if(!/^#[0-9a-f]{6}$/i.test(hex)) return;
   k.colours[i]=hex.toLowerCase();
-  const lbl=$('kitHex'+i); if(lbl) lbl.textContent=hex.toLowerCase();
+  const lbl=$('kitHex'+i); if(lbl && document.activeElement!==lbl) lbl.value=hex.toLowerCase();
   const box=$('kitBox'+i); if(box) box.style.background=hex;
+  const dot=$('kitDot'+i); if(dot) dot.value=hex;
   clearTimeout(window._kitT); window._kitT=setTimeout(tikiPush, 400);
+}
+
+/* Typing the hex is the way most brand guidelines are written down, so it is the
+   field that leads. The swatch still opens the system picker for anyone who
+   would rather point at it. Three-digit shorthand and a missing # both work. */
+function kitHexNorm(v){
+  let t=String(v||'').trim().replace(/^#/,'').toLowerCase();
+  if(/^[0-9a-f]{3}$/.test(t)) t=t.split('').map(c=>c+c).join('');
+  return /^[0-9a-f]{6}$/.test(t) ? '#'+t : null;
+}
+function kitHexTyped(i, el){
+  const hex=kitHexNorm(el.value);
+  el.classList.toggle('bad', !hex && el.value.trim().length>0);
+  if(hex) kitColourAt(i, hex);
+}
+function kitHexBlur(i, el){
+  const hex=kitHexNorm(el.value);
+  const k=brandKit();
+  /* Put back what is actually stored rather than leaving half a code on screen. */
+  el.value = hex || k.colours[i];
+  el.classList.remove('bad');
+  if(hex) kitColourAt(i, hex);
 }
 function kitDropColour(i){
   const k=brandKit(); k.colours.splice(i,1); tikiPush(); renderSettingsInner();
@@ -8211,12 +8240,14 @@ function kitPanelHTML(){
           <div class="kit-cols">
             ${cols.map((c,i)=>`<div class="kit-slot">
               <label class="kit-box" id="kitBox${i}" style="background:${c}">
-                <input type="color" id="kitCol${i}" value="${c}"
+                <input type="color" id="kitDot${i}" value="${c}" title="Or pick it"
                   oninput="kitColourAt(${i}, this.value)">
               </label>
               <div class="kit-meta">
                 <span class="role">${KIT_SLOTS[i]||('Colour '+(i+1))}</span>
-                <span class="hex" id="kitHex${i}">${c}</span>
+                <input class="kit-hex" id="kitHex${i}" value="${c}" spellcheck="false"
+                  maxlength="7" autocomplete="off"
+                  oninput="kitHexTyped(${i}, this)" onblur="kitHexBlur(${i}, this)">
               </div>
               <div class="kit-ops">
                 ${i?`<button title="Move up" onclick="kitMove(${i},-1)">↑</button>`:''}
