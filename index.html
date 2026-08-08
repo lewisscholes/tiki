@@ -2409,6 +2409,9 @@ body.cloning .asx-thread{padding-bottom:0}
 .save-alarm button:hover{background:rgba(255,255,255,.26)}
 .save-alarm button.ghost{border-color:rgba(255,255,255,.3)}
 @media(max-width:700px){.save-alarm{flex-wrap:wrap}}
+
+.cl-th img,.cl-th span{pointer-events:none}
+.cl-th{-webkit-tap-highlight-color:transparent}
 </style>
 </head>
 <body>
@@ -12045,7 +12048,7 @@ const CL_ASPECTS = [['1:1','Square'],['4:5','Portrait 4:5'],['9:16','Story 9:16'
 const CL_COUNTS  = [1,2,4,6,8];
 let CLONE = {
   on:false, adId:null, ad:null, prodId:null, imgIdx:0,
-  n:4, aspect:'1:1', model:'nano-banana-2', layers:true,
+  n:4, aspect:'1:1', model:'nano-banana-2', layers:false,
   angle:'', angles:[], anglesLoading:false, busy:false, err:''
 };
 
@@ -12084,11 +12087,19 @@ const clLivePrompt = () => (CLONE_PROMPTS.find(p=>p.live)||CLONE_PROMPTS[0]).bod
 
 /* Text baked in vs text as layers. The second is the whole reason to build this
    ourselves: a plate with no copy on it can take a new hook in ten seconds. */
-const CL_COPY_BAKED = `Write a short, specific headline for the angle above and set it in the
-same position and weight the reference uses. One headline, one supporting line, nothing else.`;
-const CL_COPY_CLEAN = `CRITICAL: render NO TEXT WHATSOEVER. No headline, no subhead, no badge,
-no packaging claims beyond what is physically printed on the product itself, no button, no
-watermark. Leave the headline area clean and uncluttered so type can be laid over it afterwards.`;
+/* The typography IS the ad. Asking for a layout clone while forbidding text
+   produces a product photo that resembles nothing — which is exactly what
+   happened. Baked-in is the default for that reason. */
+const CL_COPY_BAKED = `Reproduce the reference's TYPOGRAPHY as faithfully as its layout: the same
+headline position, weight, scale, casing and line breaks, the same supporting line beneath it, the
+same button or badge if it has one. Write new words for the angle above — never copy theirs — but
+set them exactly where and how the reference sets its own. Spell everything correctly.
+One headline, one supporting line, one call to action. Nothing else.`;
+const CL_COPY_CLEAN = `Render NO TEXT WHATSOEVER: no headline, no subhead, no badge, no button, no
+watermark. Keep every other element of the reference — its composition, colour, lighting and the
+product's placement — and leave generous clean space exactly where the reference puts its headline,
+because type will be laid over it afterwards. The result should read as the same ad with the words
+removed, not as a different picture.`;
 
 /* The panel lives in two places — the assistant composer and the Static Ads
    page — so "anything to change" is whichever box is actually on screen. */
@@ -12114,13 +12125,67 @@ function clToggle(){
   renderAssistant();
 }
 function clSet(k,v){ CLONE[k]=v; clPaint(); }
-function clUseAngle(t){ CLONE.angle=t; clPaint(); }
+function clUseAngle(t){
+  CLONE.angle=t;
+  document.querySelectorAll('.cl-ang[data-angle]').forEach(b=>b.classList.toggle('on', b.dataset.angle===t));
+  const h=$('clAngleHint'); if(h) h.textContent=t;
+}
 
 /* Repaint only the panel. Re-rendering the whole assistant would blow away the
-   caret in the composer, which is exactly where you are typing. */
+   caret in the composer, which is exactly where you are typing.
+
+   Rebuilding is still violent: it destroys every node, so the scroll position
+   resets — which is why changing "4 variations" to "1" threw you back to the
+   top — and a click landing while it happens hits a node that no longer exists,
+   which is why picking an inspiration sometimes did nothing. So scroll is
+   preserved here, and the common interactions below do not rebuild at all. */
 function clPaint(){
-  const el=$('clonePanel'); if(el) el.innerHTML=clPanelInner();
+  const el=$('clonePanel'); if(el){
+    const sc=el.querySelector('.cl-b');
+    const top=sc?sc.scrollTop:0;
+    el.innerHTML=clPanelInner();
+    const sc2=el.querySelector('.cl-b');
+    if(sc2&&top) sc2.scrollTop=top;
+  }
   const b=$('clBtn'); if(b) b.classList.toggle('on', CLONE.on);
+  clSyncChrome();
+}
+
+/* The only things a dropdown actually changes: the price and the button. */
+function clSyncChrome(){
+  const cost=CLONE.n*(CLONE.model==='nano-banana-pro'?2:1);
+  const txt=CLONE.adId?`${cost} credit${cost===1?'':'s'} · about a minute`:'Pick an inspiration to start';
+  document.querySelectorAll('.cl-cr').forEach(e=>{ e.textContent=txt; });
+  const go=$('clGoBtn');
+  if(go){ go.disabled=(!CLONE.adId||CLONE.busy);
+    go.textContent=CLONE.busy?'Generating…':`Generate ${CLONE.n} ad${CLONE.n===1?'':'s'}`; }
+  const hint=$('clModeHint');
+  if(hint) hint.innerHTML=CLONE.layers
+    ? '<b>Text as layers</b> gives you a plate with no words on it and lays the headline over the top as editable text. Good for spinning hooks, but it will look less like the reference — the typography is half of what you are copying.'
+    : '<b>Text baked in</b> reproduces the reference\'s typography as well as its layout. This is the one that actually looks like the ad.';
+}
+
+/* Selection just moves a highlight. Rebuilding the panel to do that is what
+   made these clicks unreliable in the first place. */
+function clChooseAd(id){
+  const a=SW.rows.find(x=>x.id===id) || SA.results.find(x=>x.id===id);
+  if(!a) return;
+  CLONE.adId=a.id; CLONE.ad=a;
+  document.querySelectorAll('.cl-th[data-ad]').forEach(b=>b.classList.toggle('on', b.dataset.ad===id));
+  const cap=$('clInspCap');
+  if(cap) cap.innerHTML=`Copying <b>${esc(a.brand||'that ad')}</b>${
+    a.score!=null?` · performance ${a.score}`:''} — layout only, never their product or words.`;
+  clSyncChrome();
+}
+function clChooseImg(i){
+  CLONE.imgIdx=i;
+  document.querySelectorAll('.cl-th[data-img]').forEach(b=>{
+    const on=+b.dataset.img===i;
+    b.classList.toggle('on', on);
+    const tag=b.querySelector('.cl-used');
+    if(on && !tag){ const sp=document.createElement('span'); sp.className='cl-used'; sp.textContent='USING'; b.appendChild(sp); }
+    if(!on && tag) tag.remove();
+  });
 }
 
 /* ---- angles, pulled out of the conversation ------------------------------ */
@@ -12225,7 +12290,7 @@ function clPanelInner(){
   const cost=CLONE.n*(CLONE.model==='nano-banana-pro'?2:1);
   return `
     <div class="cl-h"><span class="cl-ic">◧</span>Clone an ad
-      <span class="cl-cr">${cost} credit${cost===1?'':'s'} · about a minute</span>
+      <span class="cl-cr">${CLONE.adId?`${cost} credit${cost===1?'':'s'} · about a minute`:'Pick an inspiration to start'}</span>
       ${state.page==='statics'?'':'<button class="cl-x" onclick="clToggle()" title="Turn off">✕</button>'}</div>
     <div class="cl-b">
 
@@ -12233,10 +12298,10 @@ function clPanelInner(){
         ${SW.loading&&!SW.rows.length?`<div class="cl-hint">Reading your swipe file…</div>`
         : SW.rows.length?`<div class="cl-strip">${SW.rows.slice(0,20).map(a=>`
             <button class="cl-th ${CLONE.adId===a.id?'on':''}" title="${esc(a.brand||'')}"
-              onclick="CLONE.adId='${a.id}';CLONE.ad=SW.rows.find(x=>x.id==='${a.id}');clPaint()">
+              data-ad="${a.id}" onclick="clChooseAd('${a.id}')">
               ${a.thumb?`<img src="${esc(a.thumb)}" loading="lazy" alt="">`:'<span>—</span>'}
             </button>`).join('')}</div>
-          <div class="cl-hint">${CLONE.ad?`Copying <b>${esc(CLONE.ad.brand||'that ad')}</b>${
+          <div class="cl-hint" id="clInspCap">${CLONE.ad?`Copying <b>${esc(CLONE.ad.brand||'that ad')}</b>${
             CLONE.ad.score!=null?` · performance ${CLONE.ad.score}`:''} — layout only, never their product or words.`
             :'Pick the layout you want to borrow.'}</div>`
         : `<div class="cl-hint">Nothing in your swipe file yet. Save ads in GetHookd under Discover Ads
@@ -12250,7 +12315,7 @@ function clPanelInner(){
             ${GHP.list.map(p=>`<option value="${p.id}" ${CLONE.prodId===p.id?'selected':''}>${esc(p.title)}</option>`).join('')}
           </select>`:''}
           ${prod&&prod.images.length?`<div class="cl-strip">${prod.images.map((u,i)=>`
-            <button class="cl-th pr ${CLONE.imgIdx===i?'on':''}" onclick="CLONE.imgIdx=${i};clPaint()">
+            <button class="cl-th pr ${CLONE.imgIdx===i?'on':''}" data-img="${i}" onclick="clChooseImg(${i})">
               <img src="${esc(u)}" loading="lazy" alt="">
               ${CLONE.imgIdx===i?'<span class="cl-used">USING</span>':''}</button>`).join('')}</div>
             <div class="cl-warn">Pick a shot of one pack on its own. Feeding a comparison graphic is
@@ -12267,37 +12332,36 @@ function clPanelInner(){
         <div class="cl-angles">
           ${CLONE.angles.map(a=>{
             const v=esc(a.brief||a.label);
-            return `<button class="cl-ang ${CLONE.angle===(a.brief||a.label)?'on':''}"
+            return `<button class="cl-ang ${CLONE.angle===(a.brief||a.label)?'on':''}" data-angle="${v}"
               title="${v}" onclick="clUseAngle(${JSON.stringify(a.brief||a.label).replace(/"/g,'&quot;')})">${esc(a.label||'Angle')}</button>`;
           }).join('')}
           <button class="cl-ang ghost" onclick="clPullAngles()">
             ${CLONE.anglesLoading?'Reading the chat…':'⟲ From this chat'}</button>
         </div>
-        ${CLONE.angle?`<div class="cl-hint">${esc(CLONE.angle)}</div>`
-          :`<div class="cl-hint">Talk an angle through above, then pull it in — it becomes the brief
-             the image is written to, not decoration.</div>`}
+        <div class="cl-hint" id="clAngleHint">${CLONE.angle?esc(CLONE.angle)
+          :'Talk an angle through above, then pull it in — it becomes the brief the image is written to, not decoration.'}</div>
       </div></div>
 
       <div class="cl-f"><div class="cl-l">Output</div><div class="cl-w">
         <div class="cl-ctrls">
-          <select class="cl-sel" onchange="CLONE.n=+this.value;clPaint()">
+          <select class="cl-sel" onchange="CLONE.n=+this.value;clSyncChrome()">
             ${CL_COUNTS.map(n=>`<option value="${n}" ${CLONE.n===n?'selected':''}>${n} variation${n===1?'':'s'}</option>`).join('')}
           </select>
-          <select class="cl-sel" onchange="CLONE.aspect=this.value;clPaint()">
+          <select class="cl-sel" onchange="CLONE.aspect=this.value">
             ${CL_ASPECTS.map(([v,l])=>`<option value="${v}" ${CLONE.aspect===v?'selected':''}>${l}</option>`).join('')}
           </select>
-          <select class="cl-sel" onchange="CLONE.model=this.value;clPaint()">
+          <select class="cl-sel" onchange="CLONE.model=this.value;clSyncChrome()">
             <option value="nano-banana-2" ${CLONE.model==='nano-banana-2'?'selected':''}>Nano Banana 2 · 1 cr</option>
             <option value="nano-banana-pro" ${CLONE.model==='nano-banana-pro'?'selected':''}>Nano Banana Pro · 2 cr</option>
           </select>
-          <select class="cl-sel" onchange="CLONE.layers=this.value==='1';clPaint()">
+          <select class="cl-sel" onchange="CLONE.layers=this.value==='1';clSyncChrome()">
             <option value="1" ${CLONE.layers?'selected':''}>Text as layers</option>
             <option value="0" ${CLONE.layers?'':'selected'}>Text baked in</option>
           </select>
         </div>
-        <div class="cl-hint">${CLONE.layers
-          ? '<b>Text as layers</b> renders the plate with no copy on it and puts the headline over the top as real text — so a new hook is a retype, not another credit.'
-          : '<b>Text baked in</b> lets the model set the type itself. Faster to look at, impossible to edit afterwards.'}</div>
+        <div class="cl-hint" id="clModeHint">${CLONE.layers
+          ? '<b>Text as layers</b> gives you a plate with no words on it and lays the headline over the top as editable text. Good for spinning hooks, but it will look less like the reference — the typography is half of what you are copying.'
+          : '<b>Text baked in</b> reproduces the reference\'s typography as well as its layout. This is the one that actually looks like the ad.'}</div>
       </div></div>
 
     </div>`;
@@ -12560,6 +12624,7 @@ function renderStatics(){
    assistant — two renderings of one control would drift apart within a week.
    All that differs is the box you type into and the button you press. */
 function saCloneHTML(){
+  ghClones();
   const cost=CLONE.n*(CLONE.model==='nano-banana-pro'?2:1);
   return `
     <div class="card sa-clone"><div class="card-b" style="padding:0">
@@ -12571,14 +12636,64 @@ function saCloneHTML(){
           placeholder="Anything to change — background, model, colour, mood…">${esc(CLONE.prompt||'')}</textarea>
         <div class="sa-cl-go">
           <span class="cl-cr">${CLONE.adId?`${cost} credit${cost===1?'':'s'} · about a minute`:'Pick an inspiration to start'}</span>
-          <button class="btn btn-primary" onclick="saCloneGo()" ${(!CLONE.adId||CLONE.busy)?'disabled':''}>
+          <button class="btn btn-primary" id="clGoBtn" onclick="saCloneGo()" ${(!CLONE.adId||CLONE.busy)?'disabled':''}>
             ${CLONE.busy?'Generating…':`Generate ${CLONE.n} ad${CLONE.n===1?'':'s'}`}</button>
         </div>
       </div>
     </div></div>
     ${CLONE_ORDER.length?`<div class="section-title" style="margin-top:20px">Generations</div>
-      <div id="clRuns">${CLONE_ORDER.map(id=>clCardHTML(id,CLONE_RUNS[id])).join('')}</div>`:''}`;
+      <div id="clRuns">${CLONE_ORDER.map(id=>clCardHTML(id,CLONE_RUNS[id])).join('')}</div>`:''}
+    <div class="section-title" style="margin-top:20px">Made in GetHookd
+      <button class="link-btn" style="margin-left:8px" onclick="GHCL.loaded=false;ghClones(true)">Refresh</button></div>
+    ${ghClonesHTML()}`;
 }
+/* ---- generations made in GetHookd's own app ------------------------------
+   Yesterday's best ad was made over there, so it never appeared here and looked
+   lost. It is one free-ish call to list them, and they belong in the same place
+   as ours — where they came from is an implementation detail. */
+const GHCL={ list:[], loading:false, loaded:false, err:'' };
+async function ghClones(force){
+  if(GHCL.loading || (GHCL.loaded && !force)) return;
+  GHCL.loading=true; GHCL.err='';
+  if(state.page==='statics'&&SA.tab==='clone') renderStatics();
+  try{
+    const r=await tikiFetch('/functions/v1/adlib',{ method:'POST',
+      body:JSON.stringify({ action:'clone_list', params:{ per_page:20 } }) });
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+    GHCL.list=(j.data||[]).map(row=>{
+      const pr=(row.prompts||[])[0]||{};
+      return { id:row.id, title:row.title||'Clone', at:row.created_at||'',
+        status:pr.status||'', model:pr.model_slug||'',
+        urls:(pr.media||[]).filter(m=>!m.is_image_reference&&!m.is_product_reference)
+                           .map(m=>m.url).filter(Boolean) };
+    }).filter(x=>x.urls.length);
+    GHCL.loaded=true;
+  }catch(e){ GHCL.err=e.message||'could not read them'; }
+  GHCL.loading=false;
+  if(state.page==='statics'&&SA.tab==='clone') renderStatics();
+}
+function ghClonesHTML(){
+  if(GHCL.loading&&!GHCL.list.length) return `<div class="cl-hint" style="padding:0 2px 6px">Looking…</div>`;
+  if(GHCL.err) return `<div class="cl-warn" style="padding:0 2px 6px">${esc(GHCL.err)}</div>`;
+  if(!GHCL.list.length) return `<div class="cl-hint" style="padding:0 2px 6px">Nothing generated in GetHookd yet.</div>`;
+  return `<div class="cl-grid" style="padding:0">${GHCL.list.flatMap(c=>c.urls.map(u=>`
+    <div class="cl-res">
+      <a class="cl-shot" href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" loading="lazy" alt=""></a>
+      <div class="cl-acts"><button class="btn btn-primary btn-sm" style="flex:1"
+        onclick="ghCloneToBrief('${esc(u)}','${esc(c.title)}')">Add to brief</button></div>
+    </div>`)).join('')}</div>
+  <div class="cl-hint" style="padding:6px 2px 0">Made in GetHookd. Their links expire within the
+    hour — adding one to a brief keeps a permanent copy.</div>`;
+}
+async function ghCloneToBrief(url, title){
+  toast('Adding to your brief…');
+  try{
+    const src=await clHost(url);
+    imgToBrief(src);
+  }catch(e){ toast('Could not add it — '+(e.message||'unknown error')); }
+}
+
 function saCloneGo(){
   const ta=$('clChanges'); if(ta) CLONE.prompt=ta.value;
   clGenerate().then(()=>{ if(state.page==='statics') renderStatics(); });
@@ -12632,6 +12747,10 @@ const SW_CACHE_TTL = 40*60*1000;
    Static Ads page and the clone panel both do, and forgetting the second is why
    the panel sat empty until some other click forced a redraw. */
 function swPaint(){
+  /* Once the strip has rows and an inspiration is chosen, there is nothing to
+     redraw and everything to lose — a rebuild mid-click swallows the click. */
+  const settled = typeof CLONE!=='undefined' && CLONE.adId && SW.rows.length;
+  if(settled) return;
   if(state.page==='statics') renderStatics();
   if(state.page==='assistant' && typeof CLONE!=='undefined' && CLONE.on) clPaint();
 }
@@ -12694,6 +12813,8 @@ async function ghProducts(force){
     GHP.err=e.message||'could not reach GetHookd';
   }
   GHP.loading=false;
+  /* Same reasoning as swPaint: do not rebuild a panel somebody is using. */
+  if(typeof CLONE!=='undefined' && CLONE.adId && GHP.list.length) return clSyncChrome();
   if(state.page==='statics') renderStatics();
   if(state.page==='assistant') clPaint();
 }
