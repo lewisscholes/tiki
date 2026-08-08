@@ -2485,6 +2485,19 @@ body.cloning .asx-thread{padding-bottom:0}
   padding:3px 6px;outline:none;text-transform:lowercase}
 .kit-hex:focus{border-color:var(--accent);color:var(--ink)}
 .kit-hex.bad{border-color:var(--crit-ink);color:var(--crit-ink)}
+
+/* A thumb says which; the sentence says why. The box only appears once you have
+   an opinion, so an unrated grid stays a grid. */
+.cl-note{display:none;padding:7px 8px 8px;gap:6px;flex-direction:column;background:var(--surface)}
+.cl-res.rated .cl-note,.cl-res:focus-within .cl-note{display:flex}
+.cl-why{width:100%;border:1px solid var(--line);border-radius:8px;padding:6px 9px;
+  font-family:inherit;font-size:.74rem;background:var(--surface-2);color:var(--ink);outline:none}
+.cl-why:focus{border-color:var(--accent);background:var(--surface)}
+.cl-rule{align-self:flex-start;border:1px solid var(--line);background:var(--surface);
+  color:var(--accent-ink);font-family:inherit;font-size:.68rem;font-weight:650;
+  padding:4px 9px;border-radius:99px;cursor:pointer}
+.cl-rule:hover{border-color:var(--accent);background:var(--accent-soft)}
+.cl-res.rated .cl-rate{opacity:1}
 </style>
 </head>
 <body>
@@ -12348,38 +12361,96 @@ const CLONE_FEEDBACK = [];   // {url, up, angle, changes, model, aspect, layers,
 function clRate(cardId, idx, up){
   const st=CLONE_RUNS[cardId]; if(!st) return;
   const url=st.done[idx]; if(!url) return;
-  const existing=CLONE_FEEDBACK.find(f=>f.url===url);
-  if(existing){
-    /* Clicking the same thumb again takes the rating back. */
-    if(existing.up===up) CLONE_FEEDBACK.splice(CLONE_FEEDBACK.indexOf(existing),1);
-    else existing.up=up;
+  let f=CLONE_FEEDBACK.find(x=>x.url===url);
+  if(f && f.up===up){
+    /* Clicking the same thumb again takes the rating back — but a note you
+       already wrote is worth keeping, so only the verdict is cleared. */
+    f.up=null;
+  } else if(f){
+    f.up=up;
   } else {
-    CLONE_FEEDBACK.unshift({ url, up, angle:st.angle||'', changes:st.changes||'',
-      model:st.model, aspect:st.aspect, layers:!!st.layers, adBrand:st.brand||'', ts:Date.now() });
+    f={ url, up, note:'', angle:st.angle||'', changes:st.changes||'',
+        model:st.model, aspect:st.aspect, layers:!!st.layers,
+        adBrand:st.brand||'', ts:Date.now() };
+    CLONE_FEEDBACK.unshift(f);
     if(CLONE_FEEDBACK.length>200) CLONE_FEEDBACK.length=200;
   }
   tikiPush();
-  const el=$(cardId); if(el) el.outerHTML=clCardHTML(cardId,st);
-  AI.msgs=AI.msgs.map(x=>(x.html&&x.html.includes(`id="${cardId}"`))?{who:'card',html:clCardHTML(cardId,st)}:x);
-  toast(up?'Noted — I will lean on that':'Noted — I will steer away from that');
+  /* Update in place. Re-rendering the card would throw away the note somebody
+     is halfway through typing, which is the fastest way to stop them typing. */
+  const wrap=document.querySelector(`[data-rate="${cardId}:${idx}"]`);
+  if(wrap){
+    wrap.classList.toggle('rated', f.up!==null && f.up!==undefined);
+    wrap.querySelector('.up')?.classList.toggle('on', f.up===true);
+    wrap.querySelector('.down')?.classList.toggle('on', f.up===false);
+    if(f.up!==null && f.up!==undefined) setTimeout(()=>wrap.querySelector('.cl-why')?.focus(), 50);
+  }
+  toast(f.up===null?'Rating cleared':up?'Noted — tell me why and I will keep doing it'
+                                       :'Noted — tell me why and I will avoid it');
 }
+
+/* The sentence is the valuable half. "The tablets are wrong, we sell powder" is
+   a fact about the product; a thumbs-down on its own is a shrug. */
+function clWhy(cardId, idx, value){
+  const st=CLONE_RUNS[cardId]; if(!st) return;
+  const url=st.done[idx]; if(!url) return;
+  let f=CLONE_FEEDBACK.find(x=>x.url===url);
+  if(!f){
+    f={ url, up:null, note:'', angle:st.angle||'', changes:st.changes||'',
+        model:st.model, aspect:st.aspect, layers:!!st.layers, adBrand:st.brand||'', ts:Date.now() };
+    CLONE_FEEDBACK.unshift(f);
+  }
+  f.note=String(value||'').slice(0,300);
+  tikiPush();
+  const wrap=document.querySelector(`[data-rate="${cardId}:${idx}"]`);
+  const btn=wrap&&wrap.querySelector('.cl-rule');
+  if(btn) btn.style.display=f.note.trim()?'':'none';
+}
+
+/* Some notes are not feedback at all — they are facts that will be true of every
+   ad we ever make. Those belong in the brand kit, where they are applied even
+   when this generation is long forgotten. */
+function clMakeRule(cardId, idx){
+  const st=CLONE_RUNS[cardId]; if(!st) return;
+  const f=CLONE_FEEDBACK.find(x=>x.url===st.done[idx]);
+  const note=(f&&f.note||'').trim();
+  if(!note) return toast('Write the note first');
+  const k=brandKit();
+  const existing=(k.notes||'').trim();
+  if(existing.toLowerCase().includes(note.toLowerCase().slice(0,40))) return toast('Already a standing rule');
+  k.notes = existing ? `${existing}. ${note}` : note;
+  k.notes = k.notes.slice(0,240);
+  tikiPush();
+  toast('Added to Always & never — it now applies to every generation');
+}
+
 const clRating = url => (CLONE_FEEDBACK.find(f=>f.url===url)||{}).up;
 
 /* What the ratings actually buy you, in words the model can use. */
 function clLearned(){
-  const liked=CLONE_FEEDBACK.filter(f=>f.up), disliked=CLONE_FEEDBACK.filter(f=>!f.up);
-  if(!liked.length && !disliked.length) return '';
-  const notes=[];
-  const phrases=[...new Set(liked.map(f=>f.changes).filter(t=>t && t.length>3))].slice(0,4);
-  if(phrases.length) notes.push('These instructions produced results we kept: '+phrases.map(t=>`"${t}"`).join('; '));
-  const avoid=[...new Set(disliked.map(f=>f.changes).filter(t=>t && t.length>3))].slice(0,3);
-  if(avoid.length) notes.push('These did not work: '+avoid.map(t=>`"${t}"`).join('; '));
-  /* Only claim a model preference once there is enough to claim it. */
+  const rated=CLONE_FEEDBACK.filter(f=>f.up===true||f.up===false);
+  const notes=CLONE_FEEDBACK.filter(f=>(f.note||'').trim());
+  if(!rated.length && !notes.length) return '';
+  const out=[];
+
+  /* Written reasons first — they say what a thumb cannot. */
+  const good=[...new Set(notes.filter(f=>f.up===true).map(f=>f.note.trim()))].slice(0,5);
+  const bad =[...new Set(notes.filter(f=>f.up===false).map(f=>f.note.trim()))].slice(0,5);
+  const plain=[...new Set(notes.filter(f=>f.up==null).map(f=>f.note.trim()))].slice(0,3);
+  if(good.length)  out.push('Do this — it worked before:\n'+good.map(t=>`  · ${t}`).join('\n'));
+  if(bad.length)   out.push('Avoid this — it was wrong last time:\n'+bad.map(t=>`  · ${t}`).join('\n'));
+  if(plain.length) out.push('Notes from previous rounds:\n'+plain.map(t=>`  · ${t}`).join('\n'));
+
+  const liked=rated.filter(f=>f.up);
+  const phrases=[...new Set(liked.map(f=>f.changes).filter(t=>t&&t.length>3))].slice(0,3);
+  if(phrases.length) out.push('Instructions that produced keepers: '+phrases.map(t=>`"${t}"`).join('; '));
+
   const byModel={};
   liked.forEach(f=>{ byModel[f.model]=(byModel[f.model]||0)+1; });
   const best=Object.entries(byModel).sort((a,b)=>b[1]-a[1])[0];
-  if(best && best[1]>=3) notes.push(`Most of what we keep comes out of ${best[0]}.`);
-  return notes.length ? '\n\nWHAT HAS WORKED BEFORE\n' + notes.map(n=>'- '+n).join('\n') : '';
+  if(best && best[1]>=3) out.push(`Most of what we keep comes out of ${best[0]}.`);
+
+  return out.length ? '\n\nWHAT WE HAVE LEARNED\n' + out.join('\n') : '';
 }
 
 let CLONE = {
@@ -12838,12 +12909,22 @@ function clCardHTML(id, st){
         : `<span class="cl-pill bad">Failed</span>`}
     </div>
     ${st.done.length?`<div class="cl-grid">${st.done.map((u,i)=>{
-      const r=clRating(u);
-      return `<div class="cl-res">
+      const f=CLONE_FEEDBACK.find(x=>x.url===u)||{};
+      const rated=f.up===true||f.up===false;
+      return `<div class="cl-res ${rated||f.note?'rated':''}" data-rate="${id}:${i}">
         <a class="cl-shot" href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt=""></a>
         <div class="cl-rate">
-          <button class="${r===true?'on up':''}" title="Keep doing this" onclick="clRate('${id}',${i},true)">▲</button>
-          <button class="${r===false?'on down':''}" title="Not this" onclick="clRate('${id}',${i},false)">▼</button>
+          <button class="up ${f.up===true?'on':''}" title="Keep doing this" onclick="clRate('${id}',${i},true)">▲</button>
+          <button class="down ${f.up===false?'on':''}" title="Not this" onclick="clRate('${id}',${i},false)">▼</button>
+        </div>
+        <div class="cl-note">
+          <input class="cl-why" value="${esc(f.note||'')}" maxlength="300"
+            placeholder="Why? e.g. we sell powder, not capsules"
+            onchange="clWhy('${id}',${i},this.value)"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}">
+          <button class="cl-rule" style="${(f.note||'').trim()?'':'display:none'}"
+            title="Apply this to every future generation"
+            onclick="clMakeRule('${id}',${i})">Make it a rule</button>
         </div></div>`;}).join('')}
       ${Array.from({length:pend},()=>'<div class="cl-shot ph"></div>').join('')}</div>`
     : pend?`<div class="cl-grid">${Array.from({length:pend},()=>'<div class="cl-shot ph"></div>').join('')}</div>`:''}
