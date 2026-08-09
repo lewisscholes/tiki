@@ -12458,12 +12458,28 @@ let CLONE = {
 };
 
 /* ---- the prompt, versioned and editable in the back office --------------- */
-const CLONE_PROMPT_V1 = `You are rebuilding a proven advertisement for a different product.
+const CLONE_PROMPT_V1 = `You are rebuilding a proven advertisement for a DIFFERENT product and a
+DIFFERENT brand. Image 1 is a competitor's ad. You are borrowing its structure, nothing else.
 
 THE LAYOUT
-Image 1 is the reference ad. Copy its composition, its crop, where the eye lands
-first, and the relationship between headline and product.
-Do NOT copy its product, its brand marks, its logos, its words or its colours.
+From image 1 take only: the composition, the crop, where the eye lands first, the
+relationship between headline and product, and the typographic treatment — which
+words are big, which are small, where they sit, how they are weighted and cased.
+
+THE WORDS — READ THIS TWICE
+Every word visible in image 1 belongs to another company and describes another
+product. NONE of it may appear in your output. Not the headline, not the body,
+not the star ratings, review counts, customer counts, guarantees, prices, badges,
+"as seen in" strips, claims about studies, or the brand name.
+Use EXACTLY the copy given below and nothing else. Do not add a single word.
+
+  HEADLINE:  {{HEADLINE}}
+  SUPPORTING LINE: {{SUB}}
+  BUTTON: {{CTA}}
+
+Set that copy in the same positions and the same visual hierarchy the reference
+uses for its own. If the reference has a badge or a strip you have no copy for,
+leave the space empty rather than inventing something to fill it.
 
 THE PALETTE
 {{PALETTE}}
@@ -12473,25 +12489,26 @@ Image 2 is the product: {{PRODUCT}}.
 Render it EXACTLY ONCE unless the reference layout itself shows a set.
 Match the packaging artwork, the label text and the proportions precisely — a
 viewer must recognise it as the same physical item. Never invent a second pack,
-a sachet, a bottle or a variant that is not visible in image 2.
+a sachet, a bottle, a capsule or a variant that is not visible in image 2.
 
 THE ANGLE
 {{ANGLE}}
-Speak to that person, not to a general shopper.
+The copy above was written for that person. Everything visual should suit them too.
 
-THE COPY
 {{COPY_MODE}}
 
 HARD RULES
-- The reference decides the STRUCTURE. The palette above decides the COLOUR.
-  Borrowing their colours makes it their ad with our product in it.
+- The reference decides the STRUCTURE. The palette decides the COLOUR. The copy
+  above decides the WORDS. Taking any of the last two from the reference is the
+  single most common failure — do not do it.
 - One product, shown once, unless the reference layout is explicitly a set.
-- No text that was not asked for. No lorem, no invented claims, no fake badges,
-  no review stars, no press logos.
-- No competitor products, logos or trade dress carried over from the reference.
+- No invented claims, statistics, review scores, press logos or certifications.
+  If we did not supply it, it does not go on the ad.
+- No competitor product, logo or trade dress carried over from the reference.
 - Photographic lighting consistent between product and scene — nothing pasted on.
-- Leave clean, uncluttered space where the reference puts its headline.
+- Spell every word exactly as written above.
 {{CHANGES}}`;
+
 const CLONE_PROMPTS = [{ id:'v1', name:'v1 — pack count as a rule', body:CLONE_PROMPT_V1, live:true, runs:0 }];
 const clLivePrompt = () => (CLONE_PROMPTS.find(p=>p.live)||CLONE_PROMPTS[0]).body;
 
@@ -12500,16 +12517,15 @@ const clLivePrompt = () => (CLONE_PROMPTS.find(p=>p.live)||CLONE_PROMPTS[0]).bod
 /* The typography IS the ad. Asking for a layout clone while forbidding text
    produces a product photo that resembles nothing — which is exactly what
    happened. Baked-in is the default for that reason. */
-const CL_COPY_BAKED = `Reproduce the reference's TYPOGRAPHY as faithfully as its layout: the same
-headline position, weight, scale, casing and line breaks, the same supporting line beneath it, the
-same button or badge if it has one. Write new words for the angle above — never copy theirs — but
-set them exactly where and how the reference sets its own. Spell everything correctly.
-One headline, one supporting line, one call to action. Nothing else.`;
-const CL_COPY_CLEAN = `Render NO TEXT WHATSOEVER: no headline, no subhead, no badge, no button, no
-watermark. Keep every other element of the reference — its composition, colour, lighting and the
-product's placement — and leave generous clean space exactly where the reference puts its headline,
-because type will be laid over it afterwards. The result should read as the same ad with the words
-removed, not as a different picture.`;
+const CL_COPY_BAKED = `TYPOGRAPHY
+Set the supplied copy in the reference's own typographic style — matching its headline weight,
+scale, casing and line-break rhythm — but with our words and our colours. Nothing beyond the
+headline, the supporting line and the button.`;
+const CL_COPY_CLEAN = `TYPOGRAPHY
+Ignore the copy above and render NO TEXT WHATSOEVER: no headline, no subhead, no badge, no button,
+no watermark, and none of the reference's words either. Keep every other element — composition,
+colour, lighting, the product's placement — and leave generous clean space exactly where the
+reference puts its headline, because type will be laid over it afterwards.`;
 
 /* The panel lives in two places — the assistant composer and the Static Ads
    page — so "anything to change" is whichever box is actually on screen. */
@@ -12517,7 +12533,7 @@ function clChangesText(){
   const el=$('clChanges')||$('asxTa');
   return el ? el.value.trim() : '';
 }
-function clBuildPrompt(){
+function clBuildPrompt(copy){
   const prod=GHP.list.find(p=>p.id===CLONE.prodId);
   const angle=CLONE.angle.trim();
   const changes=clChangesText();
@@ -12529,7 +12545,11 @@ function clBuildPrompt(){
       + `\nNeutrals — white, black and greys — are always allowed. Nothing else.`
       + (kit.notes?`\nHouse style: ${kit.notes}`:'')
     : `Keep the reference's palette; no brand colours have been set. (Settings → Brand kit fixes that.)`;
+  const c = copy || {headline:'', sub:'', cta:''};
   return clLivePrompt()
+    .replace('{{HEADLINE}}', c.headline || '(none — leave the headline area clean)')
+    .replace('{{SUB}}',      c.sub      || '(none — leave it out)')
+    .replace('{{CTA}}',      c.cta      || '(none — no button)')
     .replace('{{PALETTE}}', palette)
     .replace('{{PRODUCT}}', prod?prod.title:'the product shown')
     .replace('{{ANGLE}}',  angle||'A clear, single-minded benefit for the everyday buyer.')
@@ -12665,8 +12685,13 @@ async function clGenerate(){
     return toast('Storage is unreachable, so the model cannot read the references. Try again shortly.');
   }
 
-  const prompt=clBuildPrompt();
   const changes=clChangesText();
+  /* The words are written first and handed to the image model verbatim. Asking
+     an image model to invent copy is what made it transcribe the competitor's
+     headline instead — they are far better at rendering given text than at
+     resisting text they can see. */
+  const copy=await clWriteCopy({ angle:CLONE.angle, changes });
+  const prompt=clBuildPrompt(copy);
   /* Everything below this point runs; nothing else can bail out leaving the
      button stuck on "Generating…". */
   const n=CLONE.n, cardId='cl'+Date.now().toString(36);
@@ -12680,7 +12705,7 @@ async function clGenerate(){
 
   const st={ n, done:[], fails:0, model:CLONE.model, aspect:CLONE.aspect,
              layers:CLONE.layers, brand:CLONE.ad.brand||'', angle:label, prompt, cardId,
-             changes };
+             changes, copy };
   CLONE_RUNS[cardId]=st; CLONE_ORDER.unshift(cardId); if(CLONE_ORDER.length>12) CLONE_ORDER.length=12;
   const repaint=()=>{
     const html=clCardHTML(cardId,st);
@@ -12824,7 +12849,7 @@ function clPanelInner(){
             ${CLONE.anglesLoading?'Reading the chat…':'⟲ From this chat'}</button>
         </div>
         <div class="cl-hint" id="clAngleHint">${CLONE.angle?esc(CLONE.angle)
-          :'Talk an angle through above, then pull it in — it becomes the brief the image is written to, not decoration.'}</div>
+          :'No angle means no new words, and the ad comes back carrying the reference\'s copy. Pull one in — it is what the headline gets written from.'}</div>
       </div></div>
 
       <div class="cl-f"><div class="cl-l">Output</div><div class="cl-w">
@@ -12925,8 +12950,9 @@ async function clLand(st){
 
   /* Written once for the whole run — the copy belongs to the angle, not to the
      individual render, and asking four times would give four different hooks. */
-  let copy=null;
-  if(st.layers) copy=await clWriteCopy(st);
+  /* Written once, before the images — the layers use the very same words the
+     baked-in version was told to render, so the two modes cannot disagree. */
+  const copy = st.copy && st.copy.headline ? st.copy : (st.layers ? await clWriteCopy(st) : null);
 
   for(const url of st.done){
     const uid=()=>'e'+Math.random().toString(36).slice(2,9);
@@ -12952,24 +12978,40 @@ async function clLand(st){
 /* One headline, one supporting line, one button — written from the angle so it
    matches the picture rather than describing it. */
 async function clWriteCopy(st){
-  const fallback={ headline:(st.angle||'Made for how you actually live').toUpperCase(), sub:'', cta:'SHOP NOW' };
+  const prod=GHP.list.find(p=>p.id===CLONE.prodId);
+  const kit=brandKit();
+  const angle=(st.angle||CLONE.angle||'').trim();
+  /* No angle means no opinion, and an ad with no opinion is a product photo.
+     Better to say nothing than to invent a benefit we never agreed. */
+  if(!angle) return { headline:'', sub:'', cta:'' };
+  const fallback={ headline:angle.slice(0,42).toUpperCase(), sub:'', cta:'Shop now' };
   try{
-    const q=`Write the copy for a single static ad.
-Angle: ${st.angle||'general benefit'}
-Product: ${(GHP.list.find(p=>p.id===CLONE.prodId)||{}).title||'the product'}
-Rules: the headline is at most six words and says something specific, not "stay hydrated".
-The supporting line is one sentence, at most twelve words. No exclamation marks, no emoji,
-no medical claims, no invented statistics.
-Reply with STRICT JSON only, no prose and no code fences:
+    const q=`Write the copy for one static ad. Reply with STRICT JSON only, no prose, no code fences.
+
+Product: ${prod?prod.title:'the product'}
+Angle: ${angle}
+${kit.notes?`House rules: ${kit.notes}`:''}
+${st.changes?`The brief also says: ${st.changes}`:''}
+
+Rules:
+- The headline is at most six words, specific, and about the ANGLE — not a generic
+  benefit. "Stay hydrated" is a failure; "Still sharp at hour nine" is not.
+- The supporting line is one sentence, twelve words maximum.
+- No exclamation marks, no emoji, no invented statistics, no medical claims,
+  no review scores, no mention of studies or guarantees we have not agreed.
+- British spelling.
+
 {"headline":"...","sub":"...","cta":"two or three words"}`;
-    const r=await tikiFetch('/functions/v1/assistant',{ method:'POST',
-      body:JSON.stringify({ snapshot:{}, history:[], question:q, model:'claude-haiku-4-5-20251001' }) });
+    const r=await tikiFetchT('/functions/v1/assistant',{ method:'POST',
+      body:JSON.stringify({ snapshot:{}, history:[], question:q, model:'claude-haiku-4-5-20251001' }) }, 30000);
     if(!r.ok) return fallback;
     const j=await r.json();
     const text=(j.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');
     const m=text.match(/\{[\s\S]*\}/); if(!m) return fallback;
     const c=JSON.parse(m[0]);
-    return { headline:String(c.headline||fallback.headline), sub:String(c.sub||''), cta:String(c.cta||'Shop now') };
+    return { headline:String(c.headline||fallback.headline).trim(),
+             sub:String(c.sub||'').trim(),
+             cta:String(c.cta||'Shop now').trim() };
   }catch(e){ return fallback; }
 }
 
@@ -13133,7 +13175,7 @@ function saCloneHTML(){
       </div>
       <div class="sa-cl-foot">
         <textarea id="clChanges" class="cl-ta2" rows="2"
-          placeholder="Anything to change — background, model, colour, mood…">${esc(CLONE.prompt||'')}</textarea>
+          placeholder="Anything to change — optional. Background, model, colour, mood…">${esc(CLONE.prompt||'')}</textarea>
         <div class="sa-cl-go">
           <span class="cl-cr">${CLONE.adId?`${cost} credit${cost===1?'':'s'} · about a minute`:'Pick an inspiration to start'}</span>
           <button class="btn btn-primary" id="clGoBtn" onclick="saCloneGo()" ${(!CLONE.adId||CLONE.busy)?'disabled':''}>
@@ -13394,6 +13436,9 @@ function clPick(id){
    than press their button. So it is editable, versioned, and only one is live.
    ========================================================================== */
 const CL_TOKENS = [
+  ['{{HEADLINE}}', 'the headline, written from your angle before the image runs'],
+  ['{{SUB}}',      'the supporting line'],
+  ['{{CTA}}',      'the button text'],
   ['{{PALETTE}}',  'your brand colours, from Settings → Brand kit'],
   ['{{PRODUCT}}',  'the product name from GetHookd'],
   ['{{ANGLE}}',    'the angle you picked in the chat'],
@@ -13478,6 +13523,9 @@ function renderPromptLab(){
         <div class="clp-preview">
           <div class="clp-h" style="margin-bottom:8px">As it will be sent</div>
           <pre class="clp-pre">${hl(editing.body
+            .replace('{{HEADLINE}}','Still sharp at hour nine')
+            .replace('{{SUB}}','Yerba mate energy and electrolytes, in one sachet.')
+            .replace('{{CTA}}','Shop now')
             .replace('{{PALETTE}}', brandColours().length?('Use ONLY these brand colours…\n  '+brandColours().join('\n  ')):'[no brand colours set]')
             .replace('{{PRODUCT}}','YerbaLytes')
             .replace('{{COPY_MODE}}','[layers switch decides]')
@@ -16145,8 +16193,21 @@ const MIGRATIONS = [
   { id:'2026-08-task-title-field',fn:mig_taskTitleField },
   { id:'2026-08-notif-timestamps',fn:mig_notifTimestamps },
   { id:'2026-08-signal-noise',    fn:mig_signalNoise },
-  { id:'2026-08-brand-palette',   fn:mig_brandPalette }
+  { id:'2026-08-brand-palette',   fn:mig_brandPalette },
+  { id:'2026-08-supplied-copy',   fn:mig_suppliedCopy }
 ];
+
+/* v2 still asked the image model to write the words, and it answered by copying
+   the competitor's. v3 supplies them. Same rule as before: only take over if
+   nobody has written their own. */
+function mig_suppliedCopy(){
+  if(CLONE_PROMPTS.some(p=>p.id==='v3-supplied-copy')) return true;
+  const mine = CLONE_PROMPTS.some(p=>p.live && !['v1','v2-palette'].includes(p.id));
+  CLONE_PROMPTS.unshift({ id:'v3-supplied-copy', name:'v3 — copy supplied, never invented',
+    body:CLONE_PROMPT_V1, live:!mine, runs:0, ts:Date.now() });
+  if(!mine) CLONE_PROMPTS.forEach(p=>{ if(p.id!=='v3-supplied-copy') p.live=false; });
+  return true;
+}
 
 /* The prompt list is saved state, so an older copy would keep overriding the
    built-in one and the palette instruction would never reach the model. Add the
