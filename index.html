@@ -16439,6 +16439,15 @@ async function localOffer(){
      <button class="btn btn-primary" onclick="localMerge()">Merge them</button>`));
 }
 
+/* The escape hatch: take the file away and decide later. */
+async function localDownload(){
+  const rec=await localGet(); if(!rec) return;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([rec.json],{type:'application/json'}));
+  a.download=`rarri-local-${new Date(rec.ts).toISOString().slice(0,16).replace(/[:T]/g,'-')}.json`;
+  a.click(); toast('Downloaded');
+}
+
 /* The safe default, and deliberately dumber than the sync merge.
    An offline snapshot has no common ancestor — we cannot know whether a row
    missing from it was deleted or simply never seen. So this NEVER deletes:
