@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rarri — TikTok Operations</title>
+<!-- The app mark, inline so it needs no file and no network. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23ff3b30%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23c1121f%22%2F%3E%3C%2FlinearGradient%3E%3Cmask%20id%3D%22m%22%3E%3Crect%20width%3D%2248%22%20height%3D%2248%22%20fill%3D%22%23fff%22%2F%3E%3Cpath%20d%3D%22M2%2034%20L48%2014%22%20stroke%3D%22%23000%22%20stroke-width%3D%224.6%22%2F%3E%3C%2Fmask%3E%3C%2Fdefs%3E%3Crect%20width%3D%2248%22%20height%3D%2248%22%20rx%3D%2211%22%20fill%3D%22url%28%23g%29%22%2F%3E%3Cg%20mask%3D%22url%28%23m%29%22%20fill%3D%22%23fff%22%3E%3Cpath%20d%3D%22M15%2036%20L20.5%2012%20h9.5%20c5.6%200%208.6%203%207.6%207.6%20-.7%203.4%20-3.2%205.6%20-6.8%206.4%20l4.2%2010%20h-7.4%20l-3.4%20-9.2%20h-1.6%20L24.3%2036%20z%20M25.6%2021.4%20h3.2%20c2.2%200%203.6%20-1%203.9%20-2.6%20.3%20-1.6%20-.7%20-2.5%20-2.8%20-2.5%20h-3.2%20z%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23ff3b30%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23c1121f%22%2F%3E%3C%2FlinearGradient%3E%3Cmask%20id%3D%22m%22%3E%3Crect%20width%3D%2248%22%20height%3D%2248%22%20fill%3D%22%23fff%22%2F%3E%3Cpath%20d%3D%22M2%2034%20L48%2014%22%20stroke%3D%22%23000%22%20stroke-width%3D%224.6%22%2F%3E%3C%2Fmask%3E%3C%2Fdefs%3E%3Crect%20width%3D%2248%22%20height%3D%2248%22%20rx%3D%2211%22%20fill%3D%22url%28%23g%29%22%2F%3E%3Cg%20mask%3D%22url%28%23m%29%22%20fill%3D%22%23fff%22%3E%3Cpath%20d%3D%22M15%2036%20L20.5%2012%20h9.5%20c5.6%200%208.6%203%207.6%207.6%20-.7%203.4%20-3.2%205.6%20-6.8%206.4%20l4.2%2010%20h-7.4%20l-3.4%20-9.2%20h-1.6%20L24.3%2036%20z%20M25.6%2021.4%20h3.2%20c2.2%200%203.6%20-1%203.9%20-2.6%20.3%20-1.6%20-.7%20-2.5%20-2.8%20-2.5%20h-3.2%20z%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
+<meta name="theme-color" content="#c1121f">
 <!-- V1.1 · Apple-inspired UI · system SF typography, no external fonts — fully offline -->
 <!-- Charts are hand-rolled SVG — no external chart library needed -->
 <style>
@@ -2519,6 +2523,115 @@ body.cloning .asx-thread{padding-bottom:0}
 .lo-row .k{flex:1;font-weight:640;text-transform:capitalize}
 .lo-row .mine{color:var(--accent-ink);background:var(--accent-soft);padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700}
 .lo-row .theirs{color:var(--good-ink);background:var(--good-soft);padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700}
+
+/* ============================================================================
+   STATIC ADS — the cloner as numbered steps
+   Every colour here is a token, so dark mode is not a second design.
+   ========================================================================== */
+.sa-tabs{display:flex;gap:8px;margin-bottom:18px}
+.sa-tab{display:flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:12px;
+  border:1px solid var(--line-2);background:var(--surface);color:var(--ink-3);
+  font-family:inherit;font-size:.85rem;font-weight:640;cursor:pointer;box-shadow:var(--shadow)}
+.sa-tab svg{width:15px;height:15px}
+.sa-tab:hover{color:var(--ink)}
+.sa-tab.on{color:var(--ink);border-color:var(--line)}
+.sa-tab.red.on{color:var(--crit-ink);border-color:color-mix(in srgb,var(--crit-ink) 40%,transparent);
+  background:var(--crit-soft)}
+
+.sa-wrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+@media(max-width:1080px){.sa-wrap{grid-template-columns:1fr}}
+.sa-steps{display:flex;flex-direction:column;gap:14px;min-width:0}
+
+.sa-step{background:var(--surface);border:1px solid var(--line-2);border-radius:18px;
+  box-shadow:var(--shadow);padding:18px 20px;display:grid;grid-template-columns:210px minmax(0,1fr);
+  gap:22px;align-items:start}
+@media(max-width:760px){.sa-step{grid-template-columns:1fr;gap:14px}}
+.sa-sh{display:flex;gap:12px;align-items:flex-start}
+.sa-num{width:26px;height:26px;border-radius:9px;flex:none;display:flex;align-items:center;
+  justify-content:center;font-size:.8rem;font-weight:800;color:var(--ink)}
+.sa-st{font-size:.95rem;font-weight:680;letter-spacing:-.01em}
+.sa-sd{font-size:.78rem;color:var(--ink-3);margin-top:5px;line-height:1.5}
+.sa-opt{font-size:.62rem;font-weight:700;color:var(--ink-3);background:var(--surface-2);
+  padding:2px 7px;border-radius:99px;margin-left:6px;vertical-align:middle}
+.sa-sb{min-width:0}
+
+/* pickers */
+.sa-rail{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:thin;
+  scroll-snap-type:x proximity}
+.sa-rail::-webkit-scrollbar{height:7px}
+.sa-rail::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px}
+.sa-pick{width:112px;height:112px;border-radius:14px;flex:none;overflow:hidden;padding:0;cursor:pointer;
+  border:2px solid var(--line-2);background:var(--surface-2);position:relative;scroll-snap-align:start;
+  display:flex;align-items:center;justify-content:center;color:var(--ink-3);transition:.15s}
+.sa-pick:hover{border-color:var(--line);transform:translateY(-1px)}
+.sa-pick img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.sa-pick.pr{background:#fff}
+.sa-pick.pr img{object-fit:contain}
+.sa-pick.on{border-color:var(--crit-ink);box-shadow:0 0 0 3px var(--crit-soft)}
+.sa-pick.pr.on{border-color:var(--violet-ink);box-shadow:0 0 0 3px var(--violet-soft)}
+.sa-badge{position:absolute;top:6px;left:6px;background:var(--violet-ink);color:#fff;font-size:.53rem;
+  font-weight:800;letter-spacing:.04em;padding:3px 7px;border-radius:6px}
+.sa-note{font-size:.75rem;color:var(--ink-3);line-height:1.55;margin-top:10px}
+.sa-note b{color:var(--ink);font-weight:640}
+.sa-warn{font-size:.75rem;color:var(--warn-ink);line-height:1.55;margin-top:10px}
+.sa-empty2{font-size:.8rem;color:var(--ink-3);line-height:1.6;padding:6px 0}
+
+/* angle */
+.sa-angle{position:relative}
+.sa-ta{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px 14px;
+  font-family:inherit;font-size:.85rem;line-height:1.55;resize:vertical;outline:none;
+  background:var(--surface);color:var(--ink)}
+.sa-ta:focus{border-color:var(--accent)}
+.sa-angle .sa-ta{padding-right:150px}
+.sa-ta.tall{min-height:86px}
+.sa-sugg{position:absolute;right:10px;top:10px;display:flex;align-items:center;gap:6px;
+  border:none;background:none;color:var(--violet-ink);font-family:inherit;font-size:.78rem;
+  font-weight:650;cursor:pointer;padding:4px 6px;border-radius:8px}
+.sa-sugg:hover{background:var(--violet-soft)}
+.sa-sugg svg{width:14px;height:14px}
+.sa-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.sa-chip{font-size:.74rem;font-weight:620;padding:6px 11px;border-radius:99px;cursor:pointer;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink-2);font-family:inherit;
+  max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sa-chip:hover{border-color:var(--accent)}
+.sa-chip.on{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+.sa-count{font-size:.7rem;color:var(--ink-3);text-align:right;margin-top:6px}
+
+/* output row */
+.sa-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.sa-fl{font-size:.73rem;font-weight:660;color:var(--ink-2);margin-bottom:6px;display:flex;align-items:center;gap:5px}
+.sa-tip{width:13px;height:13px;border-radius:50%;background:var(--surface-2);color:var(--ink-3);
+  font-size:.55rem;font-weight:800;display:inline-flex;align-items:center;justify-content:center;cursor:help}
+.sa-ctrl{position:relative;display:flex;align-items:center}
+.sa-ci{position:absolute;left:11px;width:14px;height:14px;color:var(--ink-3);pointer-events:none;
+  display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:700}
+.sa-ci svg{width:14px;height:14px}
+.sa-sel{width:100%;height:40px;border:1px solid var(--line);border-radius:11px;padding:0 32px 0 34px;
+  font-family:inherit;font-size:.82rem;background:var(--surface);color:var(--ink);outline:none;cursor:pointer;
+  appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-3) 50%),linear-gradient(135deg,var(--ink-3) 50%,transparent 50%);
+  background-position:calc(100% - 16px) 17px,calc(100% - 11px) 17px;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.sa-sel:focus{border-color:var(--accent)}
+.sa-fields .sa-sel:not([style]){padding-left:34px}
+
+/* the right rail */
+.sa-side{position:sticky;top:14px;display:flex;flex-direction:column;gap:14px}
+@media(max-width:1080px){.sa-side{position:static}}
+.sa-card{background:var(--surface);border:1px solid var(--line-2);border-radius:18px;
+  box-shadow:var(--shadow);padding:18px}
+.sa-ct{font-size:1rem;font-weight:700;letter-spacing:-.02em}
+.sa-cd{font-size:.79rem;color:var(--ink-3);line-height:1.55;margin-top:7px}
+.sa-go{width:100%;height:46px;margin-top:15px;border:none;border-radius:13px;cursor:pointer;
+  font-family:inherit;font-size:.9rem;font-weight:700;color:#fff;display:flex;align-items:center;
+  justify-content:center;gap:8px;background:linear-gradient(100deg,#8b3dff,#ff3b6b);
+  box-shadow:0 8px 20px -8px rgba(255,59,107,.6);transition:.15s}
+.sa-go:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 12px 26px -8px rgba(255,59,107,.7)}
+.sa-go:disabled{opacity:.45;cursor:default;box-shadow:none}
+.sa-go svg{width:16px;height:16px}
+.sa-cr{font-size:.75rem;color:var(--ink-3);text-align:center;margin-top:11px}
+.sa-how{background:var(--surface-2);border:1px solid var(--line-2);border-radius:16px;padding:15px 16px}
+.sa-ht{display:flex;align-items:center;gap:7px;font-size:.82rem;font-weight:660}
+.sa-ht svg{width:14px;height:14px;color:var(--ink-3)}
+.sa-how p{font-size:.77rem;color:var(--ink-3);line-height:1.6;margin:8px 0 0}
 </style>
 </head>
 <body>
@@ -12669,11 +12782,12 @@ function clChooseImg(i){
 }
 
 /* ---- angles, pulled out of the conversation ------------------------------ */
-async function clPullAngles(){
+async function clPullAngles(force){
   const said=AI.msgs.filter(m=>m.who==='ai'||m.who==='me')
     .slice(-8).map(m=>String(m.html||'').replace(/<[^>]+>/g,' ')).join('\n').slice(-6000);
   if(said.replace(/\s/g,'').length<80){ CLONE.angles=[]; clPaint(); return; }
-  CLONE.anglesLoading=true; clPaint();
+  CLONE.anglesLoading=true;
+  if(state.page==='statics') renderStatics(); else clPaint();
   try{
     const q=`From the conversation below, pull out every distinct ADVERTISING ANGLE that was
 proposed or agreed — the audience and the reason they would buy, not the product features.
@@ -12692,7 +12806,13 @@ ${said}`;
     CLONE.angles=(JSON.parse(m[0]).angles||[]).slice(0,5);
     if(!CLONE.angle && CLONE.angles[0]) CLONE.angle=CLONE.angles[0].brief||CLONE.angles[0].label;
   }catch(e){ CLONE.angles=[]; }
-  CLONE.anglesLoading=false; clPaint();
+  CLONE.anglesLoading=false;
+  if(state.page==='statics'){
+    /* Keep whatever is being typed — only the suggestions below it change. */
+    const box=$('clAngleBox'), keep=box?box.value:null;
+    renderStatics();
+    const b2=$('clAngleBox'); if(b2&&keep&&keep!==CLONE.angle) b2.value=keep;
+  } else clPaint();
 }
 
 /* ---- generation ----------------------------------------------------------
@@ -13193,45 +13313,145 @@ function renderStatics(){
   if(!SA.tab || SA.tab==='find') SA.tab='library';
   $('page-statics').innerHTML=`
     <div class="page-head"><div><h1>Static Ads</h1>
-      <p class="sub">Your swipe file, and the cloner. The same panel the assistant uses.</p></div>
-      <div class="actions"><button class="btn btn-ghost btn-sm" onclick="SW.loaded=false;swLoad(true)">Refresh</button></div></div>
-    <div class="seg" style="width:max-content;margin-bottom:16px">
-      <button class="${SA.tab==='library'?'active':''}" onclick="SA.tab='library';renderStatics()">
-        Library${SW.rows.length?` · ${SW.rows.length}`:''}</button>
-      <button class="${SA.tab==='clone'?'active':''}" onclick="SA.tab='clone';renderStatics()">Clone an ad</button>
+      <p class="sub">Clone proven static ads using your inspiration, product shots, and angles.</p></div>
+      <div class="actions"><button class="btn btn-ghost btn-sm" onclick="SW.loaded=false;swLoad(true)">
+        ${ICONS.refresh||''} Refresh</button></div></div>
+    <div class="sa-tabs">
+      <button class="sa-tab ${SA.tab==='library'?'on':''}" onclick="SA.tab='library';renderStatics()">
+        ${ICONS.image||''}<span>Library${SW.rows.length?` · ${SW.rows.length}`:''}</span></button>
+      <button class="sa-tab red ${SA.tab==='clone'?'on':''}" onclick="SA.tab='clone';renderStatics()">
+        ${ICONS.spark||''}<span>Clone an ad</span></button>
     </div>
     ${SA.tab==='clone'?saCloneHTML():saLibraryHTML()}`;
 }
 
-/* The Static Ads copy of the cloner. Deliberately the SAME panel function as the
-   assistant — two renderings of one control would drift apart within a week.
-   All that differs is the box you type into and the button you press. */
+/* ---- the cloner, as five plain steps ------------------------------------
+   Same state and the same handlers as the assistant's panel — only the chrome
+   differs. Numbering it turns "a wall of controls" into "do this, then this",
+   which is what it always was. */
 function saCloneHTML(){
+  const prod=GHP.list.find(p=>p.id===CLONE.prodId)||GHP.list[0];
+  if(prod&&!CLONE.prodId) CLONE.prodId=prod.id;
   const cost=CLONE.n*(CLONE.model==='nano-banana-pro'?2:1);
+
+  const step=(n,tint,title,desc,body)=>`
+    <div class="sa-step">
+      <div class="sa-sh">
+        <span class="sa-num" style="background:${tint}">${n}</span>
+        <div><div class="sa-st">${title}</div><div class="sa-sd">${desc}</div></div>
+      </div>
+      <div class="sa-sb">${body}</div>
+    </div>`;
+
+  const inspiration = SW.loading&&!SW.rows.length
+    ? `<div class="sa-empty2">Reading your swipe file…</div>`
+    : SW.rows.length
+      ? `<div class="sa-rail">${SW.rows.slice(0,24).map(a=>`
+          <button class="sa-pick ${CLONE.adId===a.id?'on':''}" data-ad="${a.id}"
+            title="${esc(a.brand||'')}" onclick="clChooseAd('${a.id}')">
+            ${a.thumb?`<img src="${esc(a.thumb)}" loading="lazy" alt="">`:'<span>—</span>'}
+          </button>`).join('')}</div>
+         <div class="sa-note" id="clInspCap">${CLONE.ad
+           ? `Copying <b>${esc(CLONE.ad.brand||'that ad')}</b>${CLONE.ad.score!=null?` · performance ${CLONE.ad.score}`:''} — layout only, never their product or words.`
+           : 'Pick the layout you want to borrow.'}</div>`
+      : `<div class="sa-empty2">Nothing in your swipe file yet. Save ads in GetHookd under
+          Discover Ads and they appear here.</div>`;
+
+  const product = !GHP.list.length
+    ? (GHP.loading?`<div class="sa-empty2">Loading your products…</div>`
+      : GHP.err?`<div class="sa-warn">Couldn't load your products — ${esc(GHP.err)}
+          <button class="link-btn" onclick="GHP.loaded=false;ghProducts(true)">Try again</button></div>`
+      : `<div class="sa-empty2">No product found. Add one in GetHookd under Brand Assets → Products.</div>`)
+    : `${GHP.list.length>1?`<select class="sa-sel" style="margin-bottom:10px;max-width:260px"
+          onchange="CLONE.prodId=+this.value;CLONE.imgIdx=0;renderStatics()">
+          ${GHP.list.map(p=>`<option value="${p.id}" ${CLONE.prodId===p.id?'selected':''}>${esc(p.title)}</option>`).join('')}
+        </select>`:''}
+       ${prod&&prod.images.length?`<div class="sa-rail">${prod.images.map((u,i)=>`
+          <button class="sa-pick pr ${CLONE.imgIdx===i?'on':''}" data-img="${i}" onclick="clChooseImg(${i})">
+            <img src="${esc(u)}" loading="lazy" alt="">
+            ${CLONE.imgIdx===i?'<span class="sa-badge">SELECTED</span>':''}
+          </button>`).join('')}</div>
+         <div class="sa-warn">Pick a shot of one pack on its own — a comparison graphic is what makes
+           the model draw your product three times.</div>`
+        :`<div class="sa-empty2">That product has no images on it yet.</div>`}`;
+
+  const angle = `
+    <div class="sa-angle">
+      <textarea id="clAngleBox" class="sa-ta" rows="2" placeholder="From this chat, or type the angle yourself…"
+        oninput="CLONE.angle=this.value">${esc(CLONE.angle||'')}</textarea>
+      <button class="sa-sugg" onclick="clPullAngles(true)">
+        ${ICONS.spark||'✦'} ${CLONE.anglesLoading?'Reading…':'Use suggestion'}</button>
+    </div>
+    ${CLONE.angles.length?`<div class="sa-chips">${CLONE.angles.map(a=>{
+       const v=esc(a.brief||a.label);
+       return `<button class="sa-chip ${CLONE.angle===(a.brief||a.label)?'on':''}" data-angle="${v}" title="${v}"
+         onclick="clUseAngle(${JSON.stringify(a.brief||a.label).replace(/"/g,'&quot;')});$('clAngleBox').value=${JSON.stringify(a.brief||a.label).replace(/"/g,'&quot;')}">${esc(a.label||'Angle')}</button>`;
+     }).join('')}</div>`:''}
+    <div class="sa-note" id="clAngleHint">No angle means no new words, and the ad comes back carrying
+      the reference's copy. It is what the headline gets written from.</div>`;
+
+  const field=(label,ico,ctrl,tip)=>`<div class="sa-field">
+      <div class="sa-fl">${label}${tip?`<span class="sa-tip" title="${esc(tip)}">i</span>`:''}</div>
+      <div class="sa-ctrl">${ico?`<span class="sa-ci">${ico}</span>`:''}${ctrl}</div></div>`;
+
+  const output = `<div class="sa-fields">
+      ${field('Variations', ICONS.frame||'', `<select class="sa-sel" onchange="CLONE.n=+this.value;clSyncChrome()">
+        ${CL_COUNTS.map(n=>`<option value="${n}" ${CLONE.n===n?'selected':''}>${n} variation${n===1?'':'s'}</option>`).join('')}</select>`)}
+      ${field('Aspect ratio', ICONS.image||'', `<select class="sa-sel" onchange="CLONE.aspect=this.value">
+        ${CL_ASPECTS.map(([v,l])=>`<option value="${v}" ${CLONE.aspect===v?'selected':''}>${l}</option>`).join('')}</select>`)}
+      ${field('Model', ICONS.spark||'', `<select class="sa-sel" onchange="CLONE.model=this.value;clSyncChrome()">
+        <option value="nano-banana-2" ${CLONE.model==='nano-banana-2'?'selected':''}>Nano Banana 2 · 1 cr</option>
+        <option value="nano-banana-pro" ${CLONE.model==='nano-banana-pro'?'selected':''}>Nano Banana Pro · 2 cr</option></select>`)}
+      ${field('Text rendering','T', `<select class="sa-sel" onchange="CLONE.layers=this.value==='1';clSyncChrome()">
+        <option value="0" ${CLONE.layers?'':'selected'}>Text baked in</option>
+        <option value="1" ${CLONE.layers?'selected':''}>Text as layers</option></select>`,
+        'Baked in looks most like the reference. Layers gives you a plate with editable type over it.')}
+    </div>
+    <div class="sa-note" id="clModeHint">${CLONE.layers
+      ? '<b>Text as layers</b> gives a plate with no words on it and lays the headline over the top as editable text.'
+      : '<b>Text baked in</b> reproduces the reference\'s typography as well as its layout. This is the one that looks like the ad.'}</div>`;
+
+  const notes = `<textarea id="clChanges" class="sa-ta tall" rows="3" maxlength="500"
+      placeholder="e.g. Use a beach background, vibrant colours, smiling model, bright mood…"
+      oninput="CLONE.prompt=this.value;$('clCount').textContent=this.value.length+' / 500'"
+      >${esc(CLONE.prompt||'')}</textarea>
+    <div class="sa-count" id="clCount">${(CLONE.prompt||'').length} / 500</div>`;
+
   return `
-    <div class="card sa-clone"><div class="card-b" style="padding:0">
-      <div class="cl-pan" style="border:none;margin:0;background:transparent;box-shadow:none">
-        ${clPanelInner()}
+  <div class="sa-wrap">
+    <div class="sa-steps">
+      ${step(1,'var(--crit-soft)','Choose inspiration','Pick the layout you want to borrow.',inspiration)}
+      ${step(2,'var(--violet-soft)','Select product','Pick a product shot. This will be used to create your ad.',product)}
+      ${step(3,'var(--accent-soft)','Add angle / copy','Add the angle or headline you want to use.',angle)}
+      ${step(4,'var(--aqua-soft)','Configure output','Choose how you want your ads to be generated.',output)}
+      ${step(5,'var(--magenta-soft)','Additional notes <span class="sa-opt">optional</span>','Add any extra details about background, model, colour, mood…',notes)}
+    </div>
+
+    <aside class="sa-side">
+      <div class="sa-card">
+        <div class="sa-ct">Generate your ads</div>
+        <div class="sa-cd">Review your selections and generate high-performing static ads.</div>
+        <button class="sa-go" id="clGoBtn" onclick="saCloneGo()" ${(!CLONE.adId||CLONE.busy)?'disabled':''}>
+          ${ICONS.spark||'✦'} ${CLONE.busy?'Generating…':'Generate Ads'}</button>
+        <div class="sa-cr cl-cr">${CLONE.adId?`${cost} credit${cost===1?'':'s'} · about a minute`:'Pick an inspiration to start'}</div>
       </div>
-      <div class="sa-cl-foot">
-        <textarea id="clChanges" class="cl-ta2" rows="2"
-          placeholder="Anything to change — optional. Background, model, colour, mood…">${esc(CLONE.prompt||'')}</textarea>
-        <div class="sa-cl-go">
-          <span class="cl-cr">${CLONE.adId?`${cost} credit${cost===1?'':'s'} · about a minute`:'Pick an inspiration to start'}</span>
-          <button class="btn btn-primary" id="clGoBtn" onclick="saCloneGo()" ${(!CLONE.adId||CLONE.busy)?'disabled':''}>
-            ${CLONE.busy?'Generating…':`Generate ${CLONE.n} ad${CLONE.n===1?'':'s'}`}</button>
-        </div>
+      <div class="sa-how">
+        <div class="sa-ht">${ICONS.eye||''} How it works</div>
+        <p>Your inspiration gives the layout. Your product shot gives the pack. Your angle is written
+          into the headline before the image is drawn, and your brand colours are the only ones allowed.</p>
       </div>
-    </div></div>
-    ${CLONE_ORDER.length?`<div class="section-title" style="margin-top:20px">Generations</div>
-      <div id="clRuns">${CLONE_ORDER.map(id=>clCardHTML(id,CLONE_RUNS[id])).join('')}</div>`:''}
-    <div class="section-title" style="margin-top:20px">Your static ads</div>
-    ${madeHTML()}`;
+    </aside>
+  </div>
+
+  ${CLONE_ORDER.length?`<div class="section-title" style="margin-top:22px">Generations</div>
+    <div id="clRuns">${CLONE_ORDER.map(id=>clCardHTML(id,CLONE_RUNS[id])).join('')}</div>`:''}
+  <div class="section-title" style="margin-top:22px">Your static ads</div>
+  ${madeHTML()}`;
 }
+
 /* ---- everything we have made ---------------------------------------------
    Read straight off the "Static ads" brief rather than kept as a second list.
-   One source of truth: delete a page in the editor and it leaves here too,
-   which a parallel array would never manage. */
+   One source of truth: delete a page in the editor and it leaves here too. */
 function madeAds(){
   const b=BRIEFS.find(x=>(x.name||'')==='Static ads');
   if(!b) return [];
@@ -13239,12 +13459,12 @@ function madeAds(){
   const inFrame=e=>frames.find(f=>e.x>=f.x-40&&e.x<=f.x+f.w+40&&e.y>=f.y-40&&e.y<=f.y+f.h+40);
   return (b.elements||[]).filter(e=>e.type==='image'&&e.src)
     .map(e=>({ id:e.id, src:e.src, title:(inFrame(e)||{}).title||e.alt||'Static ad', briefId:b.id }))
-    .reverse();          /* newest first — they are appended left to right */
+    .reverse();
 }
 function madeHTML(){
   const ads=madeAds();
-  if(!ads.length) return `<div class="cl-hint" style="padding:0 2px 6px">
-    Nothing yet. Generate one above and it lands here and in the editor.</div>`;
+  if(!ads.length) return `<div class="sa-empty2">Nothing yet. Generate one above and it lands here
+    and in the editor.</div>`;
   return `<div class="cl-grid" style="padding:0">${ads.map(a=>`
     <div class="cl-res">
       <a class="cl-shot" href="${esc(a.src)}" target="_blank" rel="noopener">
@@ -13256,7 +13476,6 @@ function madeHTML(){
 }
 function madeOpen(briefId, elId){
   openBriefEditor(briefId);
-  /* Land on the ad itself rather than wherever the canvas happened to be. */
   setTimeout(()=>{
     const b=briefById(briefId), el=(b&&b.elements||[]).find(x=>x.id===elId);
     if(!el) return;
