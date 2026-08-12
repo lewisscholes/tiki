@@ -2496,6 +2496,13 @@ body.cloning .asx-thread{padding-bottom:0}
 
 .cl-made{font-size:.72rem;color:var(--ink-2);font-weight:620;padding:8px 9px 0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.lo-diff{margin-top:12px;border:1px solid var(--line-2);border-radius:11px;overflow:hidden}
+.lo-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid var(--line-2);font-size:.78rem}
+.lo-row:first-child{border-top:none}
+.lo-row .k{flex:1;font-weight:640;text-transform:capitalize}
+.lo-row .mine{color:var(--accent-ink);background:var(--accent-soft);padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700}
+.lo-row .theirs{color:var(--good-ink);background:var(--good-soft);padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700}
 </style>
 </head>
 <body>
@@ -8763,7 +8770,10 @@ function brfScreenToWorld(e){
 }
 function brfBind(b){
   const vp=$('brfViewport'), world=$('brfWorld');
+  /* Mirrored globally so the sync layer knows not to repaint the canvas while
+     a hand is on it — a merge landing mid-drag drops whatever was being moved. */
   let mode=null, start=null, moved=false;
+  const setMode=v=>{ mode=v; BRF_DRAG=!!v; };
   vp.addEventListener('mousedown', e=>{
     const s=state.brf;
     if(e.target.closest('.brf-dock')) return;   // the dock floats over the canvas
@@ -8778,7 +8788,7 @@ function brfBind(b){
       const el=b.elements.find(x=>x.id===erotNode.dataset.erot);
       if(el&&!el.locked){
         brfSnapshot();
-        mode='elrot'; moved=false;
+        setMode('elrot'); moved=false;
         /* Angle is measured in world space from the element's centre, so it is
            immune to zoom and pan without any extra maths. */
         const w0=brfScreenToWorld(e), cx=el.x+el.w/2, cy=el.y+el.h/2;
@@ -8793,7 +8803,7 @@ function brfBind(b){
       const el=b.elements.find(x=>x.id===eid);
       if(el&&!el.locked){
         brfSnapshot();
-        mode='elresize'; moved=false;
+        setMode('elresize'); moved=false;
         rtLock(el.id);
         start={mx:e.clientX,my:e.clientY,el,edge,w:el.w,h:el.h,x:el.x,y:el.y,
           ratio: el.type==='video' ? VID_RATIO
@@ -8806,7 +8816,7 @@ function brfBind(b){
     if(rsNode){
       const [fid,edge]=rsNode.dataset.rs.split(':');
       const fr=b.elements.find(x=>x.id===fid);
-      mode='resize'; moved=false; start={mx:e.clientX,my:e.clientY,fr,edge,w:fr.w,h:fr.h};
+      setMode('resize'); moved=false; start={mx:e.clientX,my:e.clientY,fr,edge,w:fr.w,h:fr.h};
       const fn=world.querySelector(`[data-frame="${fid}"]`); if(fn) fn.classList.add('resizing');
       e.preventDefault(); return;
     }
@@ -8818,7 +8828,7 @@ function brfBind(b){
         .concat(b.comments.filter(c=>c.x>=fr.x&&c.x<=fr.x+fr.w&&c.y>=fr.y&&c.y<=fr.y+fr.h));
       /* Remembered so mouseup can tell a click (select the page) from a drag
          (move it) — selecting on mousedown would re-render mid-drag. */
-      mode='drag'; moved=false; start={mx:e.clientX,my:e.clientY,frameId:fr.id,
+      setMode('drag'); moved=false; start={mx:e.clientX,my:e.clientY,frameId:fr.id,
         pos:kids.map(k=>({k,x:k.x,y:k.y})).concat([{k:fr,x:fr.x,y:fr.y}])};
     } else if(elNode){
       const el=b.elements.find(x=>x.id===elNode.dataset.el);
@@ -8827,7 +8837,7 @@ function brfBind(b){
       if(held){ toast(`${whoName(held.who)} is editing this`); e.preventDefault(); return; }
       if(el&&el.type!=='frame'){
         brfSnapshot();   // taken before the move so undo returns it to where it was
-        mode='drag'; moved=false; start={mx:e.clientX,my:e.clientY,pos:[{k:el,x:el.x,y:el.y}]};
+        setMode('drag'); moved=false; start={mx:e.clientX,my:e.clientY,pos:[{k:el,x:el.x,y:el.y}]};
         rtLock(el.id);
         if(s.sel!==el.id){ s.sel=el.id;
           world.querySelectorAll('.brf-el.selected').forEach(n=>n.classList.remove('selected'));
@@ -8845,7 +8855,7 @@ function brfBind(b){
     } else {
       if(s.sel||s.openThread||s.selFrame){ s.sel=null; s.openThread=null; s.selFrame=null; renderBriefEditor(); return; }
       if(s.editing) return;   // let the blur handler commit before anything else runs
-      mode='pan'; start={mx:e.clientX,my:e.clientY,px:s.panX,py:s.panY};
+      setMode('pan'); start={mx:e.clientX,my:e.clientY,px:s.panX,py:s.panY};
       vp.classList.add('panning');
     }
     e.preventDefault();
@@ -8992,7 +9002,7 @@ function brfBind(b){
       const wasStructural = (mode==='resize'||mode==='elresize'||mode==='elrot'||mode==='drag') && moved;
       /* A click on a page title with no movement selects that page. */
       const pickedFrame = mode==='drag' && !moved && start && start.frameId ? start.frameId : null;
-      mode=null; start=null; moved=false;
+      setMode(null); start=null; moved=false;
       const v=$('brfViewport'); if(v) v.classList.remove('panning');
       if(pickedFrame){
         const s=state.brf;
@@ -9334,6 +9344,7 @@ function brfMovePage(id, delta){
 }
 /* Pages drag against each other only. Dropping a page onto a layer row, or a
    layer onto a page row, would be ambiguous — so the two lists stay separate. */
+let BRF_DRAG=false;   /* true while the canvas is being dragged or panned */
 let BRF_PAGE_DRAG=null;
 function brfPageDragStart(ev,id){
   BRF_PAGE_DRAG=id; BRF_LAYER_DRAG=null; ev.stopPropagation();
@@ -16321,7 +16332,8 @@ async function tikiPull(){
     TIKI_REV = Number(rows[0].rev)||0;
     applyTikiState(rows[0].value);
     tikiLastPushed=JSON.stringify(collectTikiState());
-  } else { TIKI_REV=0; tikiLastPushed=''; }   // first run — seed data will be pushed
+    TIKI_BASE = JSON.parse(tikiLastPushed);
+  } else { TIKI_REV=0; tikiLastPushed=''; TIKI_BASE=null; }   // first run — seed data will be pushed
 }
 /* ============================================================================
    THE LOCAL COPY
@@ -16391,18 +16403,58 @@ async function localOffer(){
   if(!unsaved) return localClear();
   if(rec.json===JSON.stringify(collectTikiState())) return localClear();
   const when=new Date(rec.ts).toLocaleString('en-GB',{weekday:'short',hour:'2-digit',minute:'2-digit'});
+  /* Say what is actually in it. "Restore this?" with no detail is how five of
+     Rod's tasks were thrown away by someone clicking the obvious button. */
+  let local={}; try{ local=JSON.parse(rec.json); }catch(e){ return localClear(); }
+  const server=collectTikiState();
+  const counts=[];
+  MERGE_LISTS.forEach(k=>{
+    const a=Array.isArray(local[k])?local[k]:[], b=Array.isArray(server[k])?server[k]:[];
+    const bIds=new Set(b.map(x=>x&&String(x.id)));
+    const onlyLocal=a.filter(x=>x&&!bIds.has(String(x.id))).length;
+    const aIds=new Set(a.map(x=>x&&String(x.id)));
+    const onlyServer=b.filter(x=>x&&!aIds.has(String(x.id))).length;
+    if(onlyLocal||onlyServer) counts.push({k, onlyLocal, onlyServer});
+  });
+  LOCAL_PENDING=local;
   openModal(modalShell('Unsaved work found on this computer',
     `<p style="font-size:.88rem;line-height:1.6;color:var(--ink-2)">
        This browser has a copy from <b>${esc(when)}</b> that never reached the server —
        most likely saving was failing at the time.</p>
-     <p style="font-size:.88rem;line-height:1.6;color:var(--ink-2);margin-top:10px">
-       Restoring replaces <b>everything</b> with that copy — so if a teammate has
-       saved work since, theirs goes too. Downloading is the safe move if you are
-       not sure: the file can always be merged in afterwards.</p>`,
+     ${counts.length?`<div class="lo-diff">${counts.map(c=>`<div class="lo-row">
+        <span class="k">${esc(c.k)}</span>
+        ${c.onlyLocal?`<span class="mine">${c.onlyLocal} only here</span>`:''}
+        ${c.onlyServer?`<span class="theirs">${c.onlyServer} only on the server</span>`:''}
+      </div>`).join('')}</div>`
+      :`<p style="font-size:.84rem;color:var(--ink-3);margin-top:8px">Nothing differs by row — it may
+        only be edits to existing items.</p>`}
+     <p style="font-size:.84rem;line-height:1.6;color:var(--ink-3);margin-top:12px">
+       <b>Merge</b> keeps both: anything only on this computer is added, and anything a teammate
+       has saved since stays. That is almost always what you want.</p>`,
     `<button class="btn btn-ghost" onclick="localDownload()">Download it</button>
      <button class="btn btn-ghost" style="color:var(--crit-ink)" onclick="localDiscard()">Discard</button>
-     <button class="btn btn-primary" onclick="localRestore()">Restore it</button>`));
+     <button class="btn btn-primary" onclick="localMerge()">Merge them</button>`));
 }
+
+/* The safe default. The local copy is treated as "mine" and the server as
+   "theirs", with the same three-way merge the sync layer uses. */
+async function localMerge(){
+  const local=LOCAL_PENDING;
+  if(!local) return closeModal();
+  try{
+    const server=collectTikiState();
+    /* Base is the server: anything the local copy has that the server does not
+       is treated as an addition rather than a deletion of everything else. */
+    const merged=mergeState(server, local, server);
+    /* Then fold the local additions in on top of the live state. */
+    const out=mergeState(server, merged, server);
+    applyTikiState(out);
+    closeModal(); await localClear();
+    tikiPush(); rerenderAll(); renderNotifs();
+    toast('Merged — nothing was replaced');
+  }catch(e){ toast('Could not merge that copy'); }
+}
+
 let LOCAL_PENDING=null;
 async function localDownload(){
   const rec=await localGet(); if(!rec) return;
@@ -16411,18 +16463,100 @@ async function localDownload(){
   a.download=`rarri-local-${new Date(rec.ts).toISOString().slice(0,16).replace(/[:T]/g,'-')}.json`;
   a.click(); toast('Downloaded');
 }
+/* Kept for the rare case where the local copy really is the only good one, but
+   it is no longer a button anyone can hit by accident. */
 async function localRestore(){
   const rec=await localGet(); if(!rec) return closeModal();
+  if(!confirm('Replace EVERYTHING with the local copy?\n\nAnything a teammate has saved since will be lost. Merging is almost always the right choice.')) return;
   try{
     applyTikiState(JSON.parse(rec.json));
     closeModal(); await localClear();
     tikiPush(); rerenderAll(); renderNotifs();
-    toast('Restored — and saved to the server');
+    toast('Replaced with the local copy');
   }catch(e){ toast('Could not restore that copy'); }
 }
 async function localDiscard(){
   if(!confirm('Discard the local copy? This cannot be undone.')) return;
   await localClear(); closeModal(); toast('Discarded');
+}
+
+/* ============================================================================
+   MERGING, NOT OVERWRITING
+   Every client saves the WHOLE state, so two people working at once are two
+   people writing the same document. Until now a losing write threw its own work
+   away and took the server's copy; a restore replaced everything outright. Both
+   are how five of Rod's tasks vanished.
+
+   The fix is a three-way merge. We keep BASE — the state we and the server last
+   agreed on — so we can tell the difference between "I added this" and "they
+   deleted it". Lists are merged by id; nobody's row is dropped because somebody
+   else was typing at the same time.
+   ========================================================================== */
+let TIKI_BASE = null;                 // last state we and the server agreed on
+const clone = o => JSON.parse(JSON.stringify(o));
+const same  = (a,b) => JSON.stringify(a===undefined?null:a)===JSON.stringify(b===undefined?null:b);
+
+/* Everything keyed by id gets merged row by row. Anything else is a setting,
+   where last-writer-wins is the right answer. */
+const MERGE_LISTS = ['tasks','briefs','creators','retainers','courses','projects','statics',
+  'campaigns','roadmap','flows2','flows','personal','samples','chats','notifs','aiChats',
+  'briefShelf','products','brands','briefFolders','clfb','clonePrompts'];
+
+function mergeList(base, mine, theirs){
+  if(!Array.isArray(mine)||!Array.isArray(theirs)) return theirs ?? mine ?? [];
+  const idx = arr => { const m=new Map(); (arr||[]).forEach(x=>{ if(x&&x.id!=null) m.set(String(x.id),x); }); return m; };
+  const B=idx(base), M=idx(mine), T=idx(theirs);
+  const out=[]; const seen=new Set();
+
+  /* Start from theirs so the server's ordering wins, then fold mine in. */
+  (theirs||[]).forEach(t=>{
+    const id=String(t&&t.id); seen.add(id);
+    const b=B.get(id), m=M.get(id);
+    if(m===undefined){
+      /* Missing locally. Deleted by me only if it was there when we last agreed
+         AND they have not touched it since. */
+      if(b!==undefined && same(b,t)) return;      // my delete stands
+      out.push(t); return;                        // never mine to delete
+    }
+    const iChanged = b===undefined || !same(b,m);
+    const theyChanged = b===undefined || !same(b,t);
+    if(iChanged && !theyChanged) out.push(m);
+    else out.push(t);                             // theirs wins a genuine clash
+  });
+
+  /* Anything I have that they do not: mine if I made it, gone if they deleted it. */
+  (mine||[]).forEach(m=>{
+    const id=String(m&&m.id);
+    if(seen.has(id)) return;
+    const b=B.get(id);
+    if(b===undefined){ out.push(m); return; }     // I created it
+    if(!same(b,m)) out.push(m);                   // they deleted, I edited — keep it
+  });
+  return out;
+}
+
+function mergeState(base, mine, theirs){
+  base=base||{}; mine=mine||{}; theirs=theirs||{};
+  const out=clone(theirs);
+  const keys=new Set([...Object.keys(mine), ...Object.keys(theirs)]);
+  keys.forEach(k=>{
+    if(k==='v') return;
+    if(MERGE_LISTS.includes(k)){ out[k]=mergeList(base[k], mine[k], theirs[k]); return; }
+    const b=base[k], m=mine[k], t=theirs[k];
+    /* A setting I changed and they did not is mine; otherwise take theirs. */
+    if(!same(b,m) && same(b,t)) out[k]=m;
+  });
+  return out;
+}
+
+/* What a merge actually did, in words, so a surprise is explainable. */
+function mergeSummary(mine, merged){
+  const bits=[];
+  MERGE_LISTS.forEach(k=>{
+    const a=Array.isArray(mine[k])?mine[k].length:0, b=Array.isArray(merged[k])?merged[k].length:0;
+    if(b>a) bits.push(`${b-a} more ${k}`);
+  });
+  return bits.slice(0,3).join(', ');
 }
 
 let TIKI_LOADED=false;   // no successful pull yet -> pushing would destroy data
@@ -16444,15 +16578,15 @@ async function tikiPush(){
       const rows=await r.json().catch(()=>[]);
       if(rows.length){
         TIKI_REV=Number(rows[0].rev)||TIKI_REV+1;
-        tikiLastPushed=s; SAVE_LAST_OK=Date.now(); SAVE_FAILS=0;
+        tikiLastPushed=s; TIKI_BASE=JSON.parse(s); SAVE_LAST_OK=Date.now(); SAVE_FAILS=0;
         syncStatus('', 'Synced · '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}));
         rtBroadcastState();          // tell every other device to catch up
       } else {
-        /* Somebody else got there first. Take THEIR copy rather than stamping
-           over it — at most four seconds of local work is redone, instead of
-           however long they have been editing. */
+        /* Somebody else got there first. Merge rather than surrender: their
+           copy is the base, our changes are folded in on top, and the result
+           goes back. Nobody's row is lost because two people typed at once. */
         tikiSaving=false;
-        await tikiRefetch('Someone else saved — catching up');
+        await tikiMergeAndPush();
         return;
       }
     }
@@ -16470,11 +16604,66 @@ async function tikiPush(){
   tikiSaving=false;
 }
 
+/* The heart of it. Pull what they have, fold in what we have, save the result.
+   Runs whenever our write is rejected, and whenever we hear that somebody else
+   has written. */
+let TIKI_MERGING=false;
+async function tikiMergeAndPush(why){
+  if(TIKI_MERGING || !TIKI_LOADED) return;
+  TIKI_MERGING=true;
+  try{
+    syncStatus('saving', why||'Merging changes…');
+    const r=await tikiFetchT('/rest/v1/tiki_state?key=eq.app&select=value,rev', {}, 25000);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const rows=await r.json();
+    if(!rows.length) throw new Error('no state row');
+
+    const theirs=rows[0].value, theirRev=Number(rows[0].rev)||0;
+    const mine=collectTikiState();
+    const merged=mergeState(TIKI_BASE, mine, theirs);
+
+    applyTikiState(merged);
+    TIKI_REV=theirRev;
+    TIKI_BASE=clone(theirs);
+
+    /* Write the merged result straight back so the other side sees ours too. */
+    const body=JSON.stringify(collectTikiState());
+    const w=await tikiFetchT(`/rest/v1/tiki_state?key=eq.app&rev=eq.${TIKI_REV}`,{ method:'PATCH',
+      headers:{ Prefer:'return=representation' },
+      body:JSON.stringify({ value:JSON.parse(body), rev:TIKI_REV+1, updated_at:new Date().toISOString() }) }, 30000);
+    if(w.ok){
+      const wr=await w.json().catch(()=>[]);
+      if(wr.length){
+        TIKI_REV=Number(wr[0].rev)||TIKI_REV+1;
+        tikiLastPushed=body; TIKI_BASE=JSON.parse(body);
+        SAVE_LAST_OK=Date.now(); SAVE_FAILS=0;
+        rtBroadcastState();
+      }
+    }
+
+    /* Repaint, but never yank the canvas out from under a hand that is mid-drag. */
+    renderBrandUI(); renderSidebar(); renderNotifs();
+    if(state.briefId && !state.brf.present && !state.brf.editing && !BRF_DRAG) renderBriefEditor();
+    else if(!state.briefId) renderPage(state.page);
+
+    const gained=mergeSummary(mine, merged);
+    syncStatus('', 'Synced · '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}));
+    if(gained) toast(`Merged — ${gained} from the team`);
+  }catch(e){
+    syncStatus('error','Could not merge — will retry');
+  }
+  TIKI_MERGING=false;
+}
+
 /* Reload from the server and repaint. Used when we are behind, either because
    another device wrote or because it told us it did. */
 let TIKI_REFETCHING=false;
 async function tikiRefetch(why){
   if(TIKI_REFETCHING||!TIKI_LOADED) return;
+  /* If we have unsaved work, catching up means merging — a plain pull would
+     throw it away, which is the whole bug. */
+  if(tikiLastPushed && JSON.stringify(collectTikiState())!==tikiLastPushed)
+    return tikiMergeAndPush(why);
   TIKI_REFETCHING=true;
   try{
     syncStatus('saving', why||'Updating…');
