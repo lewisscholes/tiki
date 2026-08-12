@@ -696,11 +696,24 @@ select.vinput{cursor:pointer}
 .vprod .pn{font-size:.72rem;color:var(--ink-2);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;
   -webkit-box-orient:vertical;overflow:hidden}
 /* cancels .modal-b padding so the poster can go edge to edge */
-.vmodal{display:grid;grid-template-columns:330px 1fr;gap:0;margin:-18px -22px;border-radius:0 0 16px 16px;overflow:hidden}
+/* minmax(0,1fr) not 1fr. A grid column's default minimum is its CONTENT, so
+   a long product name or a wide number pushed the column past the modal and
+   the figures were clipped off the right-hand edge — which is exactly the
+   half Rod needs to screenshot. */
+.vmodal{display:grid;grid-template-columns:330px minmax(0,1fr);gap:0;margin:-18px -22px;
+  border-radius:0 0 16px 16px;overflow:hidden}
+.vmodal>div:last-child{min-width:0;overflow-wrap:anywhere}
+@media(max-width:820px){
+  .vmodal{grid-template-columns:1fr}
+  .vmleft{width:100%;height:420px}
+}
 .vplayer{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:#000}
 .vmleft{background:#000;width:330px;height:587px;position:relative;overflow:hidden}
 .vmleft img{width:100%;height:100%;object-fit:cover}
-.vmrow{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line-2);font-size:.85rem}
+.vmrow{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:9px 0;
+  border-bottom:1px solid var(--line-2);font-size:.85rem}
+.vmrow>span:first-child{color:var(--ink-2);flex:0 1 auto;min-width:0}
+.vmrow>span:last-child{font-weight:650;text-align:right;flex:0 0 auto;white-space:nowrap}
 .vmrow span:first-child{color:var(--ink-3)}
 .vmrow span:last-child{font-weight:600}
 .vspark{display:flex;align-items:flex-end;gap:3px;height:56px;margin:12px 0 4px}
@@ -850,7 +863,10 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.84rem}
 .overlay{position:fixed;inset:0;background:rgba(16,20,24,.5);backdrop-filter:blur(2px);z-index:90;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:5vh 16px 40px}
 .overlay.open{display:flex}
 .modal{background:#fff;border-radius:16px;width:100%;max-width:560px;box-shadow:var(--shadow-lg);animation:pop .18s ease}
-.modal.wide{max-width:860px}
+.modal.wide{max-width:880px}
+/* The player alone is 587px; on a laptop the rest ran off the bottom with no
+   way to reach it. */
+.modal.wide .modal-b{max-height:76vh;overflow-y:auto}
 .modal.xwide{max-width:980px}
 @keyframes pop{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
 .modal-h{display:flex;align-items:center;gap:10px;padding:18px 22px 14px;border-bottom:1px solid var(--line-2)}
@@ -8922,22 +8938,28 @@ function brfBind(b){
       }
       if(Math.abs(dx)+Math.abs(dy)>=2) moved=true;
       const el=start.el, edge=start.edge;
-      const isVid=el.type==='video', isTxt=el.type==='text';
-      const MIN=isVid?90:40;      // below this the embed's own controls stop being usable
+      const isVid=el.type==='video', isTxt=el.type==='text', isShape=el.type==='shape';
+      /* A shape is a rectangle you draw — a 4px rule is a legitimate thing to
+         want, so it gets no floor to speak of. Videos keep a real minimum
+         because below it the embed's own controls stop working. */
+      const MINW = isVid?90 : isShape?1 : 40;
+      const MINH = isVid?Math.round(90*VID_RATIO) : isShape?1 : 40;
       /* Photos are free-form and Shift locks them. Videos are ALWAYS locked to
          portrait: a landscape box can only crop the player, never fit it. */
       const ratio = isVid ? VID_RATIO : (e.shiftKey && start.ratio ? start.ratio : null);
       const east=edge.includes('e'), west=edge.includes('w');
       const north=edge.includes('n'), south=edge.includes('s');
       let w=start.w, hgt=start.h, nx=start.x, ny=start.y;
-      if(east) w=Math.max(MIN, Math.round(start.w+dx));
-      if(west){ w=Math.max(MIN, Math.round(start.w-dx)); nx=start.x+(start.w-w); }
-      if(south) hgt=Math.max(MIN*VID_RATIO, Math.round(start.h+dy));
-      if(north){ hgt=Math.max(MIN*VID_RATIO, Math.round(start.h-dy)); ny=start.y+(start.h-hgt); }
+      /* MIN*VID_RATIO was the minimum HEIGHT for everything, video or not.
+         40 x 16/9 is 71.111 recurring — precisely the floor shapes stuck at. */
+      if(east) w=Math.max(MINW, Math.round(start.w+dx));
+      if(west){ w=Math.max(MINW, Math.round(start.w-dx)); nx=start.x+(start.w-w); }
+      if(south) hgt=Math.max(MINH, Math.round(start.h+dy));
+      if(north){ hgt=Math.max(MINH, Math.round(start.h-dy)); ny=start.y+(start.h-hgt); }
       if(ratio){
         /* Whichever axis the grip actually controls drives the other. */
-        if(!east&&!west) w=Math.max(MIN, Math.round(hgt/ratio));
-        else hgt=Math.max(MIN, Math.round(w*ratio));
+        if(!east&&!west) w=Math.max(MINW, Math.round(hgt/ratio));
+        else hgt=Math.max(MINH, Math.round(w*ratio));
         if(west) nx=start.x+(start.w-w);
         if(north) ny=start.y+(start.h-hgt);
       }
@@ -9966,7 +9988,10 @@ function renderBriefPresent(b){
     const dark=brfIsDark(bg);
     const mine=b.elements.filter(e=>e.type!=='frame'&&!e.hidden&&brfHostFrame(b,e)&&brfHostFrame(b,e).id===fr.id);
     /* Same paint order as the canvas: photos under text and links. */
-    const ordered=mine.filter(e=>e.type==='image').concat(mine.filter(e=>e.type!=='image'));
+    /* Shapes sit with photos in the under-layer: they are nearly always panels
+       and highlights BEHIND type, and presenting them on top hid the words. */
+    const under=e=>e.type==='image'||e.type==='shape';
+    const ordered=mine.filter(under).concat(mine.filter(e=>!under(e)));
     const body=ordered.map(e=>{
       const x=e.x-fr.x, y=e.y-fr.y;
       if(e.type==='image')
@@ -9980,6 +10005,10 @@ function renderBriefPresent(b){
           <span class="lk-ico">${ICONS.link}</span><span><div>${esc(e.label)}</div><div class="lk-url">${esc(e.url)}</div></span></a></div>`;
       if(e.type==='video')
         return `<div style="position:absolute;left:${x}px;top:${y}px">${brfVideoHTML(e,{live:true})}</div>`;
+      /* Shapes were missing entirely here, so anything drawn with the shape tool
+         simply vanished when you pressed Present. */
+      if(e.type==='shape')
+        return `<div class="el-shape" style="position:absolute;left:${x}px;top:${y}px;width:${e.w}px;height:${e.h}px;transform-origin:center center;${brfRotCss(e)}">${brfShapeHTML(e)}</div>`;
       return '';
     }).join('');
     return `<div class="pv-wrap" style="width:${(fr.w*k).toFixed(2)}px;height:${(fr.h*k).toFixed(2)}px">
@@ -10705,7 +10734,7 @@ function vidOpen(id){
         <div class="vmrow"><span>SKU orders</span><span>${v.orders}</span></div>
         <div class="vmrow"><span>Click-through rate</span><span>${(v.ctr*100).toFixed(2)}%</span></div>
         <div class="vmrow"><span>GMV per 1,000 views</span><span>${moneyDec(v.gpm)}</span></div>
-        ${prod?`<div class="vmrow"><span>Product</span><span style="max-width:55%;text-align:right;font-weight:500">${vEsc(prod.name||prod.title||'')}</span></div>`:''}
+        ${prod?`<div class="vmrow"><span>Product</span><span style="max-width:62%;text-align:right;font-weight:500;white-space:normal">${vEsc(prod.name||prod.title||'')}</span></div>`:''}
         <div style="margin-top:18px;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);font-weight:600">Views per day</div>
         <div class="vspark">${v.days.map(d=>`<i style="height:${Math.max(2,Math.round(d.views/maxV*100))}%" title="${d.d}: ${d.views.toLocaleString('en-GB')} views"></i>`).join('')}</div>
         <div style="font-size:.72rem;color:var(--ink-3)">${v.days.length} day${v.days.length===1?'':'s'} of stored detail in this window</div>
