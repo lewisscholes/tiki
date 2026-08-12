@@ -16416,6 +16416,9 @@ async function localOffer(){
     const onlyServer=b.filter(x=>x&&!aIds.has(String(x.id))).length;
     if(onlyLocal||onlyServer) counts.push({k, onlyLocal, onlyServer});
   });
+  /* If the snapshot has nothing the server lacks, there is nothing to decide.
+     Asking anyway is how somebody ends up clicking the wrong button. */
+  if(!counts.some(c=>c.onlyLocal)){ LOCAL_PENDING=null; return localClear(); }
   LOCAL_PENDING=local;
   openModal(modalShell('Unsaved work found on this computer',
     `<p style="font-size:.88rem;line-height:1.6;color:var(--ink-2)">
@@ -16429,40 +16432,46 @@ async function localOffer(){
       :`<p style="font-size:.84rem;color:var(--ink-3);margin-top:8px">Nothing differs by row — it may
         only be edits to existing items.</p>`}
      <p style="font-size:.84rem;line-height:1.6;color:var(--ink-3);margin-top:12px">
-       <b>Merge</b> keeps both: anything only on this computer is added, and anything a teammate
-       has saved since stays. That is almost always what you want.</p>`,
+       <b>Merge</b> only ever adds. Anything only on this computer is put back, and everything
+       currently on the server stays exactly as it is. Nothing can be lost by choosing it.</p>`,
     `<button class="btn btn-ghost" onclick="localDownload()">Download it</button>
      <button class="btn btn-ghost" style="color:var(--crit-ink)" onclick="localDiscard()">Discard</button>
      <button class="btn btn-primary" onclick="localMerge()">Merge them</button>`));
 }
 
-/* The safe default. The local copy is treated as "mine" and the server as
-   "theirs", with the same three-way merge the sync layer uses. */
+/* The safe default, and deliberately dumber than the sync merge.
+   An offline snapshot has no common ancestor — we cannot know whether a row
+   missing from it was deleted or simply never seen. So this NEVER deletes:
+   it takes the live state and adds anything the snapshot has that is not
+   already there. Getting that backwards is what wiped the list a second time.
+   Add-only cannot lose anybody's work; the worst it can do is bring a row back. */
+function mergeAddOnly(local, live){
+  const out=clone(live);
+  let added=0;
+  MERGE_LISTS.forEach(k=>{
+    const mine=Array.isArray(local[k])?local[k]:null;
+    if(!mine) return;
+    const there=Array.isArray(out[k])?out[k]:[];
+    const have=new Set(there.map(x=>x&&String(x.id)));
+    const extra=mine.filter(x=>x&&x.id!=null&&!have.has(String(x.id)));
+    if(extra.length){ out[k]=extra.concat(there); added+=extra.length; }
+  });
+  return { out, added };
+}
+
 async function localMerge(){
   const local=LOCAL_PENDING;
   if(!local) return closeModal();
   try{
-    const server=collectTikiState();
-    /* Base is the server: anything the local copy has that the server does not
-       is treated as an addition rather than a deletion of everything else. */
-    const merged=mergeState(server, local, server);
-    /* Then fold the local additions in on top of the live state. */
-    const out=mergeState(server, merged, server);
+    const { out, added } = mergeAddOnly(local, collectTikiState());
     applyTikiState(out);
     closeModal(); await localClear();
     tikiPush(); rerenderAll(); renderNotifs();
-    toast('Merged — nothing was replaced');
+    toast(added?`Added ${added} item${added===1?'':'s'} back — nothing was replaced`
+               :'Nothing was missing; everything is already here');
   }catch(e){ toast('Could not merge that copy'); }
 }
 
-let LOCAL_PENDING=null;
-async function localDownload(){
-  const rec=await localGet(); if(!rec) return;
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([rec.json],{type:'application/json'}));
-  a.download=`rarri-local-${new Date(rec.ts).toISOString().slice(0,16).replace(/[:T]/g,'-')}.json`;
-  a.click(); toast('Downloaded');
-}
 /* Kept for the rare case where the local copy really is the only good one, but
    it is no longer a button anyone can hit by accident. */
 async function localRestore(){
@@ -16604,6 +16613,35 @@ async function tikiPush(){
   tikiSaving=false;
 }
 
+/* ============================================================================
+   THE WATCHER
+   The websocket tells us when somebody saves, but only while it is connected,
+   and only for writes made through the app. A dropped socket meant sitting on a
+   stale screen with no clue.
+
+   So we also ask, every few seconds, one very small question: what revision are
+   you on? It is a handful of bytes — the state itself is only fetched when the
+   answer has moved. Belt and braces, and the braces cost nothing.
+   ========================================================================== */
+let TIKI_WATCH=null;
+async function tikiWatch(){
+  if(!TIKI_LOADED || document.visibilityState!=='visible') return;
+  if(tikiSaving || TIKI_MERGING || TIKI_REFETCHING) return;
+  try{
+    const r=await tikiFetchT('/rest/v1/tiki_state?key=eq.app&select=rev', {}, 12000);
+    if(!r.ok) return;
+    const rows=await r.json();
+    const serverRev=Number(rows[0]?.rev||0);
+    if(serverRev>TIKI_REV) await tikiRefetch('Catching up');
+  }catch(e){ /* the save alarm already covers a network that is properly down */ }
+}
+function tikiWatchStart(){
+  clearInterval(TIKI_WATCH);
+  TIKI_WATCH=setInterval(tikiWatch, 6000);
+  /* And the moment you come back to the tab, rather than up to six seconds later. */
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') tikiWatch(); });
+}
+
 /* The heart of it. Pull what they have, fold in what we have, save the result.
    Runs whenever our write is rejected, and whenever we hear that somebody else
    has written. */
@@ -16667,11 +16705,17 @@ async function tikiRefetch(why){
   TIKI_REFETCHING=true;
   try{
     syncStatus('saving', why||'Updating…');
+    const before=collectTikiState();
     await tikiPull();
-    /* Repaint whatever is on screen so the change is visible immediately. */
+    /* Repaint whatever is on screen so the change is visible immediately —
+       except under a hand that is mid-drag, which would drop what it is moving. */
     renderBrandUI(); renderSidebar(); renderNotifs();
-    if(state.briefId && !state.brf.present) renderBriefEditor();
-    else renderPage(state.page);
+    if(state.briefId && !state.brf.present && !state.brf.editing && !BRF_DRAG) renderBriefEditor();
+    else if(!state.briefId) renderPage(state.page);
+    /* Say what arrived, quietly, so a screen changing by itself is explainable. */
+    const after=collectTikiState();
+    const gained=mergeSummary(before, after);
+    if(gained) toast(`Updated — ${gained} from the team`);
     syncStatus('', 'Synced · '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}));
   }catch(e){ syncStatus('error','Could not refresh'); }
   TIKI_REFETCHING=false;
@@ -16727,7 +16771,10 @@ async function tikiEnter(inviteType){
   rerenderAll(); renderNotifs();
   /* Back to the page — and the brief — you were on before the reload. */
   if(!viewRestore()) navTo('tasks');
-  setInterval(tikiPush, 4000);
+  /* Was four seconds. The shorter this is, the smaller the window in which two
+     people can diverge — and a 150 KB payload no longer makes it expensive. */
+  setInterval(tikiPush, 1500);
+  tikiWatchStart();
   setInterval(viewSave, 2000);
   window.addEventListener('pagehide', viewSave);
   /* Separate timer on purpose: the safety net must not depend on the thing it
