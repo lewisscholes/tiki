@@ -2801,6 +2801,23 @@ body.pg-assistant .aura{opacity:.5}
 /* The rail toggle is a control, not a floating panel. */
 .asx-tgl{position:absolute;top:14px;left:14px;z-index:3}
 body.pg-assistant .asx-thread{padding-top:56px}
+
+/* ---- marquee, multi-selection and groups -------------------------------- */
+.brf-marquee{position:absolute;z-index:40;pointer-events:none;border:1.5px solid var(--accent);
+  background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:3px}
+.brf-el.multi-sel{outline:2px solid var(--violet-ink);outline-offset:2px}
+.brf-ovl.multi-sel{outline:2px solid var(--violet-ink);outline-offset:2px;border-radius:3px}
+.brf-multibar{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:70;
+  display:flex;align-items:center;gap:8px;padding:8px 10px 8px 15px;border-radius:99px;
+  background:var(--ink);color:var(--bg);box-shadow:0 16px 34px -14px rgba(0,0,0,.5);
+  font-size:.8rem;font-weight:620}
+.brf-multibar button{border:none;border-radius:99px;padding:6px 13px;cursor:pointer;
+  font-family:inherit;font-size:.76rem;font-weight:650;
+  background:color-mix(in srgb,var(--bg) 22%,transparent);color:var(--bg)}
+.brf-multibar button:hover{background:color-mix(in srgb,var(--bg) 34%,transparent)}
+.brf-multibar button.danger{background:var(--crit);color:#fff}
+.lay-menu .cap{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--ink-3);padding:9px 13px 5px}
 </style>
 </head>
 <body>
@@ -8374,6 +8391,17 @@ function brfKeydown(e){
   }
   if(typing) return;
 
+  /* ⌘G / ⌘⇧G — the shortcuts everyone already has in their fingers. */
+  if(meta && e.key.toLowerCase()==='g'){
+    e.preventDefault();
+    if(e.shiftKey) brfUngroup(); else brfGroup();
+    return;
+  }
+  if(e.key==='Escape' && brfMulti().length){ brfClearMulti(); return; }
+  if((e.key==='Backspace'||e.key==='Delete') && brfMulti().length>1){
+    e.preventDefault(); brfDeleteMulti(); return;
+  }
+
   if(meta && e.key.toLowerCase()==='x'){ e.preventDefault(); brfCut(); return; }
   if(meta && e.key.toLowerCase()==='c'){ e.preventDefault(); brfCopy(); return; }
   if(meta && e.key.toLowerCase()==='v'){ e.preventDefault(); brfPaste(); return; }
@@ -9173,7 +9201,16 @@ function brfBind(b){
       if(held){ toast(`${whoName(held.who)} is editing this`); e.preventDefault(); return; }
       if(el&&el.type!=='frame'){
         brfSnapshot();   // taken before the move so undo returns it to where it was
-        setMode('drag'); moved=false; start={mx:e.clientX,my:e.clientY,pos:[{k:el,x:el.x,y:el.y}]};
+        /* Grab the whole set: the group this belongs to, or a multi-selection
+           that already includes it. One element wandering out of its group is
+           exactly what grouping exists to prevent. */
+        let team=brfExpandGroup(el.id);
+        if(brfInMulti(el.id)) team=[...new Set([...brfMulti(), ...team])];
+        if(team.length>1) brfSetMulti(team); else if(!e.shiftKey) brfClearMulti();
+        const movers=(team.length>1?team:[el.id])
+          .map(id=>b.elements.find(x=>x.id===id)).filter(x=>x&&!x.locked);
+        setMode('drag'); moved=false;
+        start={mx:e.clientX,my:e.clientY,pos:movers.map(k=>({k,x:k.x,y:k.y}))};
         rtLock(el.id);
         if(s.sel!==el.id){ s.sel=el.id;
           world.querySelectorAll('.brf-el.selected').forEach(n=>n.classList.remove('selected'));
@@ -9189,8 +9226,22 @@ function brfBind(b){
         }
       }
     } else {
-      if(s.sel||s.openThread||s.selFrame){ s.sel=null; s.openThread=null; s.selFrame=null; renderBriefEditor(); return; }
       if(s.editing) return;   // let the blur handler commit before anything else runs
+      /* Drag on empty canvas sweeps a selection box. Panning is still here:
+         hold space, use the middle button, or scroll — which is what most
+         people were doing anyway. */
+      const wantsPan = e.button===1 || BRF_SPACE;
+      if(!wantsPan){
+        if(!e.shiftKey) brfClearMulti();
+        const w0=brfScreenToWorld(e);
+        setMode('marquee');
+        start={mx:e.clientX,my:e.clientY,wx:w0.x,wy:w0.y,add:e.shiftKey};
+        const box=document.createElement('div');
+        box.id='brfMarquee'; box.className='brf-marquee';
+        vp.appendChild(box);
+        e.preventDefault(); return;
+      }
+      if(s.sel||s.openThread||s.selFrame){ s.sel=null; s.openThread=null; s.selFrame=null; brfClearMulti(); renderBriefEditor(); return; }
       setMode('pan'); start={mx:e.clientX,my:e.clientY,px:s.panX,py:s.panY};
       vp.classList.add('panning');
     }
@@ -9205,8 +9256,30 @@ function brfBind(b){
   document.addEventListener('mousemove', onMove);
   document.addEventListener('mouseup', onUp);
   document.addEventListener('keydown', brfKeydown);
+  /* Space is the universal "pan instead" modifier; releasing it must always
+     clear, including when the window loses focus mid-hold. */
+  if(!window._brfSpace){
+    window._brfSpace=true;
+    document.addEventListener('keydown', ev=>{ if(ev.code==='Space' && !ev.target.isContentEditable
+      && !/INPUT|TEXTAREA/.test(ev.target.tagName)) BRF_SPACE=true; });
+    document.addEventListener('keyup',   ev=>{ if(ev.code==='Space') BRF_SPACE=false; });
+    addEventListener('blur', ()=>{ BRF_SPACE=false; });
+  }
+  vp.addEventListener('contextmenu', ev=>{
+    if(brfMulti().length>1 && !ev.target.closest('[data-fdrag]')) brfSelMenu(ev);
+  });
   function onMove(e){
     const s=state.brf;
+    if(mode==='marquee'&&start){
+      const box=$('brfMarquee'); if(!box) return;
+      const vpr=vp.getBoundingClientRect();
+      const x0=start.mx-vpr.left, y0=start.my-vpr.top;
+      const x1=e.clientX-vpr.left, y1=e.clientY-vpr.top;
+      box.style.left=Math.min(x0,x1)+'px'; box.style.top=Math.min(y0,y1)+'px';
+      box.style.width=Math.abs(x1-x0)+'px'; box.style.height=Math.abs(y1-y0)+'px';
+      if(Math.abs(x1-x0)+Math.abs(y1-y0)>4) moved=true;
+      return;
+    }
     if(mode==='pan'&&start){ s.panX=start.px+(e.clientX-start.mx); s.panY=start.py+(e.clientY-start.my);
       brfApplyTransform(); }
     else if(mode==='drag'&&start){
@@ -9334,7 +9407,30 @@ function brfBind(b){
       }
     }
   }
-  function onUp(){
+  function onUp(e){
+    /* Commit the sweep: everything whose box overlaps the marquee. */
+    if(mode==='marquee'){
+      const box=$('brfMarquee');
+      const b2=briefById(state.briefId);
+      if(box&&b2&&moved){
+        const w1=brfScreenToWorld({clientX:(e&&e.clientX)||start.mx, clientY:(e&&e.clientY)||start.my});
+        const x0=Math.min(start.wx,w1.x), x1=Math.max(start.wx,w1.x);
+        const y0=Math.min(start.wy,w1.y), y1=Math.max(start.wy,w1.y);
+        const hit=b2.elements.filter(el=>el.type!=='frame' && !el.hidden && !el.locked
+          && el.x < x1 && el.x+(el.w||0) > x0 && el.y < y1 && el.y+(el.h||0) > y0)
+          .map(el=>el.id);
+        /* Sweeping one member of a group takes the whole group with it. */
+        const full=[...new Set(hit.flatMap(id=>brfExpandGroup(id)))];
+        brfSetMulti(start.add ? [...brfMulti(), ...full] : full);
+        if(full.length) toast(`${full.length} selected — right-click to group`);
+      } else if(!moved){
+        const s=state.brf;
+        if(s.sel||s.openThread||s.selFrame){ s.sel=null; s.openThread=null; s.selFrame=null; renderBriefEditor(); }
+      }
+      if(box) box.remove();
+      setMode(null); start=null; moved=false;
+      return;
+    }
     if(mode){
       /* Let go of anything we were holding so the other side can touch it. */
       if(start){
@@ -9686,6 +9782,7 @@ function brfMovePage(id, delta){
 }
 /* Pages drag against each other only. Dropping a page onto a layer row, or a
    layer onto a page row, would be ambiguous — so the two lists stay separate. */
+let BRF_SPACE=false; /* held space turns drag back into panning */
 let BRF_DRAG=false;   /* true while the canvas is being dragged or panned */
 let BRF_PAGE_DRAG=null;
 function brfPageDragStart(ev,id){
@@ -9980,6 +10077,102 @@ function brfDeletePage(fid){
   brfLog(b,'delete', fr.title);
   tikiPush(); renderBriefEditor();
   toast(`Deleted ${fr.title}`);
+}
+
+/* ============================================================================
+   MULTI-SELECT AND GROUPS
+   Drag on empty canvas to sweep up everything inside the box; right-click to
+   group. A group is just a shared `grp` stamp on the elements — no container,
+   no nesting — so selecting one selects the set and dragging any of them moves
+   all of them. Nothing else in the editor has to know groups exist.
+   ========================================================================== */
+const brfMulti = () => state.brf.multi || (state.brf.multi=[]);
+const brfInMulti = id => brfMulti().includes(id);
+function brfSetMulti(ids){
+  state.brf.multi = [...new Set(ids)];
+  state.brf.sel = state.brf.multi.length===1 ? state.brf.multi[0] : null;
+  brfPaintMulti();
+}
+function brfClearMulti(){ state.brf.multi=[]; brfPaintMulti(); }
+
+/* Outlines are painted directly rather than by re-rendering — a rebuild in the
+   middle of a drag drops whatever is being moved. */
+function brfPaintMulti(){
+  const set=new Set(brfMulti());
+  document.querySelectorAll('#brfWorld [data-el],#brfWorld [data-ovl]').forEach(n=>{
+    const id=n.dataset.el||n.dataset.ovl;
+    n.classList.toggle('multi-sel', set.has(id));
+  });
+  const bar=$('brfMultiBar');
+  if(bar) bar.remove();
+  if(set.size>1){
+    const d=document.createElement('div');
+    d.id='brfMultiBar'; d.className='brf-multibar';
+    const grouped=brfGroupOf([...set]);
+    d.innerHTML=`<span>${set.size} selected</span>
+      ${grouped?`<button onclick="brfUngroup()">Ungroup</button>`:`<button onclick="brfGroup()">Group</button>`}
+      <button onclick="brfDeleteMulti()" class="danger">Delete</button>
+      <button onclick="brfClearMulti()">Done</button>`;
+    document.body.appendChild(d);
+  }
+}
+/* The group id shared by every id given, or null if they are not all one group. */
+function brfGroupOf(ids){
+  const b=briefById(state.briefId); if(!b) return null;
+  const gs=new Set(ids.map(id=>(b.elements.find(e=>e.id===id)||{}).grp));
+  return gs.size===1 && [...gs][0] ? [...gs][0] : null;
+}
+/* Clicking one member of a group selects the whole thing. */
+function brfExpandGroup(id){
+  const b=briefById(state.briefId); if(!b) return [id];
+  const el=b.elements.find(e=>e.id===id);
+  if(!el||!el.grp) return [id];
+  return b.elements.filter(e=>e.grp===el.grp).map(e=>e.id);
+}
+function brfGroup(){
+  const ids=brfMulti(); if(ids.length<2) return toast('Select two or more things first');
+  const b=briefById(state.briefId); brfSnapshot();
+  const g='g'+Math.random().toString(36).slice(2,9);
+  b.elements.forEach(e=>{ if(ids.includes(e.id)) e.grp=g; });
+  tikiPush(); brfPaintMulti(); toast(`Grouped ${ids.length} items — they move together now`);
+}
+function brfUngroup(){
+  const ids=brfMulti(); const b=briefById(state.briefId);
+  const g=brfGroupOf(ids); if(!g) return;
+  brfSnapshot();
+  b.elements.forEach(e=>{ if(e.grp===g) delete e.grp; });
+  tikiPush(); brfPaintMulti(); toast('Ungrouped');
+}
+function brfDeleteMulti(){
+  const ids=brfMulti(); if(!ids.length) return;
+  const b=briefById(state.briefId); brfSnapshot();
+  b.elements=b.elements.filter(e=>!ids.includes(e.id));
+  brfClearMulti(); tikiPush(); renderBriefEditor();
+  toast(`Deleted ${ids.length} item${ids.length===1?'':'s'}`);
+}
+
+/* Right-click on the canvas with a selection. */
+function brfSelMenu(ev){
+  ev.preventDefault(); ev.stopPropagation();
+  brfCloseLayerMenu();
+  const ids=brfMulti();
+  const g=brfGroupOf(ids);
+  const m=document.createElement('div');
+  m.className='lay-menu';
+  m.innerHTML=`
+    <div class="cap">${ids.length} selected</div>
+    ${g?`<button onclick="brfCloseLayerMenu();brfUngroup()">${ICONS.frame||''}Ungroup</button>`
+       :`<button onclick="brfCloseLayerMenu();brfGroup()">${ICONS.frame||''}Group<kbd>⌘G</kbd></button>`}
+    <div class="sep"></div>
+    <button class="danger" onclick="brfCloseLayerMenu();brfDeleteMulti()">${ICONS.x}Delete<kbd>⌫</kbd></button>`;
+  document.body.appendChild(m);
+  const w=m.offsetWidth, h=m.offsetHeight;
+  m.style.left=Math.min(ev.clientX, window.innerWidth-w-8)+'px';
+  m.style.top=Math.min(ev.clientY, window.innerHeight-h-8)+'px';
+  setTimeout(()=>{
+    const close=e=>{ if(!e.target.closest('.lay-menu')){ brfCloseLayerMenu(); document.removeEventListener('mousedown',close); } };
+    document.addEventListener('mousedown',close);
+  },0);
 }
 
 function brfPageMenu(ev,id){
