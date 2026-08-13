@@ -2731,8 +2731,13 @@ body.cloning .asx-thread{padding-bottom:0}
    ========================================================================== */
 
 /* The page fills the shell. No card, no inset, no second app. */
-.asx{display:flex;height:calc(100vh - 74px);margin:0;border:none;border-radius:0;
+/* An earlier rule left padding:58px 0 112px on this, so 170px of the box was
+   padding and the rail stopped short of the bottom. Height alone was never
+   going to fix it. Top padding clears the fixed top bar; the composer carries
+   its own clearance for the dock. */
+.asx{display:flex;height:100vh;margin:0;padding:58px 0 0;border:none;border-radius:0;
   background:transparent;overflow:hidden}
+.asx-comp{flex:none;padding:6px 24px 104px;background:transparent}
 /* Flat behind the assistant — the moving background fought the reading. */
 body.pg-assistant #silkBg{opacity:0}
 body.pg-assistant .aura{opacity:.5}
@@ -2791,7 +2796,6 @@ body.pg-assistant .aura{opacity:.5}
   scrollbar-width:none}
 .asx-thread::-webkit-scrollbar{display:none}
 .asx-mid{max-width:820px;margin:0 auto}
-.asx-comp{flex:none;padding:6px 24px 18px;background:transparent}
 .asx-box{max-width:820px}
 .asx-disc{max-width:820px}
 /* The rail toggle is a control, not a floating panel. */
@@ -12973,7 +12977,10 @@ function clChooseAd(id){
   const a=SW.rows.find(x=>x.id===id) || SA.results.find(x=>x.id===id);
   if(!a) return;
   CLONE.adId=a.id; CLONE.ad=a;
-  document.querySelectorAll('.cl-th[data-ad]').forEach(b=>b.classList.toggle('on', b.dataset.ad===id));
+  /* The tiles are .cl-th in the assistant panel and .sa-pick on Static Ads.
+     Targeting one class meant the click registered and nothing moved. Match on
+     the data attribute, which both have, and neither can drift from. */
+  document.querySelectorAll('[data-ad]').forEach(b=>b.classList.toggle('on', b.dataset.ad===id));
   const cap=$('clInspCap');
   if(cap) cap.innerHTML=`Copying <b>${esc(a.brand||'that ad')}</b>${
     a.score!=null?` · performance ${a.score}`:''} — layout only, never their product or words.`;
@@ -12981,11 +12988,14 @@ function clChooseAd(id){
 }
 function clChooseImg(i){
   CLONE.imgIdx=i;
-  document.querySelectorAll('.cl-th[data-img]').forEach(b=>{
+  document.querySelectorAll('[data-img]').forEach(b=>{
     const on=+b.dataset.img===i;
     b.classList.toggle('on', on);
-    const tag=b.querySelector('.cl-used');
-    if(on && !tag){ const sp=document.createElement('span'); sp.className='cl-used'; sp.textContent='USING'; b.appendChild(sp); }
+    /* Two hosts, two badge styles — move whichever this one uses. */
+    const cls = b.classList.contains('sa-pick') ? 'sa-badge' : 'cl-used';
+    const txt = cls==='sa-badge' ? 'SELECTED' : 'USING';
+    const tag=b.querySelector('.'+cls);
+    if(on && !tag){ const sp=document.createElement('span'); sp.className=cls; sp.textContent=txt; b.appendChild(sp); }
     if(!on && tag) tag.remove();
   });
 }
