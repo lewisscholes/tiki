@@ -6332,7 +6332,7 @@ const PROFIT_NETSALES_M = [];
 const PROFIT_NET_M      = [];
 const PROFIT_ORDERS = [];
 const PROFIT_BANK = [];
-const CALC_LEV = { price:24.99, units:172, plat:9, commNoAd:20, commAd:15, pctCreator:80, smart:3, ship:1.79, pctAds:80, roas:3, cost:6.09, vat:20, ovhOn:true, vatOn:true };
+const CALC_LEV = { price:24.99, units:172, plat:9, commNoAd:20, commAd:15, pctCreator:80, smart:3, ship:1.79, pctAds:80, roas:3, cost:6.09, vat:20, ovhOn:true, vatOn:true, fulfil:0.79 };
 state.profitTab='pnl';
 
 const m2 = n => (n<0?'−':'') + '£' + Math.abs(n).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -6951,6 +6951,7 @@ function profitCalc(){
             ${lever('smart','Smart Promotion',0,10,0.5,'fmtPc')}
             ${lever('roas','Ad ROAS basis',1,10,0.1,'fmtX')}
             ${lever('ship','Shipping / order',0,5,0.01,'fmtP')}
+            ${lever('fulfil','Fulfilment fee / order',0,3,0.01,'fmtP')}
             ${lever('cost','Unit cost ex VAT',3,12,0.01,'fmtP')}
             <div class="lever"><span class="ll">Add ${L.vat}% VAT to cost</span>
               <label class="switch"><input type="checkbox" ${L.vatOn?'checked':''} onchange="CALC_LEV.vatOn=this.checked;renderCalcResults()"><span class="sl"></span></label>
@@ -6979,6 +6980,7 @@ function renderCalcResults(){
   const el=$('calcResults'); if(!el) return;
   const L=CALC_LEV;
   const cogs=L.cost*(L.vatOn?1+L.vat/100:1);
+  const ff=+L.fulfil||0;
   const ovh=L.ovhOn?calcAutoOvh():0;
   const ad=L.price/L.roas;
   const pc=L.pctCreator/100, pa=L.pctAds/100;
@@ -6988,19 +6990,19 @@ function renderCalcResults(){
     { n:'Ad only',      w:(1-pc)*pa,    comm:0,          hasAd:true },
     { n:'Organic',      w:(1-pc)*(1-pa),comm:0,          hasAd:false }
   ].map(b=>{
-    const net=L.price*(1-L.plat/100-b.comm/100-(b.hasAd?L.smart/100:0))-L.ship-cogs-(b.hasAd?ad:0)-ovh;
+    const net=L.price*(1-L.plat/100-b.comm/100-(b.hasAd?L.smart/100:0))-L.ship-ff-cogs-(b.hasAd?ad:0)-ovh;
     return {...b, net};
   });
   const blended=buckets.reduce((s,b)=>s+b.w*b.net,0);
   const margin=blended/L.price*100;
-  const availAd=L.price*(1-L.plat/100-L.commAd/100-L.smart/100)-L.ship-cogs-ovh;
+  const availAd=L.price*(1-L.plat/100-L.commAd/100-L.smart/100)-L.ship-ff-cogs-ovh;
   const beRoas=availAd>0?L.price/availAd:null;
   const grossMo=L.price*L.units, netMo=blended*L.units;
   const vcls=v=>v>=2?'bg-good':v>=0?'bg-warn':'bg-crit';
   const ladder=[19.99,22.99,24.99,27.99,29.99].map(p=>{
     const adp=p/L.roas;
     const bl=buckets.reduce((s,b)=>{
-      const n=p*(1-L.plat/100-b.comm/100-(b.hasAd?L.smart/100:0))-L.ship-cogs-(b.hasAd?adp:0)-ovh;
+      const n=p*(1-L.plat/100-b.comm/100-(b.hasAd?L.smart/100:0))-L.ship-ff-cogs-(b.hasAd?adp:0)-ovh;
       return s+b.w*n;},0);
     return {p, bl};
   });
