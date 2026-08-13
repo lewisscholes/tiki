@@ -6332,7 +6332,7 @@ const PROFIT_NETSALES_M = [];
 const PROFIT_NET_M      = [];
 const PROFIT_ORDERS = [];
 const PROFIT_BANK = [];
-const CALC_LEV = { price:24.99, units:172, plat:9, commNoAd:20, commAd:15, pctCreator:80, smart:3, ship:1.79, pctAds:80, roas:3, cost:6.09, vat:20, ovhOn:true };
+const CALC_LEV = { price:24.99, units:172, plat:9, commNoAd:20, commAd:15, pctCreator:80, smart:3, ship:1.79, pctAds:80, roas:3, cost:6.09, vat:20, ovhOn:true, vatOn:true };
 state.profitTab='pnl';
 
 const m2 = n => (n<0?'−':'') + '£' + Math.abs(n).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -6952,6 +6952,9 @@ function profitCalc(){
             ${lever('roas','Ad ROAS basis',1,10,0.1,'fmtX')}
             ${lever('ship','Shipping / order',0,5,0.01,'fmtP')}
             ${lever('cost','Unit cost ex VAT',3,12,0.01,'fmtP')}
+            <div class="lever"><span class="ll">Add ${L.vat}% VAT to cost</span>
+              <label class="switch"><input type="checkbox" ${L.vatOn?'checked':''} onchange="CALC_LEV.vatOn=this.checked;renderCalcResults()"><span class="sl"></span></label>
+              <span class="lv" id="lv-vat">—</span></div>
             <div class="lever"><span class="ll">Overhead / order</span>
               <label class="switch"><input type="checkbox" ${L.ovhOn?'checked':''} onchange="CALC_LEV.ovhOn=this.checked;renderCalcResults()"><span class="sl"></span></label>
               <span class="lv" id="lv-ovh">—</span></div>
@@ -6975,7 +6978,7 @@ function profitCalc(){
 function renderCalcResults(){
   const el=$('calcResults'); if(!el) return;
   const L=CALC_LEV;
-  const cogs=L.cost*(1+L.vat/100);
+  const cogs=L.cost*(L.vatOn?1+L.vat/100:1);
   const ovh=L.ovhOn?calcAutoOvh():0;
   const ad=L.price/L.roas;
   const pc=L.pctCreator/100, pa=L.pctAds/100;
@@ -7002,6 +7005,7 @@ function renderCalcResults(){
     return {p, bl};
   });
   const ovhEl=$('lv-ovh'); if(ovhEl) ovhEl.textContent=L.ovhOn?'£'+ovh.toFixed(2):'off';
+  const vatEl=$('lv-vat'); if(vatEl) vatEl.textContent=L.vatOn?'£'+cogs.toFixed(2):'off · £'+cogs.toFixed(2);
   const mathEl=$('calcOvhMath'); if(mathEl) mathEl.textContent=`£${CALC_VENDORS.filter(v=>v.on&&v.attr!=='Shopify (DTC)').reduce((s,v)=>s+v.mo,0).toFixed(2)}/mo ÷ ${Math.round(L.units)} orders = £${calcAutoOvh().toFixed(2)}/order`;
   el.innerHTML=`
     <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:0">
