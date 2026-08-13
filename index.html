@@ -3715,8 +3715,10 @@ const PAGES = [
   { id:'statics',   label:'Static Ads', icon:'image' },
   /* Placeholders — deliberately not built. They sit in the sidebar greyed out
      so the intent stays visible every day rather than living in a note. */
-  { id:'genvideo',  label:'Video Generation', icon:'video', soon:true },
-  { id:'genimage',  label:'Image Generation', icon:'image', soon:true },
+  /* Parked, not abandoned. hidden keeps them out of every menu and out of
+     search; the entries stay so the intent is still written down somewhere. */
+  { id:'genvideo',  label:'Video Generation', icon:'video', soon:true, hidden:true },
+  { id:'genimage',  label:'Image Generation', icon:'image', soon:true, hidden:true },
   /* Roadmap is a back-office tool — Settings only, never the daily sidebar. */
   { id:'roadmap',   label:'Roadmap',   icon:'flag',   hidden:true },
   { id:'memory',    label:'Assistant memory', icon:'grad', hidden:true },
@@ -3739,8 +3741,7 @@ function renderSidebar(){
   $('sbNav').innerHTML =
     grp('Workspace',['assistant','tasks','overview']) +
     grp('TikTok',['creators','videos','outreach','retainers','briefs']) +
-    grp('Meta',['statics']) +
-    grp('Content',['genvideo','genimage']);
+    grp('Meta',['statics']);
   $('sbSettingsBtn')?.classList.toggle('active', state.page==='settings');
   renderDock();   /* the sidebar is hidden now — the dock is the real nav */
   function navBtn(p){
@@ -3801,8 +3802,7 @@ function renderDock(){
       ${['creators','videos','outreach','retainers','briefs'].map(id=>P(id)).filter(Boolean).map(row).join('')}
       <div class="rm-cap">Meta</div>
       ${['statics'].map(id=>P(id)).filter(Boolean).map(row).join('')}
-      <div class="rm-cap">Content</div>
-      ${['genvideo','genimage'].map(id=>P(id)).filter(Boolean).map(row).join('')}
+
     </div>`;
 
   /* Hover to open, and a grace period so the pointer can travel from the tab
