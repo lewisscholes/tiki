@@ -2841,6 +2841,64 @@ body.cloning .asx-hero{padding:3vh 24px 132px;justify-content:flex-start}
 .asx-main{padding-top:0}
 /* The hero is centred in what is left after the toggle, so it never collides. */
 .asx-hero{padding-top:46px}
+
+/* ============================================================================
+   ASSISTANT — plain white, like the reference
+   The gradient wash and the aura belong to the dashboard, where colour carries
+   meaning. Here it is a reading surface, so the page steps out of the app's
+   palette entirely. Dark mode still uses its own surfaces: forcing white there
+   would be unreadable rather than clean.
+   ========================================================================== */
+body.pg-assistant{background:#fff}
+body.pg-assistant .aura{display:none}
+body.pg-assistant #silkBg{display:none}
+
+/* The rail starts at the very top so the mark sits ON the white column rather
+   than on the wash above it — that seam was the odd-looking bit. */
+.asx{padding:0}
+.asx-hist{padding-top:58px;background:#fff;border-right:1px solid #ececef}
+.asx-main{padding-top:58px;background:#fff}
+body.pg-assistant .rtop{background:#fff}
+.asx-tgl{top:70px;left:12px}
+
+/* Surfaces inside the page, matched to the reference. */
+body.pg-assistant .asx-new{background:#fff;border-color:#e6e6ea;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+body.pg-assistant .asx-new:hover{background:#f7f7f9}
+body.pg-assistant .asx-search{background:#f5f5f7;border-color:transparent}
+body.pg-assistant .asx-search:focus{background:#fff;border-color:var(--accent)}
+body.pg-assistant .asx-item:hover,body.pg-assistant .pj-fh:hover{background:#f5f5f7}
+body.pg-assistant .pj-fh .fi{background:#f2f2f5}
+body.pg-assistant .asx-foot{background:#fff;border-top:1px solid #ececef}
+body.pg-assistant .asx-ai .body{background:#f4f4f6}
+body.pg-assistant .asx-work{background:#eefaf1}
+body.pg-assistant .asx-box{background:#fff}
+body.pg-assistant .asx-ib{background:#fff;border-color:#e6e6ea}
+body.pg-assistant .asx-ib:hover{background:#f7f7f9}
+body.pg-assistant .asx-sg{background:#fff;border-color:#ececef;backdrop-filter:none}
+body.pg-assistant .asx-sg:hover{background:#f7f7f9}
+
+/* Dark mode keeps the app's own surfaces — white on black is not "clean". */
+body.dark.pg-assistant{background:var(--bg)}
+body.dark.pg-assistant .rtop,
+body.dark.pg-assistant .asx-hist,
+body.dark.pg-assistant .asx-main{background:var(--surface)}
+body.dark.pg-assistant .asx-hist{border-right-color:var(--line-2)}
+body.dark.pg-assistant .asx-new,
+body.dark.pg-assistant .asx-box,
+body.dark.pg-assistant .asx-ib,
+body.dark.pg-assistant .asx-sg,
+body.dark.pg-assistant .asx-foot{background:var(--surface);border-color:var(--line-2)}
+body.dark.pg-assistant .asx-search,
+body.dark.pg-assistant .asx-ai .body,
+body.dark.pg-assistant .pj-fh .fi{background:var(--surface-2)}
+body.dark.pg-assistant .asx-work{background:var(--good-soft)}
+
+/* The orb stays — it is the one bit of colour the page earns. Its centre was
+   filled with --bg, which is the dashboard's tint; on a white page that read as
+   a grey disc, so it takes the page's own white instead. */
+body.pg-assistant .asx-orb::after{background:#fff}
+body.dark.pg-assistant .asx-orb::after{background:var(--surface)}
+body:not(.dark).pg-assistant .asx-orb::before{opacity:.34}
 </style>
 </head>
 <body>
