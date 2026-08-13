@@ -7247,7 +7247,7 @@ function renderBriefEditor(){
           <span class="rt-peers" id="brfPeers" style="display:flex;align-items:center;gap:6px"></span>
           <div class="brf-zoom">
             <button onclick="brfZoom(-1)">−</button><span class="zv">${Math.round(s.zoom*100)}%</span><button onclick="brfZoom(1)">+</button>
-            <button style="width:auto;padding:0 8px;font-size:.68rem" onclick="brfZoomFit()">Fit</button>
+            <button style="width:auto;padding:0 8px;font-size:.68rem" onclick="brfZoomFit()" title="Frame every page on the canvas">Fit all</button>
           </div>
           <div class="seg">
             <button class="active">✏️ Edit</button>
@@ -8981,7 +8981,41 @@ function brfIsDark(hex){
   return (0.2126*r+0.7152*g+0.0722*bl)<0.42;
 }
 function brfZoom(dir){ const s=state.brf; s.zoom=Math.min(3,Math.max(.15, s.zoom + dir*.15)); renderBriefEditor(); }
-function brfZoomFit(){ Object.assign(state.brf,{zoom:.62,panX:30,panY:20}); renderBriefEditor(); }
+/* "Fit" used to mean "reset to 62% at the origin", which fits nothing — a page
+   out to the right stayed off-screen and looked as though it did not exist.
+   Now it measures everything on the canvas and frames the lot. */
+function brfZoomFit(){
+  const b=briefById(state.briefId);
+  const els=(b&&b.elements||[]).filter(e=>!e.hidden && e.x!=null && e.y!=null);
+  if(!els.length){ Object.assign(state.brf,{zoom:.62,panX:30,panY:20}); return renderBriefEditor(); }
+  const minX=Math.min(...els.map(e=>e.x)),
+        minY=Math.min(...els.map(e=>e.y)),
+        maxX=Math.max(...els.map(e=>e.x+(e.w||0))),
+        maxY=Math.max(...els.map(e=>e.y+(e.h||0)));
+  const vp=$('brfViewport');
+  const vw=(vp?vp.clientWidth:1200)-80, vh=(vp?vp.clientHeight:700)-80;
+  const zoom=Math.max(.04, Math.min(1.5, Math.min(vw/Math.max(1,maxX-minX), vh/Math.max(1,maxY-minY))));
+  Object.assign(state.brf,{ zoom,
+    panX: 40 - minX*zoom + Math.max(0,(vw-(maxX-minX)*zoom)/2),
+    panY: 40 - minY*zoom + Math.max(0,(vh-(maxY-minY)*zoom)/2) });
+  renderBriefEditor();
+}
+
+/* Clicking a page in the Layers list takes you to it. Obvious in hindsight —
+   without it the only way to reach a distant page was to guess and drag. */
+function brfGoToPage(id){
+  const b=briefById(state.briefId);
+  const fr=b&&b.elements.find(e=>e.id===id&&e.type==='frame');
+  if(!fr) return;
+  const vp=$('brfViewport');
+  const vw=(vp?vp.clientWidth:1200), vh=(vp?vp.clientHeight:700);
+  const zoom=Math.max(.12, Math.min(1, Math.min((vw-120)/fr.w, (vh-120)/fr.h)));
+  Object.assign(state.brf,{ zoom,
+    panX: (vw-fr.w*zoom)/2 - fr.x*zoom,
+    panY: (vh-fr.h*zoom)/2 - fr.y*zoom,
+    selFrame: fr.id, sel:null });
+  renderBriefEditor();
+}
 function brfScreenToWorld(e){
   const vp=$('brfViewport').getBoundingClientRect();
   const s=state.brf;
@@ -9688,7 +9722,9 @@ function brfToggleGroup(id){
 }
 function brfSelectPageLayer(id){
   state.brf.selFrame=id; state.brf.sel=null; state.brf.editing=null;
-  renderBriefEditor();
+  /* Selecting a page in the list should also SHOW it. Selecting something you
+     cannot see is how a restored page looked like a missing one. */
+  brfGoToPage(id);
 }
 /* Hidden and locked are real, not decoration: a hidden layer doesn't render on
    the canvas or in Present, and a locked one can't be clicked or dragged. An
