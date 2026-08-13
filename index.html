@@ -2632,6 +2632,96 @@ body.cloning .asx-thread{padding-bottom:0}
 .sa-ht{display:flex;align-items:center;gap:7px;font-size:.82rem;font-weight:660}
 .sa-ht svg{width:14px;height:14px;color:var(--ink-3)}
 .sa-how p{font-size:.77rem;color:var(--ink-3);line-height:1.6;margin:8px 0 0}
+
+/* ============================================================================
+   ASSISTANT — laid out like a proper chat client, in our own colours
+   ========================================================================== */
+.asx-hist{background:var(--surface);border-right:1px solid var(--line-2)}
+.asx-hh{padding:14px 14px 10px;display:flex;flex-direction:column;gap:11px}
+.asx-brand{display:flex;align-items:center;gap:9px;padding:2px 2px 2px}
+.asx-brand .mk{width:28px;height:28px;border-radius:9px;flex:none;display:flex;align-items:center;
+  justify-content:center;background:linear-gradient(145deg,#ff3b30,#c1121f)}
+.asx-brand .mk svg{width:17px;height:17px}
+.asx-brand .nm{font-size:1.02rem;font-weight:720;letter-spacing:-.02em}
+.asx-brand .live{width:8px;height:8px;border-radius:50%;background:var(--good-ink);margin-left:2px}
+.asx-new{width:100%;height:42px;border-radius:13px;border:1px solid var(--line);background:var(--surface);
+  box-shadow:var(--shadow);font-family:inherit;font-size:.86rem;font-weight:650;color:var(--ink);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.asx-new:hover{background:var(--surface-2)}
+.asx-search{width:100%;height:38px;border-radius:11px;border:1px solid var(--line-2);
+  background:var(--surface-2);padding:0 12px;font-family:inherit;font-size:.82rem;
+  color:var(--ink);outline:none}
+.asx-search:focus{border-color:var(--accent);background:var(--surface)}
+.asx-grp{font-size:.66rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-3);padding:16px 16px 7px}
+.asx-list{padding:0 8px 8px}
+.asx-item{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:10px;
+  font-size:.83rem;color:var(--ink-2);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.asx-item:hover{background:var(--surface-2);color:var(--ink)}
+.asx-item.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:620}
+.pj-fh{display:flex;align-items:center;gap:9px;width:100%;padding:9px 10px;border-radius:10px;
+  border:none;background:none;font-family:inherit;font-size:.84rem;font-weight:600;color:var(--ink-2);cursor:pointer}
+.pj-fh:hover{background:var(--surface-2);color:var(--ink)}
+.pj-fh .cv{font-size:.55rem;color:var(--ink-3);transition:transform .16s;display:inline-block}
+.pj-fold.open .pj-fh .cv{transform:rotate(90deg)}
+.pj-fh .fi{width:26px;height:26px;border-radius:8px;background:var(--surface-2);display:flex;
+  align-items:center;justify-content:center;font-size:.76rem;flex:none}
+.pj-fh .nme{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.pj-fh .ct{font-size:.68rem;font-weight:700;color:var(--ink-3);background:var(--surface-2);
+  padding:1px 7px;border-radius:99px}
+.asx-foot{margin:auto 10px 10px;padding:13px 14px;border-radius:14px;background:var(--surface-2);
+  border:1px solid var(--line-2)}
+
+/* ---- the thread ---- */
+.asx-turn{margin-bottom:20px}
+.asx-me{display:flex;justify-content:flex-end}
+.asx-me .bub{background:var(--accent);color:#fff;padding:12px 16px 8px;border-radius:18px 18px 5px 18px;
+  max-width:min(78%,620px);font-size:.9rem;line-height:1.5}
+.asx-me .stamp{display:block;text-align:right;font-size:.66rem;opacity:.8;margin-top:5px}
+.asx-me .ticks{letter-spacing:-2px;margin-left:2px}
+.asx-ai .who{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.asx-ai .av{width:26px;height:26px;border-radius:9px;
+  background:linear-gradient(145deg,#ff3b30,#c1121f);display:flex;align-items:center;justify-content:center}
+.asx-ai .av svg{width:15px;height:15px;display:block}
+.asx-ai .nm{font-size:.84rem;font-weight:700}
+.asx-ai .chip{font-size:.6rem;font-weight:800;letter-spacing:.04em;color:var(--violet-ink);
+  background:var(--violet-soft);padding:2px 7px;border-radius:6px}
+.asx-ai .body{background:var(--surface-2);border-radius:5px 18px 18px 18px;padding:13px 17px;
+  display:inline-block;max-width:min(88%,700px);font-size:.9rem;line-height:1.62}
+.asx-ai .stamp-l{font-size:.66rem;color:var(--ink-3);margin-top:6px;padding-left:3px}
+.asx-work{display:flex;align-items:center;gap:9px;padding:11px 16px;border-radius:13px;
+  background:var(--good-soft);border:1px solid transparent;font-size:.84rem;font-weight:600;
+  color:var(--ink-2);cursor:pointer;max-width:700px}
+.asx-work .tick{color:var(--good-ink);font-weight:800}
+.asx-work .cx{margin-left:auto;font-size:.78rem;color:var(--ink-3);font-weight:600}
+.asx-work .cx b{font-weight:700}
+
+/* ---- composer ---- */
+.asx-box{max-width:780px;margin:0 auto;border:1.5px solid var(--accent);border-radius:20px;
+  padding:14px 16px 11px;background:var(--surface);box-shadow:0 4px 18px -8px rgba(0,113,227,.28)}
+.asx-box:not(:focus-within){border-color:var(--line)}
+.asx-ta{font-size:.92rem;min-height:26px}
+.asx-crow{display:flex;align-items:center;gap:8px;margin-top:10px}
+.asx-ib{width:38px;height:38px;border-radius:11px;border:1px solid var(--line-2);background:var(--surface);
+  color:var(--ink-2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.9rem}
+.asx-ib:hover{background:var(--surface-2);color:var(--ink)}
+.asx-ib svg{width:16px;height:16px}
+.asx-ib.on,.asx-ib.act{background:var(--accent-soft);color:var(--accent-ink);border-color:transparent}
+.asx-send{margin-left:auto;width:42px;height:42px;border-radius:50%;border:none;flex:none;
+  background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  box-shadow:0 6px 16px -6px rgba(0,113,227,.7)}
+.asx-send:hover{filter:brightness(1.06)}
+.asx-send svg{width:17px;height:17px}
+.asx-disc{max-width:780px;margin:11px auto 0;text-align:center;font-size:.72rem;color:var(--ink-3)}
+
+.asx-foot{display:flex;align-items:center;gap:11px}
+.asx-foot .fi{width:30px;height:30px;border-radius:9px;flex:none;display:flex;align-items:center;
+  justify-content:center;background:var(--accent-soft);color:var(--accent-ink)}
+.asx-foot .fi svg{width:15px;height:15px}
+.asx-foot .ft{font-size:.82rem;font-weight:660}
+.asx-foot .fs{font-size:.71rem;color:var(--ink-3);margin-top:2px}
+/* the old hint line is gone; keep the rule from styling anything by accident */
+.asx-hint{display:none}
 </style>
 </head>
 <body>
@@ -12437,11 +12527,11 @@ function aiWorkHTML(w, cls){
   const last=w.steps[w.steps.length-1];
   const lastTx=last? String(last.tx).replace(/<[^>]+>/g,'').trim().slice(0,64) : 'Reading the account';
   const head = w.done
-    ? `<span class="tick">✓</span> Worked through ${w.steps.length} step${w.steps.length===1?'':'s'}<span class="cx">${w.secs}s · show</span>`
+    ? `<span class="tick">✓</span> Worked through ${w.steps.length} step${w.steps.length===1?'':'s'}<span class="cx">Details <b>⌄</b></span>`
     : `<span class="spin"></span> ${esc(lastTx)}<span class="cx">${w.steps.length} step${w.steps.length===1?'':'s'}</span>`;
   return `<div class="${cls}${w.done?' shut':' run'}" onclick="this.classList.toggle(this.classList.contains('run')?'all':'shut')">
     <div class="wh">${head}</div>
-    <div class="wb">${w.steps.map(s=>`<div class="asx-step"><span class="ic">${s.ic}</span>
+    <div class="wb">${w.steps.map(s=>`<div class="asx-step"><span class="ic">${s.ic||''}</span>
       <div class="tx">${s.tx}${s.meta?`<div class="meta">${esc(s.meta)}</div>`:''}</div></div>`).join('')}</div>
   </div>`;
 }
@@ -12480,13 +12570,17 @@ function asxAsk(q){ aiPush('me', esc(q)); if(AI.cloud!==false) aiCloudRespond(q)
 
 /* The assistant signs its answers with the app's own mark rather than a letter. */
 const RARRI_MARK = `<svg viewBox="0 0 48 48" fill="none"><defs><mask id="rarriAv"><rect width="48" height="48" fill="#fff"/><path d="M2 34 L48 14" stroke="#000" stroke-width="4.6"/></mask></defs><g mask="url(#rarriAv)" fill="#fff"><path d="M15 36 L20.5 12 h9.5 c5.6 0 8.6 3 7.6 7.6 -.7 3.4 -3.2 5.6 -6.8 6.4 l4.2 10 h-7.4 l-3.4 -9.2 h-1.6 L24.3 36 z M25.6 21.4 h3.2 c2.2 0 3.6 -1 3.9 -2.6 .3 -1.6 -.7 -2.5 -2.8 -2.5 h-3.2 z"/></g></svg>`;
+const asxTime = ts => ts ? new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : '';
 function asxThreadHTML(){
   return `<div class="asx-mid">${AI.msgs.map(m=>{
       if(m.who==='work') return `<div class="asx-turn asx-ai">${aiWorkHTML(m,'asx-work')}</div>`;
       if(m.who==='card') return `<div class="asx-turn">${m.html}</div>`;
-      if(m.who==='me')   return `<div class="asx-turn asx-me"><div class="bub">${m.html}</div></div>`;
-      return `<div class="asx-turn asx-ai"><div class="who"><span class="av">${RARRI_MARK}</span><span class="nm">Rarri</span></div>
-        <div class="body">${m.html}</div></div>`;
+      if(m.who==='me')   return `<div class="asx-turn asx-me"><div class="bub">${m.html}
+        <span class="stamp">${asxTime(m.ts)} <span class="ticks">✓✓</span></span></div></div>`;
+      return `<div class="asx-turn asx-ai">
+        <div class="who"><span class="av">${RARRI_MARK}</span><span class="nm">Rarri</span><span class="chip">AI</span></div>
+        <div class="body">${m.html}</div>
+        ${m.ts?`<div class="stamp-l">${asxTime(m.ts)}</div>`:''}</div>`;
     }).join('')}</div>`;
 }
 /* ============================================================================
@@ -15000,12 +15094,18 @@ function renderAssistant(){
   <div class="asx">
     <div class="asx-hist ${state.asxHist?'min':''}">
       <div class="asx-hh">
+        <div class="asx-brand"><span class="mk">${RARRI_MARK}</span><span class="nm">Rarri</span>
+          <span class="live" id="asxLive" title="Synced"></span></div>
         <button class="asx-new" onclick="aiChatNew()">＋ New chat</button>
         <input class="asx-search" id="asxSearch" placeholder="Search chats…" value="${esc(state.asxSearch||'')}"
           oninput="state.asxSearch=this.value;clearTimeout(window._asxq);window._asxq=setTimeout(asxSoft,180)">
       </div>
       <div class="asx-list" id="asxList">${asxListHTML()}</div>
-      <div class="asx-foot" id="asxFoot">${AI_CHATS.length} chat${AI_CHATS.length===1?'':'s'} · synced to the team</div>
+      <div class="asx-foot" id="asxFoot">
+        <span class="fi">${ICONS.users||''}</span>
+        <div><div class="ft">${esc(brandInfo(state.brand).name)}</div>
+          <div class="fs">${AI_CHATS.length} chat${AI_CHATS.length===1?'':'s'} · shared with the team</div></div>
+      </div>
     </div>
 
     <div class="asx-main">
@@ -15016,9 +15116,7 @@ function renderAssistant(){
 
       ${AI.msgs.length ? `
         <div class="asx-thread" id="asxThread">${asxThreadHTML()}</div>
-        <div class="asx-comp">${asxComposerHTML()}
-          <div class="asx-hint">Tiki reads every dataset in the account and can create tasks, add creators and remember decisions. It can't message creators or browse the web.</div>
-        </div>`
+        <div class="asx-comp">${asxComposerHTML()}</div>`
       : `
         <div class="asx-hero">
           <div class="asx-orb ${activeProject()?'proj':''}"></div>
@@ -15106,9 +15204,12 @@ function asxComposerHTML(){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="8" height="16" rx="2"/><rect x="14" y="4" width="7" height="16" rx="2"/><path d="M14 9h7M14 14h7"/></svg>
         <span>${CLONE.on?'Cloning':''}</span>
       </button>
-      <button class="asx-send" onclick="asxSend()" title="Send (Enter)">↑</button>
+      <button class="asx-send" onclick="asxSend()" title="Send (Enter)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+      </button>
     </div>
-  </div>`;
+  </div>
+  <div class="asx-disc">Rarri can make mistakes. Always double-check anything that matters.</div>`;
 }
 function asxPlus(ev){
   ev.stopPropagation();
@@ -15162,7 +15263,7 @@ function aiCtxUpdate(){
 function aiPush(who, html){
   aiChat();
   if(who==='me') aiChatTitleFrom(html);
-  AI.msgs.push({who,html});
+  AI.msgs.push({who,html,ts:Date.now()});
   const c=AI_CHATS.find(x=>x.id===state.aiChatId); if(c) c.updated=Date.now();
   aiRenderAll();
 }
