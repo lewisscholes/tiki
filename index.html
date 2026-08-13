@@ -9143,7 +9143,18 @@ function brfBind(b){
     if(e.target.closest('.brf-dock')) return;   // the dock floats over the canvas
     brfShapePopClose();
     const elNode=e.target.closest('[data-el]');
-    const fTitle=e.target.closest('[data-fdrag]');
+    /* The title tab is the handle, but once a page is SELECTED its blank areas
+       become a handle too — "select it, then drag it" is what people expect,
+       and hunting for a 20px tab to move a whole page is not. Empty canvas
+       outside any selected page still sweeps a marquee. */
+    let fTitle=e.target.closest('[data-fdrag]');
+    if(!fTitle && !elNode && s.selFrame && !e.shiftKey && e.button!==1 && !BRF_SPACE){
+      const fr=b.elements.find(x=>x.id===s.selFrame&&x.type==='frame');
+      const w0=brfScreenToWorld(e);
+      if(fr && w0.x>=fr.x && w0.x<=fr.x+fr.w && w0.y>=fr.y && w0.y<=fr.y+fr.h){
+        fTitle={ dataset:{ fdrag:fr.id } };
+      }
+    }
     const rsNode=e.target.closest('[data-rs]');
     const ersNode=e.target.closest('[data-ers]');
     if(e.target.closest('.brf-thread')||e.target.closest('[data-pin]')||e.target.closest('.del-h')) return;
@@ -9188,8 +9199,16 @@ function brfBind(b){
     if(e.target.isContentEditable) return;
     if(fTitle){
       const fr=b.elements.find(x=>x.id===fTitle.dataset.fdrag);
-      const kids=b.elements.filter(el=>el.type!=='frame' && el.x>=fr.x && el.x<=fr.x+fr.w && el.y>=fr.y && el.y<=fr.y+fr.h)
-        .concat(b.comments.filter(c=>c.x>=fr.x&&c.x<=fr.x+fr.w&&c.y>=fr.y&&c.y<=fr.y+fr.h));
+      /* Membership is decided by brfHostFrame — the SAME test the renderer uses.
+         This used to ask whether the element's top-left corner sat inside the
+         page while the renderer asked whether its centre did, so anything
+         overhanging an edge drew on the page and then stayed behind when the
+         page moved. Two answers to one question is one too many. */
+      const kids=b.elements.filter(el=>{
+        if(el.type==='frame') return false;
+        const host=brfHostFrame(b,el);
+        return host && host.id===fr.id;
+      }).concat((b.comments||[]).filter(c=>c.x>=fr.x&&c.x<=fr.x+fr.w&&c.y>=fr.y&&c.y<=fr.y+fr.h));
       /* Remembered so mouseup can tell a click (select the page) from a drag
          (move it) — selecting on mousedown would re-render mid-drag. */
       setMode('drag'); moved=false; start={mx:e.clientX,my:e.clientY,frameId:fr.id,
