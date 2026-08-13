@@ -2818,6 +2818,29 @@ body.pg-assistant .asx-thread{padding-top:56px}
 .brf-multibar button.danger{background:var(--crit);color:#fff}
 .lay-menu .cap{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
   color:var(--ink-3);padding:9px 13px 5px}
+
+/* ---- nothing may sit under the dock, and nothing over the composer -------
+   The dock is fixed at the bottom of the window, so any pane that ends at the
+   viewport edge hides its own last row behind it. Every scrolling surface on
+   this page therefore reserves the dock's height. */
+.asx-hero{padding:0 24px 132px;overflow-y:auto;overflow-x:hidden;min-height:0;
+  /* "safe" centring: centre it when it fits, but never push the top out of
+     reach when it does not — plain centre clips the head of an overflowing
+     flex child with no way to scroll back to it. */
+  justify-content:center;justify-content:safe center}
+.asx-hero .asx-sugg{margin-bottom:4px}
+body.cloning .asx-hero{padding:3vh 24px 132px;justify-content:flex-start}
+/* With a conversation on screen the composer already carries the clearance, so
+   the thread only needs to stop short of it. */
+.asx-comp{padding:6px 24px 104px}
+
+/* The rail toggle belongs in the corner of the stage, not on top of whatever
+   happens to be centred there. Pinned below the top bar, above the content,
+   and out of the way of the composer at every height. */
+.asx-tgl{position:absolute;top:12px;left:12px;z-index:6;width:34px;height:34px}
+.asx-main{padding-top:0}
+/* The hero is centred in what is left after the toggle, so it never collides. */
+.asx-hero{padding-top:46px}
 </style>
 </head>
 <body>
