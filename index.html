@@ -373,10 +373,19 @@ body:not(.dark) .rtab.on{box-shadow:0 1px 3px rgba(0,0,0,.10)}
 .rfo .ct{margin-left:auto;font-size:.72rem;color:var(--ink-3)}
 .rfo.soon{opacity:.42;cursor:default}
 /* The brief editor takes the whole screen — the shell gets out of the way. */
-.rsync{width:7px;height:7px;border-radius:50%;background:var(--good-ink);margin-left:4px;flex:none;
-  transition:background .25s;box-shadow:0 0 0 3px color-mix(in srgb,var(--good-ink) 18%,transparent)}
-.rsync.saving{background:var(--warn-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--warn-ink) 18%,transparent)}
-.rsync.error{background:var(--crit-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--crit-ink) 18%,transparent)}
+/* A dot you have to hover to read is not reassurance. Words, in the corner,
+   the way Figma does it — so "is my work safe" is answered without asking. */
+.rsync{display:inline-flex;align-items:center;gap:5px;margin-left:6px;flex:none;
+  font-size:.68rem;font-weight:600;letter-spacing:.01em;color:var(--ink-3);
+  white-space:nowrap;transition:color .25s}
+.rsync::before{content:'';width:6px;height:6px;border-radius:50%;flex:none;
+  background:var(--good-ink);transition:background .25s;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--good-ink) 18%,transparent)}
+.rsync.saving{color:var(--warn-ink)}
+.rsync.saving::before{background:var(--warn-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--warn-ink) 18%,transparent)}
+.rsync.error{color:var(--crit-ink)}
+.rsync.error::before{background:var(--crit-ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--crit-ink) 18%,transparent)}
+@media(max-width:520px){ .rsync .rsync-t{display:none} }
 /* The old chrome is retired, not deleted — hiding it keeps every call site alive. */
 .mob-menu,.sb-restore{display:none !important}
 body.brief-full .rdock,body.brief-full .rtop{display:none}
@@ -2918,7 +2927,7 @@ body:not(.dark).pg-assistant .asx-orb::before{opacity:.34}
       <span class="bd" id="rBrandDot"></span><span id="rBrandName">All Brands</span>
       <div class="dd-menu left" id="brandMenuTop" style="top:calc(100% + 6px);left:0;min-width:180px"></div>
     </button>
-    <span class="rsync" id="rSync" title="Cloud sync"></span>
+    <span class="rsync" id="rSync" title="Cloud sync"><span class="rsync-t" id="rSyncTxt">Saved</span></span>
     <div class="rspacer"></div>
     <button class="rchip rglass" onclick="toggleDD(event,'newMenuTop')" title="Create new" style="width:34px;padding:0;justify-content:center">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -16786,6 +16795,9 @@ function syncStatus(cls, txt){
   /* The sidebar is hidden in the glass shell, so the same state has to show
      somewhere the eye actually goes — a single dot in the top bar. */
   const d=$('rSync'); if(d){ d.className='rsync '+(cls||''); d.title=txt; }
+  /* One word, always visible. The detail stays on the tooltip. */
+  const dt=$('rSyncTxt');
+  if(dt) dt.textContent = cls==='saving' ? 'Saving…' : cls==='error' ? 'Not saved' : 'Saved';
   if(cls==='error') SAVE_FAILS++; else if(cls!=='saving') SAVE_FAILS=0;
   saveAlarm();
 }
@@ -17291,7 +17303,30 @@ const MERGE_LISTS = ['tasks','briefs','creators','retainers','courses','projects
   'campaigns','roadmap','flows2','flows','personal','samples','chats','notifs','aiChats',
   'briefShelf','products','brands','briefFolders','clfb','clonePrompts'];
 
-function mergeList(base, mine, theirs){
+/* Rows that are documents in their own right. A brief is not one value — it is
+   a canvas holding a hundred independent objects. Resolving a clash by picking
+   one whole side (which is what this used to do) throws away everything the
+   loser drew, even though the two of you were nowhere near each other on the
+   canvas. That is exactly how Rod lost 18 elements on 12 August.
+
+   Figma's rule: the unit of conflict is the shape, not the file. So when both
+   sides have touched the same brief, we go INSIDE it and merge element by
+   element and comment by comment. Two people working on one brief now only
+   collide if they touch the very same object. */
+const NESTED_LISTS = { briefs:['elements','comments','log'] };
+
+function mergeRow(key, base, mine, theirs){
+  const kids = NESTED_LISTS[key];
+  if(!kids) return theirs;                        // opaque row: last writer wins
+  const out = Object.assign({}, theirs);
+  kids.forEach(k=>{
+    if(!Array.isArray(mine[k]) && !Array.isArray(theirs[k])) return;
+    out[k] = mergeList((base||{})[k], mine[k], theirs[k]);
+  });
+  return out;
+}
+
+function mergeList(base, mine, theirs, key){
   if(!Array.isArray(mine)||!Array.isArray(theirs)) return theirs ?? mine ?? [];
   const idx = arr => { const m=new Map(); (arr||[]).forEach(x=>{ if(x&&x.id!=null) m.set(String(x.id),x); }); return m; };
   const B=idx(base), M=idx(mine), T=idx(theirs);
@@ -17310,7 +17345,8 @@ function mergeList(base, mine, theirs){
     const iChanged = b===undefined || !same(b,m);
     const theyChanged = b===undefined || !same(b,t);
     if(iChanged && !theyChanged) out.push(m);
-    else out.push(t);                             // theirs wins a genuine clash
+    else if(iChanged && theyChanged) out.push(mergeRow(key,b,m,t));  // go inside
+    else out.push(t);
   });
 
   /* Anything I have that they do not: mine if I made it, gone if they deleted it. */
@@ -17330,7 +17366,7 @@ function mergeState(base, mine, theirs){
   const keys=new Set([...Object.keys(mine), ...Object.keys(theirs)]);
   keys.forEach(k=>{
     if(k==='v') return;
-    if(MERGE_LISTS.includes(k)){ out[k]=mergeList(base[k], mine[k], theirs[k]); return; }
+    if(MERGE_LISTS.includes(k)){ out[k]=mergeList(base[k], mine[k], theirs[k], k); return; }
     const b=base[k], m=mine[k], t=theirs[k];
     /* A setting I changed and they did not is mine; otherwise take theirs. */
     if(!same(b,m) && same(b,t)) out[k]=m;
