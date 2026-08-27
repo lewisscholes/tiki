@@ -2320,6 +2320,11 @@ body.dark .seg button.active{background:var(--accent);color:#fff}
 .cl-hint b{color:var(--ink);font-weight:640}
 .cl-warn{font-size:.72rem;color:var(--warn-ink);margin-top:7px;line-height:1.5}
 .cl-angles{display:flex;gap:6px;flex-wrap:wrap}
+/* Banked angles came from your own research, so they read as owned rather than
+   suggested — a quiet tint is enough to tell the two sources apart. */
+.cl-ang.bank{border-color:color-mix(in srgb,var(--accent) 42%,var(--line-2));
+  background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.cl-ang.bank.on{border-color:var(--accent)}
 .cl-ang{font-size:.74rem;font-weight:620;padding:6px 11px;border-radius:99px;cursor:pointer;
   border:1px solid var(--line);background:var(--surface);color:var(--ink-2);font-family:inherit;
   max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -13308,6 +13313,70 @@ function clChooseImg(i){
   });
 }
 
+/* ============================================================================
+   THE ANGLE BANK
+   Angles used to come only from the last few messages of the in-app chat, which
+   meant the research that produces them had to happen HERE, on the paid API.
+   Thinking is the expensive part; extracting is not.
+
+   So: do the research wherever it is cheapest — a Claude project on a plan you
+   already pay for — then paste the output in once. Haiku turns it into angles
+   for a fraction of a penny, and they stay banked. Every future generation
+   picks from the bank without another research bill.
+   ========================================================================== */
+const ANGLE_BANK = [];   // {id, label, brief, source, ts}
+
+function clBankOpen(){
+  openModal(modalShell('Add angles from research',
+    `<div class="field full"><label>Paste your research</label>
+       <textarea id="abIn" style="min-height:220px" placeholder="Paste the angles from your Claude project — or the whole conversation, notes, a document, whatever you have. It gets read and turned into angles you can pick from."></textarea></div>
+     <div class="cl-hint" style="margin-top:8px">Read once with Haiku, then saved. Nothing is re-read
+       when you generate, so this costs a fraction of a penny and never again.</div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" id="abGo" onclick="clBankAdd()">Read and save</button>`));
+}
+
+async function clBankAdd(){
+  const txt=($('abIn')?.value||'').trim();
+  if(txt.replace(/\s/g,'').length<40) return toast('Paste a bit more than that');
+  const btn=$('abGo'); if(btn){ btn.disabled=true; btn.textContent='Reading…'; }
+  try{
+    const q=`From the research below, pull out every distinct ADVERTISING ANGLE — the audience and
+the reason they would buy, not the product's features. Ignore anything explicitly rejected.
+Maximum twelve. Reply with STRICT JSON only, no prose and no code fences:
+{"angles":[{"label":"four to six words","brief":"one sentence naming the audience and the tension it resolves"}]}
+
+RESEARCH
+${txt.slice(0,60000)}`;
+    const r=await tikiFetch('/functions/v1/assistant',{ method:'POST',
+      body:JSON.stringify({ snapshot:{}, history:[], question:q, model:'claude-haiku-4-5-20251001' }) });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    const text=(j.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');
+    const m=text.match(/\{[\s\S]*\}/); if(!m) throw new Error('could not read any angles out of that');
+    const got=(JSON.parse(m[0]).angles||[]).filter(a=>a&&(a.label||a.brief));
+    if(!got.length) throw new Error('no angles found in that text');
+    got.forEach(a=>{
+      const brief=String(a.brief||a.label).trim();
+      if(ANGLE_BANK.some(x=>x.brief===brief)) return;      // paste twice, bank once
+      ANGLE_BANK.unshift({ id:'ab'+Math.random().toString(36).slice(2,9),
+        label:String(a.label||brief).slice(0,60), brief, source:'research', ts:Date.now() });
+    });
+    closeModal(); tikiPush();
+    if(state.page==='statics') renderStatics(); else clPaint();
+    toast(`${got.length} angle${got.length===1?'':'s'} banked`);
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='Read and save'; }
+    toast(String(e.message||e));
+  }
+}
+
+function clBankForget(id){
+  const i=ANGLE_BANK.findIndex(x=>x.id===id); if(i<0) return;
+  ANGLE_BANK.splice(i,1); tikiPush();
+  if(state.page==='statics') renderStatics(); else clPaint();
+}
+
 /* ---- angles, pulled out of the conversation ------------------------------ */
 async function clPullAngles(force){
   const said=AI.msgs.filter(m=>m.who==='ai'||m.who==='me')
@@ -13527,11 +13596,19 @@ function clPanelInner(){
 
       <div class="cl-f"><div class="cl-l">Angle</div><div class="cl-w">
         <div class="cl-angles">
+          ${ANGLE_BANK.map(a=>{
+            const v=esc(a.brief||a.label);
+            return `<button class="cl-ang bank ${CLONE.angle===(a.brief||a.label)?'on':''}" data-angle="${v}"
+              title="${v} — right-click to remove"
+              oncontextmenu="event.preventDefault();clBankForget('${a.id}')"
+              onclick="clUseAngle(${JSON.stringify(a.brief||a.label).replace(/"/g,'&quot;')})">${esc(a.label||'Angle')}</button>`;
+          }).join('')}
           ${CLONE.angles.map(a=>{
             const v=esc(a.brief||a.label);
             return `<button class="cl-ang ${CLONE.angle===(a.brief||a.label)?'on':''}" data-angle="${v}"
               title="${v}" onclick="clUseAngle(${JSON.stringify(a.brief||a.label).replace(/"/g,'&quot;')})">${esc(a.label||'Angle')}</button>`;
           }).join('')}
+          <button class="cl-ang ghost" onclick="clBankOpen()">＋ From research</button>
           <button class="cl-ang ghost" onclick="clPullAngles()">
             ${CLONE.anglesLoading?'Reading the chat…':'⟲ From this chat'}</button>
         </div>
@@ -16896,7 +16973,7 @@ function collectTikiState(){
      in the back office is the thing that actually runs. */
   /* v13 adds projects — instructions and knowledge the assistant works inside. */
   /* v15 adds the saved static-ad library. */
-  return { v:21, dshCols:state.dshCols||{}, swCache:state.swCache||null, kits:state.kits||{}, clfb:CLONE_FEEDBACK, statics:STATIC_LIB, clonePrompts:CLONE_PROMPTS, imgModel:state.imgModel||'', imgRatio:state.imgRatio||'4:5', aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
+  return { v:22, dshCols:state.dshCols||{}, swCache:state.swCache||null, kits:state.kits||{}, clfb:CLONE_FEEDBACK, statics:STATIC_LIB, clonePrompts:CLONE_PROMPTS, angleBank:ANGLE_BANK, imgModel:state.imgModel||'', imgRatio:state.imgRatio||'4:5', aiModel:state.aiModel||'', projects:PROJECTS, migrations:(state.migrations||[]), flows2:ACTION_FLOWS, roadmap:ROADMAP, aiChats:AI_CHATS.slice(0,60), campaigns:CAMPAIGNS, briefShelf:BRIEF_SHELF, map:MAP_GRAPH, tasks:state.tasks, creators:CREATORS, retainers:RETAINERS, courses:COURSES, briefs:BRIEFS,
     flows:OUTREACH_FLOWS, personal:PERSONAL_OUTREACH, samples:SAMPLE_REQS, chats:CHATS,
     notifs:state.notifs, learnings:AI.learnings, aiChat:AI.msgs.slice(-60), calcLev:CALC_LEV, profitVendors:PROFIT_VENDORS,
     users:USERS, brands:BRANDS, products:PRODUCTS, bank:PROFIT_BANK, orders:PROFIT_ORDERS,
@@ -17063,6 +17140,7 @@ function applyTikiState(d){
   replaceArr(CHATS,d.chats); replaceArr(PROFIT_VENDORS,d.profitVendors);
   if(Array.isArray(d.personal)) PERSONAL_OUTREACH=d.personal;
   if(Array.isArray(d.statics)) replaceArr(STATIC_LIB,d.statics);
+  if(Array.isArray(d.angleBank)) replaceArr(ANGLE_BANK,d.angleBank);
   if(Array.isArray(d.clonePrompts)&&d.clonePrompts.length) replaceArr(CLONE_PROMPTS,d.clonePrompts);
   if(d.swCache&&Array.isArray(d.swCache.rows)) state.swCache=d.swCache;
   if(d.kits&&typeof d.kits==='object') state.kits=d.kits;
@@ -17308,7 +17386,7 @@ const same  = (a,b) => JSON.stringify(a===undefined?null:a)===JSON.stringify(b==
    where last-writer-wins is the right answer. */
 const MERGE_LISTS = ['tasks','briefs','creators','retainers','courses','projects','statics',
   'campaigns','roadmap','flows2','flows','personal','samples','chats','notifs','aiChats',
-  'briefShelf','products','brands','briefFolders','clfb','clonePrompts'];
+  'briefShelf','products','brands','briefFolders','clfb','clonePrompts','angleBank'];
 
 /* Rows that are documents in their own right. A brief is not one value — it is
    a canvas holding a hundred independent objects. Resolving a clash by picking
