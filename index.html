@@ -7403,13 +7403,132 @@ function brfDropInto(ev,folderId){
   const f=folderId?BRIEF_FOLDERS.find(x=>x.id===folderId):null;
   toast(f?`Moved to ${f.name}`:'Moved out of the folder');
 }
-function newBrief(){
-  const b={ id:'b'+(BRIEFS.length+10), name:'Untitled brief', brand:state.brand==='all'?'lytes':state.brand, status:'Draft', sharedWith:[], updated:'Just now',
+/* ===================================================================
+   BRIEF TEMPLATES
+   A template is a factory, not a saved brief: clicking one instantiates a
+   fresh, fully editable copy — every piece is an ordinary canvas element
+   (frame / text / image / video / shape), so all the existing editor tools
+   work on it unchanged. Semantic `role` tags on elements let the TikTok data
+   hooks find "the views card" etc. without a parallel architecture.
+   =================================================================== */
+function tplBlank(){
+  return { name:'Untitled brief',
     elements:[ {id:'f1',type:'frame',x:80,y:100,w:620,h:420,title:'1 · The Product'},
-               {id:'e1',type:'text',x:115,y:140,w:400,size:'h1',text:'Brief title — double-click to edit'} ], comments:[] };
+               {id:'e1',type:'text',x:115,y:140,w:400,size:'h1',text:'Brief title — double-click to edit'} ] };
+}
+const TPL_PRODUCT_PLACEHOLDER =
+  "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='200'%20height='200'%3E%3Crect%20width='200'%20height='200'%20rx='16'%20fill='%23f2f4f7'/%3E%3Ctext%20x='100'%20y='94'%20font-family='Arial'%20font-size='14'%20fill='%2398a2b3'%20text-anchor='middle'%3EProduct%3C/text%3E%3Ctext%20x='100'%20y='114'%20font-family='Arial'%20font-size='14'%20fill='%2398a2b3'%20text-anchor='middle'%3Ephoto%3C/text%3E%3C/svg%3E";
+function tplCreatorContentBrief(){
+  /* One landscape page, reference-image layout: video left, data right,
+     product top-right, task + goal along the bottom. Array order is z-order:
+     frame → backing cards → image/video → text. */
+  const card=(id,x,y,w,h,extra)=>Object.assign(
+    {id,type:'shape',shape:'card',x,y,w,h,fill:'#ffffff',stroke:'#e7e9ee',strokeW:1,
+     text:'',textColour:'#ffffff',fontSize:18,align:'center'},extra||{});
+  const txt=(id,x,y,w,html,fs,extra)=>Object.assign(
+    {id,type:'text',x,y,w,fontSize:fs,font:'sans',html},extra||{});
+  const grey='#667085', body='#475467', green='#12b76a';
+  return { name:'Creator Content Brief', tpl:'creator-brief', elements:[
+    {id:'cbf',type:'frame',x:80,y:100,w:1440,h:960,ord:0,title:'1 · Creator Content Brief'},
+    /* backing cards (kept behind everything else) */
+    card('cbPanelVid',128,296,430,620),
+    card('cbCardViews',582,350,206,150), card('cbCardSales',810,350,206,150),
+    card('cbCardConv',1038,350,206,150), card('cbCardGmv',1266,350,206,150),
+    card('cbGmvBox',582,524,890,96),
+    card('cbNotesBox',582,644,890,272),
+    card('cbProdBox',1090,136,382,124),
+    card('cbBottomBar',128,940,1344,88,{fill:'#f7f8f9',stroke:'#eceef2'}),
+    card('cbWatchBtn',152,826,382,44,{fill:'#101418',text:'▶  WATCH FULL VIDEO',textColour:'#ffffff',fontSize:13}),
+    {id:'cbGmvBolt',type:'shape',shape:'ellipse',x:610,y:546,w:52,h:52,fill:green,stroke:'none',strokeW:0,text:'⚡',textColour:'#ffffff',fontSize:22,align:'center'},
+    {id:'cbDiv1',type:'shape',shape:'line',x:1030,y:546,w:2,h:52,fill:'#e9eaec',stroke:'none',strokeW:0},
+    {id:'cbDiv2',type:'shape',shape:'line',x:800,y:956,w:2,h:56,fill:'#e4e6ea',stroke:'none',strokeW:0},
+    /* media */
+    {id:'cbProdImg',type:'image',role:'productImage',x:1110,y:152,w:92,h:92,src:TPL_PRODUCT_PLACEHOLDER,alt:'Product photo'},
+    {id:'cbVideo',type:'video',role:'video',x:213,y:352,w:260,h:vidHeightFor(260),handle:'@paste-tiktok-url',caption:'double-click to add the winning video',views:'—'},
+    /* header */
+    txt('cbLogo',128,138,320,'LYTES ✦',22,{bold:true,caps:'upper'}),
+    txt('cbTitle',128,174,720,'CONTENT BRIEF',52,{bold:true}),
+    txt('cbSub',128,244,520,'Recreate this winning TikTok',18,{colour:grey}),
+    /* product (top right) */
+    txt('cbProdLbl',1218,156,220,'PRODUCT',11,{bold:true,caps:'upper',colour:grey}),
+    txt('cbProdName',1218,176,240,'LYTES',24,{bold:true,role:'productName'}),
+    txt('cbProdVar',1218,212,240,'LEMON &amp; LIME',14,{bold:true,caps:'upper',colour:green,role:'productVariant'}),
+    /* left panel */
+    txt('cbVidHead',152,316,390,'▶ WINNING VIDEO EXAMPLE',14,{bold:true,caps:'upper'}),
+    txt('cbVidCap',152,880,382,'Use this video as a reference for style, hook, pace and structure.',11,{colour:'#98a2b3'}),
+    /* metrics */
+    txt('cbPerfHead',582,316,320,'PERFORMANCE',14,{bold:true,caps:'upper'}),
+    txt('cbViewsLbl',582,398,206,'VIEWS',11,{bold:true,caps:'upper',colour:grey,align:'center'}),
+    txt('cbViewsVal',582,424,206,'1.2M',30,{bold:true,align:'center',role:'views'}),
+    txt('cbSalesLbl',810,398,206,'SALES',11,{bold:true,caps:'upper',colour:grey,align:'center'}),
+    txt('cbSalesVal',810,424,206,'5,842',30,{bold:true,align:'center',role:'sales'}),
+    txt('cbConvLbl',1038,398,206,'SALES CONVERSION',11,{bold:true,caps:'upper',colour:grey,align:'center'}),
+    txt('cbConvVal',1038,424,206,'0.49%',30,{bold:true,align:'center',role:'conversionRate'}),
+    txt('cbGmvLbl',1266,398,206,'GMV (EST.)',11,{bold:true,caps:'upper',colour:grey,align:'center'}),
+    txt('cbGmvVal',1266,424,206,'£124,000',30,{bold:true,align:'center',role:'gmv'}),
+    /* GMV Max */
+    txt('cbGmvMaxLbl',682,546,300,'GMV MAX POTENTIAL',13,{bold:true,caps:'upper'}),
+    txt('cbGmvMaxVal',682,566,300,'HIGH',28,{bold:true,colour:green,role:'gmvMaxPotential'}),
+    txt('cbGmvMaxNote',1064,550,384,'This video is eligible for GMV Max and has performed well.',14,{colour:body}),
+    /* key notes */
+    txt('cbNotesHead',610,668,520,'📋 KEY NOTES · FROM THIS VIDEO',14,{bold:true,caps:'upper'}),
+    txt('cbNotes',610,702,830,
+      '• Strong hook in the first 2 seconds<br>• Shows product + how to use it<br>• Clear benefit led messaging<br>• Natural lighting and real environment<br>• Simple, relatable and easy to recreate',
+      15,{colour:body,lineHeight:1.85,role:'keyNotes'}),
+    /* task + goal */
+    txt('cbTaskHead',170,956,220,'🎯 YOUR TASK',13,{bold:true,caps:'upper'}),
+    txt('cbTask',170,980,560,'Recreate this style and structure for our new stock. Make it your own, but keep the same hook, pace and vibe.',13,{colour:body,role:'task'}),
+    txt('cbGoalHead',840,956,220,'⭐ GOAL',13,{bold:true,caps:'upper'}),
+    txt('cbGoal',840,980,600,'Drive sales with a high converting, GMV Max eligible video.',13,{colour:body,role:'goal'})
+  ]};
+}
+const BRIEF_TEMPLATES=[
+  { id:'blank', name:'Blank brief', desc:'An empty canvas — build anything', make:tplBlank },
+  { id:'creator-brief', name:'Creator Content Brief',
+    desc:'Send a creator a winning video, its numbers, and their task', make:tplCreatorContentBrief }
+];
+function tplThumb(id){
+  if(id==='creator-brief') return `
+    <div style="position:relative;height:100%;background:#fff">
+      <div style="position:absolute;left:8%;top:8%;width:26%;height:6%;background:#101418;border-radius:2px"></div>
+      <div style="position:absolute;right:6%;top:7%;width:24%;height:13%;border:1px solid #dde1e7;border-radius:4px"></div>
+      <div style="position:absolute;left:6%;top:26%;width:26%;height:62%;border:1px solid #dde1e7;border-radius:5px"></div>
+      <div style="position:absolute;left:9%;top:30%;width:20%;height:44%;background:#101418;border-radius:4px"></div>
+      ${[0,1,2,3].map(i=>`<div style="position:absolute;left:${37+i*15}%;top:26%;width:13%;height:16%;border:1px solid #dde1e7;border-radius:4px"></div>`).join('')}
+      <div style="position:absolute;left:37%;top:46%;width:57%;height:10%;border:1px solid #dde1e7;border-radius:4px"></div>
+      <div style="position:absolute;left:39%;top:48.5%;width:5%;height:5%;background:#12b76a;border-radius:50%"></div>
+      <div style="position:absolute;left:37%;top:60%;width:57%;height:24%;border:1px solid #dde1e7;border-radius:4px"></div>
+      <div style="position:absolute;left:6%;top:90%;width:88%;height:7%;background:#f2f4f7;border-radius:3px"></div>
+    </div>`;
+  return `<div style="height:100%;background:#fff;display:flex;align-items:center;justify-content:center;color:#c4c9d2;font-size:.9rem">＋</div>`;
+}
+function newBrief(){
+  openModal(modalShell('New brief',`
+    <div style="font-size:.8rem;color:var(--ink-2);margin-bottom:14px">Start from a template — everything on it stays fully editable.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
+      ${BRIEF_TEMPLATES.map(t=>`
+      <div class="card" style="cursor:pointer;overflow:hidden" onclick="newBriefFromTemplate('${t.id}')">
+        <div style="height:150px;border-bottom:1px solid var(--line-2);background:var(--surface-2)">${tplThumb(t.id)}</div>
+        <div class="card-b" style="padding:12px 14px">
+          <div style="font-weight:700;font-size:.86rem">${esc(t.name)}</div>
+          <div style="font-size:.72rem;color:var(--ink-3);margin-top:3px;line-height:1.4">${esc(t.desc)}</div>
+        </div>
+      </div>`).join('')}
+    </div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>`,'wide'));
+}
+function newBriefFromTemplate(tid){
+  const t=BRIEF_TEMPLATES.find(x=>x.id===tid)||BRIEF_TEMPLATES[0];
+  const made=t.make();          // a fresh copy every time — never the master
+  const b={ id:'b'+Date.now()%1000000, name:made.name, tpl:made.tpl||null,
+    brand:state.brand==='all'?'lytes':state.brand, status:'Draft', sharedWith:[], updated:'Just now',
+    elements:made.elements, comments:[] };
   BRIEFS.unshift(b);
+  closeModal(); tikiPush();
   openBriefEditor(b.id);
-  toast('New brief created');
+  toast(tid==='creator-brief'
+    ? 'Brief created — double-click the video and paste the winning TikTok link'
+    : 'New brief created');
 }
 function openBriefEditor(id){
   state.briefId=id;
@@ -8936,6 +9055,7 @@ function brfVideoHTML(e, opts){
 const BRF_SHAPES = [
   { id:'rect',     name:'Rectangle',   w:260, h:150 },
   { id:'round',    name:'Rounded',     w:260, h:150 },
+  { id:'card',     name:'Card',        w:260, h:150 },
   { id:'pill',     name:'Pill',        w:260, h:80  },
   { id:'ellipse',  name:'Ellipse',     w:240, h:160 },
   { id:'triangle', name:'Triangle',    w:200, h:170 },
@@ -8965,6 +9085,11 @@ function brfShapeSVG(e){
           return `${(50+Math.cos(a)*rr).toFixed(1)},${(50+Math.sin(a)*rr).toFixed(1)}`; }).join(' ')
       }" ${common}/>`; break;
     case 'pill':     inner=`<rect x="0.5" y="0.5" width="99" height="99" rx="50" ry="50" ${common}/>`; break;
+    /* 'card' keeps a TRUE 12px corner whatever the box is stretched to —
+       'round' is viewBox-proportional, so wide thin panels got elliptical
+       corners. rx/ry are converted back from pixels using the live w/h. */
+    case 'card': { const rw=e.w?Math.min(40,1200/e.w):8, rh=e.h?Math.min(40,1200/e.h):8;
+      inner=`<rect x="0.5" y="0.5" width="99" height="99" rx="${rw.toFixed(2)}" ry="${rh.toFixed(2)}" ${common}/>`; break; }
     case 'round':    inner=`<rect x="0.5" y="0.5" width="99" height="99" rx="${r}" ry="${r}" ${common}/>`; break;
     default:         inner=`<rect x="0.5" y="0.5" width="99" height="99" ${common}/>`;
   }
@@ -9705,6 +9830,10 @@ function brfPickImage(x,y){
 function brfImageChosen(ev){
   const files=[...(ev.target.files||[])];
   if(!files.length) return;
+  if(state.brf.replaceImg){                 // swap-in-place, box stays put
+    const id=state.brf.replaceImg; state.brf.replaceImg=null;
+    brfSwapImage(id, files[0]); return;
+  }
   const at=state.brf.dropAt||{x:200,y:200};
   files.reduce((chain,f,i)=>chain.then(()=>brfAddImage(f, at.x+i*24, at.y+i*24)), Promise.resolve())
     .then(()=>{ const b=briefById(state.briefId); files.forEach(()=>brfLog(b,'image',''));
@@ -9747,6 +9876,42 @@ function brfAddImage(file, x, y){
   });
 }
 
+/* Replace an image's pixels without touching its box — used by the property
+   panel so a template's product shot can be swapped in one click. */
+function brfReplaceImage(id){
+  state.brf.replaceImg=id;
+  const inp=$('brfImgInput'); if(inp){ inp.value=''; inp.click(); }
+}
+function brfSwapImage(id, file){
+  const b=briefById(state.briefId); const el=b&&b.elements.find(x=>x.id===id&&x.type==='image');
+  if(!el) return;
+  if(!/^image\//.test(file.type)){ toast('That file isn’t an image'); return; }
+  const fr=new FileReader();
+  fr.onload=()=>{
+    const img=new Image();
+    img.onload=()=>{
+      const scale=Math.min(1, BRF_IMG_MAX/Math.max(img.width,img.height));
+      const cw=Math.max(1,Math.round(img.width*scale)), ch=Math.max(1,Math.round(img.height*scale));
+      const cv=document.createElement('canvas'); cv.width=cw; cv.height=ch;
+      const ctx=cv.getContext('2d');
+      const keepAlpha=/png|webp|gif/i.test(file.type);
+      if(!keepAlpha){ ctx.fillStyle='#fff'; ctx.fillRect(0,0,cw,ch); }
+      ctx.drawImage(img,0,0,cw,ch);
+      const src=keepAlpha?cv.toDataURL('image/png'):cv.toDataURL('image/jpeg',BRF_IMG_Q);
+      brfSnapshot();
+      el.src=src; el.natural={w:cw,h:ch}; delete el.srcOrig;
+      el.alt=file.name.replace(/\.[^.]+$/,'');
+      renderBriefEditor();
+      brfHostOrInline(src).then(u=>{ el.src=u; tikiPush(); if(state.briefId===b.id) renderBriefEditor(); });
+      toast('Image replaced');
+    };
+    img.onerror=()=>toast('That image is corrupt or unsupported');
+    img.src=fr.result;
+  };
+  fr.onerror=()=>toast('Could not read that file');
+  fr.readAsDataURL(file);
+}
+
 /* ---- page colour -----------------------------------------------------
    Selecting a page is deliberately limited to its title tab: the body of a
    frame is covered in elements, so clicking anywhere inside it would fight
@@ -9782,6 +9947,15 @@ function brfTextPanel(b, el){
   return `
     <div class="brf-side">
       <div class="sd-h">Text</div>
+      ${el.role==='gmvMaxPotential'?`
+      <div class="sd-h" style="margin-top:2px">GMV Max potential</div>
+      <div class="fmt-row" style="margin-bottom:10px">
+        ${GMV_MAX_LEVELS.map(([lv,c])=>`<button class="fmt-btn ${brfTextHTML(el).trim().toUpperCase()===lv?'on':''}"
+          style="color:${c};font-weight:800;font-size:.66rem" title="${lv} — sets the text and colour"
+          onclick="brfSetGmvMax('${id}','${lv}')">${lv}</button>`).join('')}
+      </div>
+      <div style="font-size:.66rem;color:var(--ink-3);line-height:1.4;margin-bottom:12px">
+        Quick presets — or just type any text and pick any colour below.</div>`:''}
 
       <select style="width:100%;margin-bottom:10px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;font-size:.8rem"
         onchange="brfTextSet('${id}','font',this.value)">
@@ -10397,6 +10571,9 @@ function brfImagePanel(b,e){
       <div class="sd-h">Image</div>
       <div style="font-size:.7rem;color:var(--ink-3);margin-bottom:14px">${e.w} × ${e.h}</div>
 
+      <button class="btn btn-soft btn-sm" style="width:100%;margin-bottom:14px"
+        onclick="brfReplaceImage('${e.id}')">Replace image</button>
+
       <div class="sd-h">Background</div>
       <button class="btn btn-primary btn-sm" style="width:100%" ${busy?'disabled':''}
         onclick="brfBgRemove('${e.id}')">
@@ -10416,6 +10593,8 @@ function brfSidePanel(b){
   if(sh) return brfShapePanel(b,sh);
   const im=b.elements.find(e=>e.id===state.brf.sel&&e.type==='image');
   if(im) return brfImagePanel(b,im);
+  const vd=b.elements.find(e=>e.id===state.brf.sel&&e.type==='video');
+  if(vd) return brfVideoPanel(b,vd);
   const fr=b.elements.find(e=>e.id===state.brf.selFrame&&e.type==='frame');
   if(!fr) return '';
   const cur=(fr.bg||'#ffffff').toLowerCase();
@@ -10527,6 +10706,7 @@ async function brfSaveVideo(id){
       if(!$('bvCap').value.trim()&&j.caption) el.caption=j.caption;
       closeModal(); renderBriefEditor(); tikiPush();
       toast(el.thumb?'Video loaded — preview on the canvas, plays in Present':'Video linked — it will play in Present');
+      brfApplyVideoStats(b, el);          // creator-brief metric cards, if present
       return;
     }
     /* A local id parse is a decent fallback: the embed still plays even when
@@ -10535,6 +10715,7 @@ async function brfSaveVideo(id){
     if(local){
       el.videoId=local; closeModal(); renderBriefEditor(); tikiPush();
       toast('Linked — thumbnail unavailable, but it will play in Present');
+      brfApplyVideoStats(b, el);
       return;
     }
     if(st) st.innerHTML=`<span style="color:var(--crit-ink)">${esc(j.error||'Could not read that link.')}</span>`;
@@ -10544,6 +10725,87 @@ async function brfSaveVideo(id){
     if(st) st.innerHTML='<span style="color:var(--crit-ink)">Couldn\u2019t reach the lookup service. Paste the full /video/ link.</span>';
   }
   if(btn){ btn.disabled=false; btn.textContent='Load video'; }
+}
+
+/* ===================================================================
+   CREATOR BRIEF ← TIKTOK SHOP DATA
+   Metric auto-fill reads the SAME store the Videos page syncs into
+   (tiktok_video_daily via the tiktok-videos edge function) — no new API
+   surface. Aggregated over every stored day for that video id, not the
+   Videos page's date filter. Values land in ordinary text elements found
+   by their `role` tag, so a manual edit is always possible and always wins
+   until the next explicit refresh.
+   =================================================================== */
+const GMV_MAX_LEVELS=[['HIGH','#12b76a'],['MEDIUM','#f79009'],['LOW','#f04438']];
+function brfRoleEl(b,role){ return (b.elements||[]).find(e=>e.role===role); }
+function brfSetRoleText(b,role,txt){
+  const el=brfRoleEl(b,role);
+  if(el&&el.type==='text'&&txt!=null){ el.html=esc(String(txt)); delete el.text; }
+}
+async function brfVideoStats(videoId){
+  if(!videoId) return null;
+  if(!VIDEO_DAILY.length){ try{ await videosLoad(); }catch(e){} }
+  const rows=VIDEO_DAILY.filter(r=>String(r.video_id)===String(videoId));
+  if(!rows.length) return null;
+  const s={views:0,gmv:0,items:0,orders:0};
+  rows.forEach(r=>{ s.views+=Number(r.views)||0; s.gmv+=Number(r.gmv)||0;
+    s.items+=Number(r.items_sold)||0; s.orders+=Number(r.sku_orders)||0; });
+  s.conv=s.views?s.orders/s.views:0;
+  return s;
+}
+async function brfApplyVideoStats(b, vel, opts){
+  if(!b||!vel||!vel.videoId) return false;
+  if(!(b.tpl==='creator-brief'||b.elements.some(e=>e.role))) return false;
+  const st=await brfVideoStats(vel.videoId);
+  if(!st){
+    if(opts&&opts.verbose) toast('No synced Shop data for this video — sync the Videos page, or type the numbers in');
+    return false;
+  }
+  brfSetRoleText(b,'views', vShort(st.views));
+  brfSetRoleText(b,'sales', st.items.toLocaleString('en-GB'));
+  brfSetRoleText(b,'gmv', moneyDec(st.gmv));
+  brfSetRoleText(b,'conversionRate', st.views?(st.conv*100).toFixed(2)+'%':'—');
+  if(st.views) vel.views=vShort(st.views);
+  tikiPush(); if(state.briefId===b.id) renderBriefEditor();
+  toast('Metrics filled from TikTok Shop data — edit any card to override');
+  return true;
+}
+/* Editor-only action (property panel, never on the canvas or in exports). */
+async function brfRefreshVideoData(id){
+  const b=briefById(state.briefId); const el=b&&b.elements.find(x=>x.id===id); if(!el) return;
+  if(!el.videoId){ toast('Paste a TikTok link on the video first'); return; }
+  const btn=$('brfRefreshBtn'); if(btn){ btn.disabled=true; btn.textContent='Refreshing…'; }
+  try{ await videosLoad(); }catch(e){}
+  const ok=await brfApplyVideoStats(b, el, {verbose:true});
+  if(!ok) renderBriefSidePanel();
+}
+function brfVideoPanel(b,e){
+  const linked=!!e.videoId;
+  const roles=b.tpl==='creator-brief'||b.elements.some(x=>x.role);
+  return `
+    <div class="brf-side">
+      <div class="sd-h">TikTok video</div>
+      <div style="font-size:.74rem;color:var(--ink-2);word-break:break-all;margin-bottom:12px">
+        ${linked?esc(e.url||('video '+e.videoId)):'No link yet'}</div>
+      <button class="btn btn-primary btn-sm" style="width:100%" onclick="brfEditVideo('${e.id}')">
+        ${linked?'Change TikTok link':'Paste a TikTok link'}</button>
+      ${roles?`
+      <button class="btn btn-soft btn-sm" id="brfRefreshBtn" style="width:100%;margin-top:8px"
+        onclick="brfRefreshVideoData('${e.id}')" ${linked?'':'disabled'}>↻ Refresh TikTok data</button>
+      <div style="font-size:.68rem;color:var(--ink-3);line-height:1.5;margin-top:10px">
+        Views, sales, GMV and conversion fill in automatically from the synced
+        Shop analytics on the Videos page. Anything not covered stays editable —
+        just click a metric card's text.</div>`:''}
+      <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:14px;color:var(--crit-ink)"
+        onclick="brfDelete('${e.id}')">Delete video</button>
+    </div>`;
+}
+function brfSetGmvMax(id, level){
+  const b=briefById(state.briefId); const el=b&&b.elements.find(x=>x.id===id); if(!el) return;
+  const m=GMV_MAX_LEVELS.find(x=>x[0]===level); if(!m) return;
+  brfSnapshot();
+  el.html=m[0]; delete el.text; el.colour=m[1];
+  tikiPush(); renderBriefEditor();
 }
 function brfEditLink(id){
   const b=briefById(state.briefId); const el=b.elements.find(x=>x.id===id);
