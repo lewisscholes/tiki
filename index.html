@@ -15904,8 +15904,15 @@ async function aiCloudRespond(q, toolResults, prior, work){
   }
   try{
     const proj=activeProject();
+    /* The project goes in its OWN field, not spliced onto the question. Sent as
+       part of the question it sat underneath the whole system prompt — which
+       tells the assistant to go and query video performance for anything
+       creative. An angle project reads as creative, so it did exactly that and
+       started reporting TikTok videos nobody had asked about. As a separate
+       field it lands at the END of the system prompt, where it outranks that. */
     const body={ snapshot:aiSnapshot(), history:aiHistory().slice(0,-1),
-      question: proj ? `${projContext(proj)}\n\n---\n\n${q}` : q,
+      question: q,
+      project: proj ? projContext(proj) : undefined,
       model: state.aiModel || undefined,
       /* Project work produces long answers; a bare lookup does not need the room. */
       maxTokens: proj ? 12000 : 6000 };
