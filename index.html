@@ -10790,6 +10790,106 @@ async function brfRefreshVideoData(id){
   const ok=await brfApplyVideoStats(b, el, {verbose:true});
   if(!ok) renderBriefSidePanel();
 }
+/* ============================================================================
+   WRITING THE KEY NOTES
+
+   "Strong hook in the first 2 seconds" is true of every video ever made, which
+   is another way of saying it is worthless as direction. A creator cannot act
+   on it.
+
+   What we actually hold for a video is its caption, its hashtags, its length,
+   and how its CTR and GPM compare with everything else on the account. That is
+   enough to say something specific and defensible. What we do NOT hold is a
+   transcript — TikTok's analytics do not carry one — so the notes are written
+   about the setup and the numbers, never about dialogue we cannot see. Saying
+   so up front is cheaper than a creator noticing the invention themselves.
+   ========================================================================== */
+function brfVideoBenchmark(){
+  /* Median, not mean: one 277k-view outlier drags a mean somewhere useless. */
+  const by={};
+  VIDEO_DAILY.forEach(r=>{
+    const id=String(r.video_id||''); if(!id) return;
+    const v=by[id]||(by[id]={views:0,gmv:0,sold:0,ctr:[],dur:Number(r.duration)||0});
+    v.views+=Number(r.views)||0; v.gmv+=Number(r.gmv)||0; v.sold+=Number(r.items_sold)||0;
+    if(r.click_through_rate) v.ctr.push(Number(r.click_through_rate));
+  });
+  const med=a=>{ if(!a.length) return null; const s=[...a].sort((x,y)=>x-y);
+    return s[Math.floor(s.length/2)]; };
+  const vids=Object.values(by).filter(v=>v.views>2000);
+  return {
+    videos: vids.length,
+    medCtr: med(vids.flatMap(v=>v.ctr)),
+    medGpm: med(vids.filter(v=>v.views).map(v=>v.gmv/v.views*1000)),
+    medDur: med(vids.map(v=>v.dur).filter(Boolean))
+  };
+}
+
+async function brfWriteNotes(id){
+  const b=briefById(state.briefId); const el=b&&b.elements.find(x=>x.id===id); if(!el) return;
+  if(!el.videoId) return toast('Paste a TikTok link on the video first');
+  const btn=$('brfNotesBtn'); if(btn){ btn.disabled=true; btn.textContent='Watching the numbers…'; }
+  try{
+    try{ await videosLoad(); }catch(e){}
+    const rows=VIDEO_DAILY.filter(r=>String(r.video_id)===String(el.videoId));
+    if(!rows.length) throw new Error('No synced Shop data for that video — sync the Videos page first');
+
+    const tot={views:0,gmv:0,sold:0};
+    rows.forEach(r=>{ tot.views+=Number(r.views)||0; tot.gmv+=Number(r.gmv)||0;
+      tot.sold+=Number(r.items_sold)||0; });
+    const top=rows[0]||{};
+    const ctr=Math.max(...rows.map(r=>Number(r.click_through_rate)||0));
+    const gpm=tot.views?tot.gmv/tot.views*1000:0;
+    const tags=(()=>{ try{ return (Array.isArray(top.hash_tags)?top.hash_tags:JSON.parse(top.hash_tags||'[]')).join(', '); }catch(e){ return ''; } })();
+    const bm=brfVideoBenchmark();
+
+    const q=`Write the KEY NOTES for a creator brief. A creator reads these and makes a new video
+like this one, so every note must be something they can DO.
+
+THE VIDEO
+Caption: ${top.title||'(none)'}
+Hashtags: ${tags||'(none)'}
+Length: ${top.duration||'?'} seconds
+Creator: @${top.username||'?'}
+Views: ${tot.views.toLocaleString('en-GB')}
+Sales: ${tot.sold}
+GMV: £${tot.gmv.toFixed(2)}
+Click-through rate: ${(ctr*100).toFixed(2)}%
+GMV per 1,000 views: £${gpm.toFixed(2)}
+
+THE REST OF THE ACCOUNT, for comparison (${bm.videos} videos)
+Median click-through rate: ${bm.medCtr!=null?(bm.medCtr*100).toFixed(2)+'%':'unknown'}
+Median GMV per 1,000 views: ${bm.medGpm!=null?'£'+bm.medGpm.toFixed(2):'unknown'}
+Median length: ${bm.medDur||'unknown'} seconds
+
+RULES
+- Five notes, maximum fourteen words each. Plain sentences, no headings.
+- At least two must quote a real number from above and say what it means.
+- Say how this video DIFFERS from the account median where it does. That
+  difference is the reason it worked and is the most useful thing you can say.
+- The caption and hashtags are real; read them for the angle and the tone.
+- You CANNOT see or hear the video. Never describe footage, dialogue, shots,
+  lighting or edits — you would be inventing it. Write about the angle, the
+  caption, the length, the audience and the numbers.
+- No praise, no filler, nothing true of every video.
+Reply with STRICT JSON only: {"notes":["…","…","…","…","…"]}`;
+
+    const r=await tikiFetch('/functions/v1/assistant',{ method:'POST',
+      body:JSON.stringify({ snapshot:{}, history:[], question:q, model:'claude-haiku-4-5-20251001' }) });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    const text=(j.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');
+    const m=text.match(/\{[\s\S]*\}/); if(!m) throw new Error('could not read a reply');
+    const notes=(JSON.parse(m[0]).notes||[]).filter(Boolean).slice(0,6);
+    if(!notes.length) throw new Error('no notes came back');
+
+    brfSnapshot();
+    brfSetRoleText(b,'keyNotes', notes.map(n=>'• '+esc(String(n))).join('<br>'));
+    tikiPush(); renderBriefEditor();
+    toast('Key notes written from this video’s numbers');
+  }catch(e){ toast(String(e.message||e)); }
+  const b2=$('brfNotesBtn'); if(b2){ b2.disabled=false; b2.textContent='✎ Write key notes with AI'; }
+}
+
 function brfVideoPanel(b,e){
   const linked=!!e.videoId;
   const roles=b.tpl==='creator-brief'||b.elements.some(x=>x.role);
@@ -10803,10 +10903,16 @@ function brfVideoPanel(b,e){
       ${roles?`
       <button class="btn btn-soft btn-sm" id="brfRefreshBtn" style="width:100%;margin-top:8px"
         onclick="brfRefreshVideoData('${e.id}')" ${linked?'':'disabled'}>↻ Refresh TikTok data</button>
+      <button class="btn btn-soft btn-sm" id="brfNotesBtn" style="width:100%;margin-top:8px"
+        onclick="brfWriteNotes('${e.id}')" ${linked?'':'disabled'}>✎ Write key notes with AI</button>
       <div style="font-size:.68rem;color:var(--ink-3);line-height:1.5;margin-top:10px">
-        Views, sales, GMV and conversion fill in automatically from the synced
+        Views, sales, GMV and commission fill in automatically from the synced
         Shop analytics on the Videos page. Anything not covered stays editable —
-        just click a metric card's text.</div>`:''}
+        just click a metric card's text.</div>
+      <div style="font-size:.68rem;color:var(--ink-3);line-height:1.5;margin-top:8px">
+        Key notes are written from this video's caption, hashtags, length and how
+        its numbers compare with the rest of the account. TikTok gives us no
+        transcript, so it never describes footage it cannot see.</div>`:''}
       <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:14px;color:var(--crit-ink)"
         onclick="brfDelete('${e.id}')">Delete video</button>
     </div>`;
@@ -17214,17 +17320,74 @@ async function tikiSignIn(){
   } catch(e){ err.textContent=e.message||'Sign-in failed'; }
   $('gateBtn').textContent='Sign in';
 }
+/* ============================================================================
+   REFRESHING THE SESSION — single flight, and it matters more than it looks.
+
+   A Supabase refresh token is SINGLE USE: spending one invalidates it and hands
+   back a replacement. This app has three timers running at once — push every
+   1.5s, snapshot every 5s, watcher every 6s — so the moment the access token
+   expires, several of them notice in the same instant and all call this at
+   once, each carrying the SAME refresh token.
+
+   One wins. The rest are told the token is already spent, return false, and
+   from then on every request 401s forever. The tab looks signed in, saves
+   nothing, and the only clue is a red banner blaming the network.
+
+   That is exactly what happened on 28 August: clean 200s until 17:18, then a
+   wall of 401s — 48 in five minutes — that never recovered.
+
+   So: one refresh at a time. Everybody else waits on the same promise and gets
+   the same answer, and the token is only ever spent once.
+   ========================================================================== */
+let TIKI_REFRESHING = null;   // the in-flight refresh, shared by every caller
+let TIKI_AUTH_DEAD = false;   // refresh failed for good — stop hammering
+
 async function tikiRefreshToken(){
+  if(TIKI_AUTH_DEAD) return false;
   if(!tikiSession?.rt) return false;
-  try{
-    const r=await fetch(`${TIKI_CFG.url}/auth/v1/token?grant_type=refresh_token`,{ method:'POST',
-      headers:{ apikey:TIKI_CFG.key, 'Content-Type':'application/json' },
-      body:JSON.stringify({ refresh_token:tikiSession.rt }) });
-    const j=await r.json();
-    if(!r.ok||!j.access_token) return false;
-    tikiStoreSession({ at:j.access_token, rt:j.refresh_token, exp:Date.now()+(j.expires_in-60)*1000, email:tikiSession.email });
-    return true;
-  } catch(e){ return false; }
+  if(TIKI_REFRESHING) return TIKI_REFRESHING;    // join the one already running
+
+  TIKI_REFRESHING = (async ()=>{
+    try{
+      const r=await fetch(`${TIKI_CFG.url}/auth/v1/token?grant_type=refresh_token`,{ method:'POST',
+        headers:{ apikey:TIKI_CFG.key, 'Content-Type':'application/json' },
+        body:JSON.stringify({ refresh_token:tikiSession.rt }) });
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok||!j.access_token){
+        /* A refused grant is terminal — the token is gone and retrying just
+           burns quota. Anything else (a 500, a flaky connection) is worth
+           another go later, so leave the session alone. */
+        const code=String(j.error_code||j.error||'');
+        if(r.status===400 || /invalid_grant|refresh_token/i.test(code)) tikiAuthDead();
+        return false;
+      }
+      tikiStoreSession({ at:j.access_token, rt:j.refresh_token, exp:Date.now()+(j.expires_in-60)*1000, email:tikiSession.email });
+      return true;
+    } catch(e){ return false; }
+  })();
+
+  try{ return await TIKI_REFRESHING; }
+  finally{ TIKI_REFRESHING=null; }
+}
+
+/* Signed out for real. Say so in those words — "not saving" sends someone
+   hunting a network problem that isn't there. The local snapshot keeps running
+   throughout, so nothing is lost while they sign back in. */
+function tikiAuthDead(){
+  if(TIKI_AUTH_DEAD) return;
+  TIKI_AUTH_DEAD=true;
+  try{ localSnapshot(); }catch(e){}
+  syncStatus('error','Signed out');
+  let el=$('authDead');
+  if(!el){
+    el=document.createElement('div'); el.id='authDead'; el.className='save-alarm';
+    document.body.appendChild(el);
+  }
+  el.innerHTML=`<span class="sa-dot"></span>
+    <div><b>You have been signed out.</b> Your work is safe on this machine and will be
+      offered back when you sign in. Nothing new can save until you do.</div>
+    <button onclick="location.reload()">Sign in again</button>
+    <button class="ghost" onclick="brfEmergencyExport()">Download a copy</button>`;
 }
 async function tikiFetch(path, opts={}, retried=false){
   if(tikiSession && Date.now()>tikiSession.exp) await tikiRefreshToken();
@@ -17745,6 +17908,7 @@ function mergeSummary(mine, merged){
 let TIKI_LOADED=false;   // no successful pull yet -> pushing would destroy data
 async function tikiPush(){
   if(tikiSaving) return;
+  if(TIKI_AUTH_DEAD) return; // signed out — the banner says so; retrying just burns quota
   if(!TIKI_LOADED) return;   // the guard that stops a failed load becoming a wipe
   const s=JSON.stringify(collectTikiState());
   if(s===tikiLastPushed) return;
@@ -17799,6 +17963,7 @@ async function tikiPush(){
    ========================================================================== */
 let TIKI_WATCH=null;
 async function tikiWatch(){
+  if(TIKI_AUTH_DEAD) return;
   if(!TIKI_LOADED || document.visibilityState!=='visible') return;
   if(tikiSaving || TIKI_MERGING || TIKI_REFETCHING) return;
   try{
