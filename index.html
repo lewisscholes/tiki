@@ -7462,8 +7462,11 @@ function tplCreatorContentBrief(){
     txt('cbViewsVal',582,424,206,'1.2M',30,{bold:true,align:'center',role:'views'}),
     txt('cbSalesLbl',810,398,206,'SALES',11,{bold:true,caps:'upper',colour:grey,align:'center'}),
     txt('cbSalesVal',810,424,206,'5,842',30,{bold:true,align:'center',role:'sales'}),
-    txt('cbConvLbl',1038,398,206,'SALES CONVERSION',11,{bold:true,caps:'upper',colour:grey,align:'center'}),
-    txt('cbConvVal',1038,424,206,'0.49%',30,{bold:true,align:'center',role:'conversionRate'}),
+    /* A creator does not act on a 0.02% conversion rate. They act on what the
+       video would have paid them. Same data, stated in the only currency that
+       moves anybody. */
+    txt('cbConvLbl',1038,398,206,`YOUR COMMISSION (${Math.round(BRF_COMM_RATE*100)}%)`,11,{bold:true,caps:'upper',colour:grey,align:'center'}),
+    txt('cbConvVal',1038,424,206,'£18,600',30,{bold:true,align:'center',colour:green,role:'commissionEst'}),
     txt('cbGmvLbl',1266,398,206,'GMV (EST.)',11,{bold:true,caps:'upper',colour:grey,align:'center'}),
     txt('cbGmvVal',1266,424,206,'£124,000',30,{bold:true,align:'center',role:'gmv'}),
     /* GMV Max */
@@ -10753,6 +10756,10 @@ async function brfVideoStats(videoId){
   s.conv=s.views?s.orders/s.views:0;
   return s;
 }
+/* The commission rate a creator brief quotes. One constant, so the brief and
+   the offer can never drift apart — change it here and every brief follows. */
+const BRF_COMM_RATE = 0.15;
+
 async function brfApplyVideoStats(b, vel, opts){
   if(!b||!vel||!vel.videoId) return false;
   if(!(b.tpl==='creator-brief'||b.elements.some(e=>e.role))) return false;
@@ -10764,7 +10771,11 @@ async function brfApplyVideoStats(b, vel, opts){
   brfSetRoleText(b,'views', vShort(st.views));
   brfSetRoleText(b,'sales', st.items.toLocaleString('en-GB'));
   brfSetRoleText(b,'gmv', moneyDec(st.gmv));
+  /* What this video would have earned a creator at our standard rate. Old
+     briefs still carry the conversionRate role, so both are filled — a brief
+     made last month keeps working, and setting a role nothing uses is free. */
   brfSetRoleText(b,'conversionRate', st.views?(st.conv*100).toFixed(2)+'%':'—');
+  brfSetRoleText(b,'commissionEst', st.gmv?moneyDec(st.gmv*BRF_COMM_RATE):'—');
   if(st.views) vel.views=vShort(st.views);
   tikiPush(); if(state.briefId===b.id) renderBriefEditor();
   toast('Metrics filled from TikTok Shop data — edit any card to override');
